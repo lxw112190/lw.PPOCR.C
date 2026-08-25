@@ -97,8 +97,11 @@ and architecture-specific kernels are isolated under `src/simd`.
 20. Stride-1 3x3 Depthwise Conv SIMD — complete locally; seven REC nodes use
     this exact pad-1 shape. Four- and eight-output-wide kernels retain each
     output element's nine-weight accumulation order and scalar boundary tails.
-21. Next: reprofile the two remaining ordinary stride-2 3x3 Conv nodes before
-    considering threads, CLS, DET, or full OCR.
+21. Ordinary stride-2 3x3 Conv SIMD — complete locally; the two REC stem nodes
+    use safe deinterleaving loads to advance eight AVX2 or four SSE2 output
+    columns while preserving scalar accumulation order.
+22. Next: reprofile the balanced remaining graph before choosing between
+    pointwise Conv, Erf, MatMul, threading, CLS, DET, or full OCR work.
 
 ## Compatibility claims
 

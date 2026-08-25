@@ -171,7 +171,7 @@ void lw_scalar_depthwise_conv3x3_unit_pad1_f32(
     }
 }
 
-static void conv3x3_stride2_pad1_f32(
+void lw_scalar_conv3x3_stride2_pad1_f32(
     const float* input,
     const float* weights,
     const float* bias,
@@ -393,8 +393,20 @@ lw_status lw_scalar_conv2d_f32(
         strides[0] == 2 && strides[1] == 2 &&
         dilations[0] == 1 && dilations[1] == 1 &&
         pads[0] == 1 && pads[1] == 1 && pads[2] == 1 && pads[3] == 1) {
-        conv3x3_stride2_pad1_f32(
-            input, weights, bias, output, input_dimensions, output_dimensions);
+        lw_simd_level simd_level = lw_detect_simd_level();
+        if (simd_level >= LW_SIMD_LEVEL_AVX2) {
+            lw_avx2_conv3x3_stride2_pad1_f32(
+                input, weights, bias, output, input_dimensions,
+                output_dimensions);
+        } else if (simd_level >= LW_SIMD_LEVEL_SSE2) {
+            lw_sse2_conv3x3_stride2_pad1_f32(
+                input, weights, bias, output, input_dimensions,
+                output_dimensions);
+        } else {
+            lw_scalar_conv3x3_stride2_pad1_f32(
+                input, weights, bias, output, input_dimensions,
+                output_dimensions);
+        }
         return LW_STATUS_OK;
     }
     for (batch = 0u; batch < (uint32_t)input_dimensions[0]; ++batch) {

@@ -206,3 +206,21 @@ The x64 target-node median fell from 3.039 ms to 0.266 ms, a 91.26% reduction
 (11.439x). The x86 median fell from 4.753 ms to 0.383 ms, a 91.95% reduction
 (12.415x). Every run reported `avx2`, retained the exact text and score, and
 had zero measured RSS growth.
+
+## Ordinary stride-2 3x3 SIMD result
+
+The two REC stem nodes use ordinary 3x3, stride-2, dilation-1, pad-1 Conv. Their
+input widths of 320 and 160 allow most output columns to use safe deinterleaving
+loads: AVX2 advances eight independent outputs and SSE2 advances four, while
+each output retains the original input-channel and nine-weight accumulation
+order. Under a fresh five repeated 3+20 A/B protocol:
+
+| Process | Depthwise stage | Stride-2 SIMD stage | Further reduction | Further speedup | Original baseline speedup | Throughput | RSS growth |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| Windows x64 | 21.367 ms | 18.865 ms | 11.71% | 1.133x | 30.255x | 53.010/s | 0 B |
+| Windows x86 | 41.951 ms | 38.833 ms | 7.43% | 1.080x | 36.477x | 25.751/s | 0 B |
+
+The x64 target-node median fell from 5.435 ms to 1.989 ms, a 63.40% reduction
+(2.732x). The x86 median fell from 4.969 ms to 2.582 ms, a 48.03% reduction
+(1.924x). Every run reported `avx2`, retained the exact text and score, and had
+zero measured RSS growth.

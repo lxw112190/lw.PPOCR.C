@@ -410,6 +410,50 @@ exact text and score, every benchmark identified the selected backend as
 `avx2`, and every run reported zero RSS growth. The two ordinary stride-2 3x3
 Conv nodes are now the largest remaining single-thread shape class.
 
+## Eleventh profile: ordinary stride-2 3x3 SIMD
+
+After the Depthwise work, the two ordinary stem nodes remained a distinct
+shape class: `1x3x48x320 -> 1x24x24x160` and
+`1x24x24x160 -> 1x48x12x80`. Both use group 1, 3x3 kernels, stride 2,
+unit dilation, and pad 1. Fresh five-run medians measured 5.435 ms on x64 and
+4.969 ms on x86.
+
+The eleventh change adds:
+
+- isolated SSE2 and AVX2 implementations for the already-specialized ordinary
+  stride-2 3x3 shape;
+- contiguous input loads followed by even-lane deinterleaving, producing four
+  SSE2 or eight AVX2 output columns without gather instructions;
+- explicit row-bound checks before every vector body, with scalar borders and
+  tails;
+- the existing AVX2-to-SSE2-to-scalar runtime hierarchy and non-x86 portable
+  fallback.
+
+The loop nesting remains output channel, input channel, kernel row, and kernel
+column. Vector lanes only combine independent output positions, so each output
+receives the same bias and floating-point additions in the same order as the
+portable specialization. A `1x2x5x18` direct reference covers all borders,
+both vector widths, and scalar tails. Direct SSE2, direct AVX2, automatic
+dispatch, and scalar output must be byte-identical before comparison with ONNX
+ReferenceEvaluator. Release disassembly confirmed `mulps/addps/shufps` and
+`vmulps/vaddps/vshufps/vzeroupper` in both architectures, with no FMA.
+
+Across five final profiles, the x64 target median fell from 5.435 ms to
+1.989 ms, a 63.40% reduction (2.732x). The x86 median fell from 4.969 ms to
+2.582 ms, a 48.03% reduction (1.924x).
+
+## Eleventh end-to-end A/B result
+
+| Process | Prior mean | Stride-2 SIMD mean | Further reduction | Further speedup | Original baseline speedup | Throughput | RSS growth |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| Windows x64 | 21.367 ms | 18.865 ms | 11.71% | 1.133x | 30.255x | 53.010/s | 0 B |
+| Windows x86 | 41.951 ms | 38.833 ms | 7.43% | 1.080x | 36.477x | 25.751/s | 0 B |
+
+These values are medians from five repeated 3+20 runs. Every call retained the
+exact text and score, every benchmark identified the selected backend as
+`avx2`, and every run reported zero RSS growth. The remaining graph is now more
+balanced, so another complete profile should precede the next optimization.
+
 All results in this document describe one machine, compiler, model, and
 fixture. They should be reproduced on target machines before being used for
 capacity planning.

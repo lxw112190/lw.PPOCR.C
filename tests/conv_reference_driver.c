@@ -45,6 +45,9 @@ int main(void) {
     const int32_t normal_weight_dimensions[4] = {3, 2, 3, 3};
     const int32_t invalid_weight_dimensions[4] = {3, 1, 3, 3};
     const int32_t normal_output_dimensions[4] = {2, 3, 2, 3};
+    const int32_t stride2_input_dimensions[4] = {1, 2, 5, 18};
+    const int32_t stride2_weight_dimensions[4] = {3, 2, 3, 3};
+    const int32_t stride2_output_dimensions[4] = {1, 3, 3, 9};
     const int32_t invalid_output_dimensions[4] = {2, 3, 2, 2};
     const int32_t normal_kernel[2] = {3, 3};
     const int32_t normal_strides[2] = {2, 2};
@@ -75,6 +78,7 @@ int main(void) {
     const int32_t no_pads[4] = {0, 0, 0, 0};
     const int32_t batch_norm_dimensions[4] = {2, 3, 2, 2};
     const float normal_bias[3] = {0.25f, -0.5f, 1.0f};
+    const float stride2_bias[3] = {-0.125f, 0.625f, -0.875f};
     const float unit_depthwise_bias[2] = {0.375f, -0.625f};
     const float pointwise_bias[6] = {0.25f, -0.5f, 1.0f, -1.25f, 0.75f, 0.5f};
     const float batch_norm_scale[3] = {1.5f, -0.75f, 0.25f};
@@ -85,6 +89,11 @@ int main(void) {
     float normal_input[80];
     float normal_weights[54];
     float normal_output[36];
+    float stride2_input[180];
+    float stride2_weights[54];
+    float stride2_output[81];
+    float stride2_dispatched_output[81];
+    float stride2_simd_output[81];
     float grouped_input[64];
     float grouped_weights[108];
     float grouped_output[96];
@@ -122,6 +131,45 @@ int main(void) {
     }
     print_values("conv", normal_output, 36u);
 
+    fill_values(stride2_input, 180u, 11u, 41u, 20, 10.0f);
+    fill_values(stride2_weights, 54u, 13u, 31u, 15, 8.0f);
+    lw_scalar_conv3x3_stride2_pad1_f32(
+        stride2_input, stride2_weights, stride2_bias, stride2_output,
+        stride2_input_dimensions, stride2_output_dimensions);
+    simd_level = lw_detect_simd_level();
+    if (simd_level >= LW_SIMD_LEVEL_SSE2) {
+        lw_sse2_conv3x3_stride2_pad1_f32(
+            stride2_input, stride2_weights, stride2_bias, stride2_simd_output,
+            stride2_input_dimensions, stride2_output_dimensions);
+        if (memcmp(stride2_output, stride2_simd_output,
+                   sizeof(stride2_output)) != 0) {
+            fprintf(stderr, "SSE2 stride-2 Conv differs from scalar output\n");
+            return 1;
+        }
+    }
+    if (simd_level >= LW_SIMD_LEVEL_AVX2) {
+        lw_avx2_conv3x3_stride2_pad1_f32(
+            stride2_input, stride2_weights, stride2_bias, stride2_simd_output,
+            stride2_input_dimensions, stride2_output_dimensions);
+        if (memcmp(stride2_output, stride2_simd_output,
+                   sizeof(stride2_output)) != 0) {
+            fprintf(stderr, "AVX2 stride-2 Conv differs from scalar output\n");
+            return 1;
+        }
+    }
+    status = lw_scalar_conv2d_f32(
+        stride2_input, stride2_weights, stride2_bias, 3u,
+        stride2_dispatched_output, stride2_input_dimensions,
+        stride2_weight_dimensions, stride2_output_dimensions, normal_kernel,
+        normal_strides, unit_dilations, normal_pads, 1u);
+    if (!expect_status("stride-2 conv", status, LW_STATUS_OK) ||
+        memcmp(stride2_output, stride2_dispatched_output,
+               sizeof(stride2_output)) != 0) {
+        fprintf(stderr, "dispatched stride-2 Conv differs from scalar output\n");
+        return 1;
+    }
+    print_values("stride2_conv", stride2_output, 81u);
+
     fill_values(grouped_input, 64u, 3u, 23u, 11, 5.0f);
     fill_values(grouped_weights, 108u, 11u, 29u, 14, 7.0f);
     status = lw_scalar_conv2d_f32(
@@ -151,7 +199,6 @@ int main(void) {
     lw_scalar_depthwise_conv3x3_unit_pad1_f32(
         unit_depthwise_input, unit_depthwise_weights, unit_depthwise_bias,
         unit_depthwise_output, unit_depthwise_dimensions);
-    simd_level = lw_detect_simd_level();
     if (simd_level >= LW_SIMD_LEVEL_SSE2) {
         lw_sse2_depthwise_conv3x3_unit_pad1_f32(
             unit_depthwise_input, unit_depthwise_weights, unit_depthwise_bias,

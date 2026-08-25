@@ -112,8 +112,11 @@ The vector paths process eight or four spatial elements per instruction, use
 separate multiply and add operations rather than FMA, and preserve the
 input-channel accumulation order for each output element. A third cache-local
 path covers ordinary 3x3, stride-2, unit-dilation, pad-1 Conv and keeps the same
-addition order. These paths add no allocation or threads. A grouped test with a
-ten-element spatial plane exercises AVX2/SSE2 vector bodies and scalar tails;
+addition order. It dispatches to AVX2 or SSE2 kernels that deinterleave
+contiguous input loads into eight or four independent output positions. Bounds
+checks prevent vector loads from crossing a row; borders and tails stay scalar.
+These paths add no allocation or threads. Direct tests exercise AVX2/SSE2
+vector bodies, scalar boundaries, and tails;
 the direct SIMD and automatic-dispatch results must be byte-identical to the
 portable implementation before comparison with ONNX. The test-only executor
 profiler is private, reports Conv and MatMul node shapes, and is not part of the

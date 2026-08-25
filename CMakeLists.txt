@@ -62,17 +62,20 @@ set(LW_PPOCR_C_SOURCES
     src/runtime/validate.c
     src/simd/avx2_binary.c
     src/simd/avx2_conv1x1.c
+    src/simd/avx2_conv3x3.c
     src/simd/avx2_depthwise3x3.c
     src/simd/avx2_matmul.c
     src/simd/cpu_features.c
     src/simd/sse2_binary.c
     src/simd/sse2_conv1x1.c
+    src/simd/sse2_conv3x3.c
     src/simd/sse2_depthwise3x3.c
     src/simd/sse2_matmul.c)
 
 if(MSVC AND MSVC_C_ARCHITECTURE_ID MATCHES "^(x64|X86)$")
     set_property(SOURCE src/simd/avx2_binary.c src/simd/avx2_conv1x1.c
-        src/simd/avx2_depthwise3x3.c src/simd/avx2_matmul.c APPEND PROPERTY
+        src/simd/avx2_conv3x3.c src/simd/avx2_depthwise3x3.c
+        src/simd/avx2_matmul.c APPEND PROPERTY
         COMPILE_OPTIONS /arch:AVX2 /fp:strict)
     set_property(SOURCE src/simd/cpu_features.c APPEND PROPERTY
         COMPILE_OPTIONS /arch:AVX)

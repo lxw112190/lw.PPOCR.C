@@ -63,6 +63,9 @@ def expected_results() -> dict[str, np.ndarray]:
     normal_input = fill_values(80, 5, 19, 9, 4.0).reshape(2, 2, 4, 5)
     normal_weights = fill_values(54, 7, 17, 8, 6.0).reshape(3, 2, 3, 3)
     normal_bias = np.asarray([0.25, -0.5, 1.0], dtype=np.float32)
+    stride2_input = fill_values(180, 11, 41, 20, 10.0).reshape(1, 2, 5, 18)
+    stride2_weights = fill_values(54, 13, 31, 15, 8.0).reshape(3, 2, 3, 3)
+    stride2_bias = np.asarray([-0.125, 0.625, -0.875], dtype=np.float32)
     grouped_input = fill_values(64, 3, 23, 11, 5.0).reshape(1, 4, 4, 4)
     grouped_weights = fill_values(108, 11, 29, 14, 7.0).reshape(6, 2, 3, 3)
     depthwise_input = fill_values(60, 13, 31, 15, 8.0).reshape(1, 3, 4, 5)
@@ -104,6 +107,10 @@ def expected_results() -> dict[str, np.ndarray]:
     return {
         "conv": conv2d_reference(
             normal_input, normal_weights, normal_bias,
+            (2, 2), (1, 1), (1, 1, 1, 1), 1,
+        ).ravel(),
+        "stride2_conv": conv2d_reference(
+            stride2_input, stride2_weights, stride2_bias,
             (2, 2), (1, 1), (1, 1, 1, 1), 1,
         ).ravel(),
         "grouped_conv": conv2d_reference(
