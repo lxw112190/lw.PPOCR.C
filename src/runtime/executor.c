@@ -278,12 +278,21 @@ static lw_status execute_session_f32(
         status = dispatch_node(session, node, graph_input_index, input);
         if (profile != NULL && operation < LW_EXECUTION_PROFILE_OPERATOR_CAPACITY) {
             uint64_t finished = profile->clock(profile->clock_context);
-            if (finished >= started &&
-                profile->operator_nanoseconds[operation] <=
-                    UINT64_MAX - (finished - started) &&
-                profile->operator_invocations[operation] != UINT64_MAX) {
-                profile->operator_nanoseconds[operation] += finished - started;
-                profile->operator_invocations[operation] += 1u;
+            if (finished >= started) {
+                uint64_t elapsed = finished - started;
+                if (profile->operator_nanoseconds[operation] <=
+                        UINT64_MAX - elapsed &&
+                    profile->operator_invocations[operation] != UINT64_MAX) {
+                    profile->operator_nanoseconds[operation] += elapsed;
+                    profile->operator_invocations[operation] += 1u;
+                }
+                if (node_index < LW_EXECUTION_PROFILE_NODE_CAPACITY &&
+                    profile->node_nanoseconds[node_index] <=
+                        UINT64_MAX - elapsed &&
+                    profile->node_invocations[node_index] != UINT64_MAX) {
+                    profile->node_nanoseconds[node_index] += elapsed;
+                    profile->node_invocations[node_index] += 1u;
+                }
             }
         }
         if (status != LW_STATUS_OK) {

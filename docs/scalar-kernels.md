@@ -63,6 +63,9 @@ single grouped implementation covers the model's normal, grouped, and
 Depthwise configurations, including its 1x5 Depthwise layer. Its first
 profile-directed optimization hoists valid kernel bounds and reuses
 row/channel pointers while preserving FP32 accumulation order; it still uses
-no SIMD or threads. The test-only executor profiler is private and is not part
+no explicit SIMD or threads. A second portable-C fast path traverses the
+spatial plane contiguously for 1x1, unit-stride, unit-dilation, zero-padding
+Conv, including batched and grouped inputs, while retaining the input-channel
+accumulation order. The test-only executor profiler is private and is not part
 of the installed API or packages. See
 [`kernel-optimization.md`](kernel-optimization.md) for the measured A/B result.

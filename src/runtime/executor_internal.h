@@ -6,6 +6,7 @@
 #include <stdint.h>
 
 #define LW_EXECUTION_PROFILE_OPERATOR_CAPACITY 16u
+#define LW_EXECUTION_PROFILE_NODE_CAPACITY 256u
 
 typedef uint64_t (*lw_execution_profile_clock)(void* context);
 
@@ -16,6 +17,8 @@ typedef struct lw_execution_profile {
     void* clock_context;
     uint64_t operator_nanoseconds[LW_EXECUTION_PROFILE_OPERATOR_CAPACITY];
     uint64_t operator_invocations[LW_EXECUTION_PROFILE_OPERATOR_CAPACITY];
+    uint64_t node_nanoseconds[LW_EXECUTION_PROFILE_NODE_CAPACITY];
+    uint64_t node_invocations[LW_EXECUTION_PROFILE_NODE_CAPACITY];
 } lw_execution_profile;
 
 lw_status lw_execute_session_f32(

@@ -3,7 +3,10 @@
 #endif
 
 #include "executor_internal.h"
+#include "lwm_read.h"
 #include "lw_infer.h"
+#include "model_internal.h"
+#include "session_internal.h"
 
 #include <errno.h>
 #include <stdint.h>
@@ -21,25 +24,26 @@
 #endif
 
 static uint64_t profile_clock(void* context) {
-    (void)context;
 #if defined(_WIN32)
-    LARGE_INTEGER frequency;
     LARGE_INTEGER counter;
-    if (!QueryPerformanceFrequency(&frequency) ||
-        !QueryPerformanceCounter(&counter) || frequency.QuadPart <= 0) {
+    const LARGE_INTEGER* frequency = (const LARGE_INTEGER*)context;
+    if (frequency == NULL || frequency->QuadPart <= 0 ||
+        !QueryPerformanceCounter(&counter)) {
         return 0u;
     }
     return (uint64_t)((double)counter.QuadPart * 1000000000.0 /
-                      (double)frequency.QuadPart);
+                      (double)frequency->QuadPart);
 #elif defined(__APPLE__)
-    mach_timebase_info_data_t timebase;
+    const mach_timebase_info_data_t* timebase =
+        (const mach_timebase_info_data_t*)context;
     uint64_t ticks = mach_absolute_time();
-    if (mach_timebase_info(&timebase) != KERN_SUCCESS || timebase.denom == 0u) {
+    if (timebase == NULL || timebase->denom == 0u) {
         return 0u;
     }
-    return (uint64_t)((double)ticks * (double)timebase.numer /
-                      (double)timebase.denom);
+    return (uint64_t)((double)ticks * (double)timebase->numer /
+                      (double)timebase->denom);
 #else
+    (void)context;
     struct timespec value;
     if (clock_gettime(CLOCK_MONOTONIC, &value) != 0) {
         return 0u;
@@ -83,6 +87,11 @@ int main(int argc, char** argv) {
     uint64_t index;
     int32_t iteration;
     int exit_code = 1;
+#if defined(_WIN32)
+    LARGE_INTEGER clock_context;
+#elif defined(__APPLE__)
+    mach_timebase_info_data_t clock_context;
+#endif
     if (argc != 4 || !parse_positive_i32(argv[2], &width) || width < 7 ||
         !parse_positive_i32(argv[3], &iterations) || iterations > 10000) {
         fprintf(stderr, "usage: rec-profile-driver rec.lwm width iterations\n");
@@ -143,6 +152,20 @@ int main(int argc, char** argv) {
     memset(&profile, 0, sizeof(profile));
     profile.struct_size = (uint32_t)sizeof(profile);
     profile.clock = profile_clock;
+#if defined(_WIN32)
+    if (!QueryPerformanceFrequency(&clock_context) || clock_context.QuadPart <= 0) {
+        fprintf(stderr, "unable to initialize the profile clock\n");
+        goto cleanup;
+    }
+    profile.clock_context = &clock_context;
+#elif defined(__APPLE__)
+    if (mach_timebase_info(&clock_context) != KERN_SUCCESS ||
+        clock_context.denom == 0u) {
+        fprintf(stderr, "unable to initialize the profile clock\n");
+        goto cleanup;
+    }
+    profile.clock_context = &clock_context;
+#endif
     for (iteration = 0; iteration < iterations; ++iteration) {
         lw_error_init(&error);
         status = lw_execute_session_f32_profiled(
@@ -163,6 +186,58 @@ int main(int argc, char** argv) {
                (unsigned long long)index, names[index],
                (unsigned long long)profile.operator_nanoseconds[index],
                (unsigned long long)profile.operator_invocations[index]);
+    }
+    printf("],\"conv_nodes\":[");
+    {
+        uint32_t node_index;
+        int first = 1;
+        for (node_index = 0u; node_index < model->info.node_count; ++node_index) {
+            const uint8_t* node = model->bytes + (size_t)model->node_offset +
+                (size_t)node_index * LWM_V0_NODE_SIZE;
+            uint32_t input_index;
+            uint32_t weight_index;
+            uint32_t output_index;
+            uint64_t param_offset;
+            const uint8_t* params;
+            const lw_runtime_tensor* input_tensor;
+            const lw_runtime_tensor* weight_tensor;
+            const lw_runtime_tensor* output_tensor;
+            if (lwm_read_u16(node) != 1u) {
+                continue;
+            }
+            input_index = lwm_read_u32(node + 8u);
+            weight_index = lwm_read_u32(node + 12u);
+            output_index = lwm_read_u32(node + 40u);
+            param_offset = lwm_read_u64(node + 56u);
+            params = model->bytes + (size_t)param_offset;
+            input_tensor = &session->tensors[input_index];
+            weight_tensor = &session->tensors[weight_index];
+            output_tensor = &session->tensors[output_index];
+            if (!first) {
+                putchar(',');
+            }
+            first = 0;
+            printf("{\"node\":%u,\"nanoseconds\":%llu,\"invocations\":%llu,"
+                   "\"input\":[%d,%d,%d,%d],\"weights\":[%d,%d,%d,%d],"
+                   "\"output\":[%d,%d,%d,%d],\"group\":%u,"
+                   "\"kernel\":[%d,%d],\"strides\":[%d,%d],"
+                   "\"dilations\":[%d,%d],\"pads\":[%d,%d,%d,%d]}",
+                   node_index,
+                   (unsigned long long)profile.node_nanoseconds[node_index],
+                   (unsigned long long)profile.node_invocations[node_index],
+                   input_tensor->dimensions[0], input_tensor->dimensions[1],
+                   input_tensor->dimensions[2], input_tensor->dimensions[3],
+                   weight_tensor->dimensions[0], weight_tensor->dimensions[1],
+                   weight_tensor->dimensions[2], weight_tensor->dimensions[3],
+                   output_tensor->dimensions[0], output_tensor->dimensions[1],
+                   output_tensor->dimensions[2], output_tensor->dimensions[3],
+                   lwm_read_u32(params + 4u),
+                   lwm_read_i32(params + 8u), lwm_read_i32(params + 12u),
+                   lwm_read_i32(params + 16u), lwm_read_i32(params + 20u),
+                   lwm_read_i32(params + 24u), lwm_read_i32(params + 28u),
+                   lwm_read_i32(params + 32u), lwm_read_i32(params + 36u),
+                   lwm_read_i32(params + 40u), lwm_read_i32(params + 44u));
+        }
     }
     printf("]}\n");
     exit_code = 0;

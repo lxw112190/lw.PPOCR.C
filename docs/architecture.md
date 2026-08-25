@@ -65,8 +65,11 @@ isolated under `src/simd` after scalar correctness.
 11. First profile-directed Scalar Conv address/bounds optimization — complete
     locally with end-to-end Windows x64/x86 A/B measurements and unchanged
     ONNX/Golden correctness gates.
-12. Next: continue profiling Conv, then consider SIMD and threads before CLS,
-    DET, and full OCR.
+12. Profile-directed pointwise Conv data-layout fast path — complete locally;
+    node profiling identified 25 pointwise nodes as 96.24% of Conv time and
+    Windows x64/x86 end-to-end latency fell by about 90% from the baseline.
+13. Next: evaluate the two remaining ordinary 3x3 hotspots, then consider
+    explicit SIMD and threads before CLS, DET, and full OCR.
 
 ## Compatibility claims
 

@@ -1,14 +1,17 @@
-# First profiled scalar-kernel optimization
+# Profiled scalar-kernel optimizations
 
-This milestone profiles the exact bundled PP-OCRv6 tiny REC graph before
-changing a kernel, optimizes the measured hotspot, and repeats the public
-end-to-end benchmark under the same conditions. The figures below are local
-engineering measurements, not a performance guarantee.
+These milestones profile the exact bundled PP-OCRv6 tiny REC graph before
+changing a kernel, optimize measured hotspots, and repeat the public end-to-end
+benchmark under the same conditions. The figures below are local engineering
+measurements, not a performance guarantee.
 
 ## Profiling method
 
 An internal, test-only executor entry point accepts a monotonic-clock callback
-and accumulates elapsed nanoseconds and invocation counts by LWM operator ID.
+and accumulates elapsed nanoseconds and invocation counts by LWM operator ID
+and node index. The profiler reports Conv input, weight, output, group, kernel,
+stride, dilation, and padding metadata so optimization targets are selected
+from evidence.
 It does not change the public C ABI, exported symbols, installed headers, or
 package contents. The normal executor does not read the clock.
 
@@ -25,7 +28,7 @@ On Windows x64, ten width-320 graph executions produced this initial profile:
 The remaining ten operator types each accounted for less than one millisecond
 per graph. Conv was therefore the first optimization target.
 
-## Conv change
+## First change: general Conv indexing
 
 The scalar NCHW Conv implementation now:
 
@@ -59,5 +62,42 @@ Every call in both optimized runs returned exactly `纯臻营养护发素` with 
 `0.998993874`. The complete REC graph remains reference-matched against ONNX,
 and the ten-crop Golden Corpus remains unchanged.
 
-These results describe one machine, compiler, model, and fixture. They should
-be reproduced on target machines before being used for capacity planning.
+## Second profile: pointwise Conv
+
+The node-level profile after the first change showed that 25 ordinary
+`1x1`, group-1, unit-stride, zero-padding Conv nodes consumed 341.150 ms per
+graph, or 96.24% of all Conv time. Depthwise Conv was below 1% and was not an
+appropriate next target.
+
+The second change adds a general fast path for `1x1`, unit-stride,
+unit-dilation, zero-padding Conv. It supports batch and groups. For each output
+channel it initializes the contiguous output plane with bias, then visits input
+channels in the original order while updating the whole spatial plane. This
+changes memory traversal from channel-strided input reads to contiguous reads
+and writes while preserving each output element's FP32 accumulation order.
+
+The source uses portable C11 and adds no allocation, intrinsic, assembly,
+thread, public ABI, or runtime CPU-dispatch requirement. An additional batched,
+grouped 1x1 case is compared with ONNX ReferenceEvaluator.
+
+On Windows x64, the ten-run profile after this change measured all Conv at
+25.379 ms per graph. Pointwise Conv fell from 341.150 ms to 10.696 ms. The two
+ordinary 3x3 nodes are now the largest Conv targets.
+
+## Second end-to-end A/B result
+
+The following 3+20 runs use the same protocol and fixture as the baseline and
+first optimization:
+
+| Process | First optimized mean | Pointwise optimized mean | Further reduction | Further speedup | Original baseline reduction | Original baseline speedup | Throughput | RSS growth |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| Windows x64 | 381.206 ms | 51.495 ms | 86.49% | 7.403x | 90.98% | 11.084x | 19.419/s | 0 B |
+| Windows x86 | 669.329 ms | 139.297 ms | 79.19% | 4.805x | 90.17% | 10.169x | 7.179/s | 0 B |
+
+Every measured call again returned exactly `纯臻营养护发素` with score
+`0.998993874`. The ONNX complete-graph comparison, ten-crop Golden Corpus,
+deterministic-repeat check, and x64/x86 reference tests remain green.
+
+All results in this document describe one machine, compiler, model, and
+fixture. They should be reproduced on target machines before being used for
+capacity planning.

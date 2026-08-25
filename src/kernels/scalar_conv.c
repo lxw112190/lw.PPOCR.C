@@ -56,6 +56,63 @@ static int spatial_output(
     return 1;
 }
 
+static void conv1x1_unit_f32(
+    const float* input,
+    const float* weights,
+    const float* bias,
+    float* output,
+    const int32_t input_dimensions[4],
+    const int32_t output_dimensions[4],
+    uint32_t groups,
+    uint32_t input_channels_per_group,
+    uint32_t output_channels_per_group) {
+    uint64_t channel_plane =
+        (uint64_t)(uint32_t)input_dimensions[2] *
+        (uint32_t)input_dimensions[3];
+    uint32_t batch;
+    for (batch = 0u; batch < (uint32_t)input_dimensions[0]; ++batch) {
+        uint32_t group;
+        for (group = 0u; group < groups; ++group) {
+            uint32_t input_channel_start = group * input_channels_per_group;
+            uint32_t output_channel_start = group * output_channels_per_group;
+            const float* group_input = input + (size_t)(
+                ((uint64_t)batch * (uint32_t)input_dimensions[1] +
+                 input_channel_start) * channel_plane);
+            float* group_output = output + (size_t)(
+                ((uint64_t)batch * (uint32_t)output_dimensions[1] +
+                 output_channel_start) * channel_plane);
+            uint32_t output_channel_in_group;
+            for (output_channel_in_group = 0u;
+                 output_channel_in_group < output_channels_per_group;
+                 ++output_channel_in_group) {
+                uint32_t output_channel =
+                    output_channel_start + output_channel_in_group;
+                const float* output_channel_weights = weights + (size_t)(
+                    (uint64_t)output_channel * input_channels_per_group);
+                float* output_channel_data = group_output + (size_t)(
+                    (uint64_t)output_channel_in_group * channel_plane);
+                float initial = bias == NULL ? 0.0f : bias[output_channel];
+                uint64_t spatial;
+                uint32_t input_channel_in_group;
+                for (spatial = 0u; spatial < channel_plane; ++spatial) {
+                    output_channel_data[(size_t)spatial] = initial;
+                }
+                for (input_channel_in_group = 0u;
+                     input_channel_in_group < input_channels_per_group;
+                     ++input_channel_in_group) {
+                    const float* input_channel_data = group_input + (size_t)(
+                        (uint64_t)input_channel_in_group * channel_plane);
+                    float weight = output_channel_weights[input_channel_in_group];
+                    for (spatial = 0u; spatial < channel_plane; ++spatial) {
+                        output_channel_data[(size_t)spatial] +=
+                            input_channel_data[(size_t)spatial] * weight;
+                    }
+                }
+            }
+        }
+    }
+}
+
 lw_status lw_scalar_conv2d_f32(
     const float* input,
     const float* weights,
@@ -125,6 +182,15 @@ lw_status lw_scalar_conv2d_f32(
     }
     input_channels_per_group = (uint32_t)input_dimensions[1] / groups;
     output_channels_per_group = (uint32_t)output_dimensions[1] / groups;
+    if (kernel[0] == 1 && kernel[1] == 1 &&
+        strides[0] == 1 && strides[1] == 1 &&
+        dilations[0] == 1 && dilations[1] == 1 &&
+        pads[0] == 0 && pads[1] == 0 && pads[2] == 0 && pads[3] == 0) {
+        conv1x1_unit_f32(
+            input, weights, bias, output, input_dimensions, output_dimensions,
+            groups, input_channels_per_group, output_channels_per_group);
+        return LW_STATUS_OK;
+    }
     for (batch = 0u; batch < (uint32_t)input_dimensions[0]; ++batch) {
         for (group = 0u; group < groups; ++group) {
             uint32_t output_channel_in_group;

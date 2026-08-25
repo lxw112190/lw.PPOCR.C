@@ -57,3 +57,17 @@ fixture, and 3+20 protocol:
 
 The profile, implementation boundary, correctness checks, and complete A/B
 report are recorded in [`kernel-optimization.md`](kernel-optimization.md).
+
+## Pointwise optimized result
+
+Node-level profiling identified the 25 pointwise Conv nodes as 96.24% of Conv
+time after the first change. A cache-contiguous 1x1 path produced this second
+result under the same 3+20 protocol:
+
+| Process | Original baseline | First optimized | Pointwise optimized | Overall speedup | Throughput | RSS growth |
+|---|---:|---:|---:|---:|---:|---:|
+| Windows x64 | 570.752 ms | 381.206 ms | 51.495 ms | 11.084x | 19.419/s | 0 B |
+| Windows x86 | 1416.520 ms | 669.329 ms | 139.297 ms | 10.169x | 7.179/s | 0 B |
+
+The full node profile and implementation constraints are recorded in
+[`kernel-optimization.md`](kernel-optimization.md).

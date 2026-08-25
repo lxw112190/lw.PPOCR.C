@@ -64,8 +64,14 @@ int main(void) {
     const int32_t asymmetric_strides[2] = {1, 2};
     const int32_t asymmetric_dilations[2] = {2, 1};
     const int32_t asymmetric_pads[4] = {2, 1, 1, 2};
+    const int32_t pointwise_input_dimensions[4] = {2, 4, 2, 3};
+    const int32_t pointwise_weight_dimensions[4] = {6, 2, 1, 1};
+    const int32_t pointwise_output_dimensions[4] = {2, 6, 2, 3};
+    const int32_t point_kernel[2] = {1, 1};
+    const int32_t no_pads[4] = {0, 0, 0, 0};
     const int32_t batch_norm_dimensions[4] = {2, 3, 2, 2};
     const float normal_bias[3] = {0.25f, -0.5f, 1.0f};
+    const float pointwise_bias[6] = {0.25f, -0.5f, 1.0f, -1.25f, 0.75f, 0.5f};
     const float batch_norm_scale[3] = {1.5f, -0.75f, 0.25f};
     const float batch_norm_bias[3] = {0.1f, 0.5f, -1.0f};
     const float batch_norm_mean[3] = {-0.25f, 1.0f, 0.5f};
@@ -83,6 +89,9 @@ int main(void) {
     float asymmetric_input[6];
     float asymmetric_weights[4];
     float asymmetric_output[9];
+    float pointwise_input[48];
+    float pointwise_weights[12];
+    float pointwise_output[72];
     float batch_norm_input[24];
     float batch_norm_output[24];
     float batch_norm_in_place[24];
@@ -135,6 +144,18 @@ int main(void) {
         return 1;
     }
     print_values("asymmetric_conv", asymmetric_output, 9u);
+
+    fill_values(pointwise_input, 48u, 7u, 19u, 9, 5.0f);
+    fill_values(pointwise_weights, 12u, 11u, 23u, 11, 6.0f);
+    status = lw_scalar_conv2d_f32(
+        pointwise_input, pointwise_weights, pointwise_bias, 6u,
+        pointwise_output, pointwise_input_dimensions,
+        pointwise_weight_dimensions, pointwise_output_dimensions,
+        point_kernel, unit_strides, unit_dilations, no_pads, 2u);
+    if (!expect_status("grouped pointwise conv", status, LW_STATUS_OK)) {
+        return 1;
+    }
+    print_values("grouped_pointwise_conv", pointwise_output, 72u);
 
     fill_values(batch_norm_input, 24u, 7u, 21u, 10, 4.0f);
     status = lw_scalar_batch_normalization_f32(
@@ -222,8 +243,6 @@ int main(void) {
     }
     if (is_32_bit_process()) {
         const int32_t large_dimensions[4] = {1, 1, 65536, 65536};
-        const int32_t point_kernel[2] = {1, 1};
-        const int32_t no_pads[4] = {0, 0, 0, 0};
         const int32_t point_weight_dimensions[4] = {1, 1, 1, 1};
         status = lw_scalar_conv2d_f32(
             normal_input, normal_weights, NULL, 0u, normal_output,

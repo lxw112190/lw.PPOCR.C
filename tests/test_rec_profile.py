@@ -45,6 +45,13 @@ class RecProfileTest(unittest.TestCase):
                 "Softmax",
             },
         )
+        conv_nodes = report["conv_nodes"]
+        self.assertEqual(len(conv_nodes), 37)
+        self.assertEqual(sum(item["invocations"] for item in conv_nodes), 37 * 2)
+        self.assertTrue(all(item["nanoseconds"] > 0 for item in conv_nodes))
+        self.assertTrue(all(len(item["input"]) == 4 for item in conv_nodes))
+        self.assertTrue(all(len(item["weights"]) == 4 for item in conv_nodes))
+        self.assertTrue(all(len(item["output"]) == 4 for item in conv_nodes))
 
 
 def parse_args() -> argparse.Namespace:
