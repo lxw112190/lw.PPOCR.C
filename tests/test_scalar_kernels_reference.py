@@ -1,0 +1,89 @@
+import argparse
+import math
+import subprocess
+
+import numpy as np
+
+
+def parse_output(text: str) -> dict[str, np.ndarray]:
+    results: dict[str, np.ndarray] = {}
+    for line in text.splitlines():
+        fields = line.split()
+        if len(fields) < 2:
+            raise AssertionError(f"invalid driver output line: {line!r}")
+        name = fields[0]
+        count = int(fields[1])
+        values = np.asarray([float(value) for value in fields[2:]], dtype=np.float32)
+        if values.size != count:
+            raise AssertionError(
+                f"{name}: declared {count} values but emitted {values.size}"
+            )
+        results[name] = values
+    return results
+
+
+def expected_results() -> dict[str, np.ndarray]:
+    left = np.asarray(
+        [(((index * 7) % 19) - 9) / 5.0 for index in range(24)],
+        dtype=np.float32,
+    ).reshape(2, 3, 4)
+    add_right = np.asarray([0.25, -1.0, 2.0], dtype=np.float32).reshape(3, 1)
+    mul_right = np.asarray([-2.0, 0.5, 3.0], dtype=np.float32).reshape(3, 1)
+    div_right = np.asarray([0.5, -2.0, 4.0], dtype=np.float32).reshape(3, 1)
+    activation_input = np.asarray(
+        [-4.0, -2.0, -1.0, -0.5, 0.0, 0.5, 1.0, 2.0, 4.0],
+        dtype=np.float32,
+    )
+    softmax_input = np.asarray(
+        [
+            1000.0, -1000.0, 0.0, 50.0,
+            1001.0, -999.0, 2.0, 48.0,
+            999.0, -1002.0, -1.0, 51.0,
+            -500.0, 500.0, 10.0, -10.0,
+            -501.0, 501.0, 12.0, -9.0,
+            -499.0, 499.0, 8.0, -11.0,
+        ],
+        dtype=np.float32,
+    ).reshape(2, 3, 4)
+    shifted = softmax_input - np.max(softmax_input, axis=1, keepdims=True)
+    exponentials = np.exp(shifted)
+    softmax = exponentials / np.sum(exponentials, axis=1, keepdims=True)
+    return {
+        "add": (left + add_right).ravel(),
+        "mul": (left * mul_right).ravel(),
+        "div": (left / div_right).ravel(),
+        "relu": np.maximum(activation_input, np.float32(0.0)),
+        "erf": np.asarray(
+            [math.erf(float(value)) for value in activation_input], dtype=np.float32
+        ),
+        "hard_sigmoid": np.clip(
+            np.float32(0.2) * activation_input + np.float32(0.5), 0.0, 1.0
+        ),
+        "softmax": softmax.ravel(),
+        "softmax_in_place": softmax.ravel(),
+    }
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--driver", required=True)
+    args = parser.parse_args()
+    completed = subprocess.run(
+        [args.driver], check=True, capture_output=True, text=True, encoding="utf-8"
+    )
+    actual = parse_output(completed.stdout)
+    expected = expected_results()
+    if actual.keys() != expected.keys():
+        raise AssertionError(
+            f"result names differ: actual={sorted(actual)}, expected={sorted(expected)}"
+        )
+    for name, expected_values in expected.items():
+        np.testing.assert_allclose(
+            actual[name], expected_values, rtol=1.0e-5, atol=2.0e-6,
+            err_msg=name,
+        )
+    print(f"validated {len(expected)} scalar kernel results against NumPy")
+
+
+if __name__ == "__main__":
+    main()

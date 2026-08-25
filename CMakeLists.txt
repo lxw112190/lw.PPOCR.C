@@ -42,18 +42,23 @@ add_custom_target(convert_rec_model ALL
     DEPENDS "${LW_PPOCR_C_REC_LWM}" "${LW_PPOCR_C_REC_LWM_METADATA}")
 
 add_library(lw_ppocr_c STATIC
+    src/kernels/scalar_activation.c
+    src/kernels/scalar_elementwise.c
+    src/kernels/scalar_softmax.c
     src/runtime/memory.c
     src/runtime/model.c
     src/runtime/session.c
     src/runtime/shape.c
     src/runtime/validate.c)
 target_include_directories(lw_ppocr_c
-    PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include")
+    PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include"
+    PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src/kernels")
 target_compile_features(lw_ppocr_c PUBLIC c_std_11)
 if(MSVC)
     target_compile_options(lw_ppocr_c PRIVATE /W4 /WX /utf-8)
 else()
     target_compile_options(lw_ppocr_c PRIVATE -Wall -Wextra -Wpedantic -Werror)
+    target_link_libraries(lw_ppocr_c PUBLIC m)
 endif()
 
 add_executable(lwm-inspect tools/lwm_inspect.c)
@@ -114,6 +119,25 @@ if(BUILD_TESTING)
         target_compile_options(test-c-abi PRIVATE -Wall -Wextra -Wpedantic -Werror)
     endif()
     add_test(NAME c_abi_contract COMMAND test-c-abi)
+
+    add_executable(kernel-reference-driver tests/kernel_reference_driver.c)
+    target_link_libraries(kernel-reference-driver PRIVATE lw_ppocr_c)
+    target_include_directories(kernel-reference-driver PRIVATE
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/kernels")
+    target_compile_features(kernel-reference-driver PRIVATE c_std_11)
+    if(MSVC)
+        target_compile_options(kernel-reference-driver PRIVATE /W4 /WX /utf-8)
+    else()
+        target_compile_options(kernel-reference-driver PRIVATE
+            -Wall -Wextra -Wpedantic -Werror)
+    endif()
+    add_test(
+        NAME scalar_kernel_reference
+        COMMAND "${Python3_EXECUTABLE}"
+                "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_scalar_kernels_reference.py"
+                --driver "$<TARGET_FILE:kernel-reference-driver>")
+    set_tests_properties(scalar_kernel_reference PROPERTIES
+        WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
 
     add_test(
         NAME lwm_corruption
