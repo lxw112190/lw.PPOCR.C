@@ -345,6 +345,28 @@ if(BUILD_TESTING)
         WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
         TIMEOUT 360)
 
+    add_executable(rec-profile-driver tests/rec_profile_driver.c)
+    target_link_libraries(rec-profile-driver PRIVATE lw_ppocr_c)
+    target_include_directories(rec-profile-driver PRIVATE
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/runtime")
+    target_compile_features(rec-profile-driver PRIVATE c_std_11)
+    add_dependencies(rec-profile-driver convert_rec_model)
+    if(MSVC)
+        target_compile_options(rec-profile-driver PRIVATE /W4 /WX /utf-8)
+    else()
+        target_compile_options(rec-profile-driver PRIVATE
+            -Wall -Wextra -Wpedantic -Werror)
+    endif()
+    add_test(
+        NAME rec_operator_profile
+        COMMAND "${Python3_EXECUTABLE}"
+                "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_rec_profile.py"
+                --driver "$<TARGET_FILE:rec-profile-driver>"
+                --model "${LW_PPOCR_C_REC_LWM}")
+    set_tests_properties(rec_operator_profile PROPERTIES
+        WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+        TIMEOUT 240)
+
     add_executable(rec-pipeline-driver tests/rec_pipeline_driver.c)
     target_link_libraries(rec-pipeline-driver PRIVATE lw_ppocr_c)
     if(WIN32)

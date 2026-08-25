@@ -37,8 +37,9 @@ are checked before pointer indexing, including 32-bit builds.
 three-dimensional broadcasts, activations, and a Softmax input containing
 values near `+1000` and `-1000`. `tensor-reference-driver` covers layout
 changes, multi-axis reduction, padded AveragePool, and batched MatMul.
-`conv-reference-driver` covers normal, grouped, and Depthwise Conv plus
-in-place BatchNormalization. The Conv/BN expectations come from ONNX's
+`conv-reference-driver` covers normal, grouped, Depthwise, and asymmetric
+dilated Conv, including padding-only output regions, plus in-place
+BatchNormalization. The Conv/BN expectations come from ONNX's
 opset-11 ReferenceEvaluator; the other Python tests use NumPy. Every output is
 checked with an FP32 tolerance. The native drivers also check invalid shapes,
 duplicate or invalid axes, forbidden aliases, null inputs, non-finite
@@ -59,5 +60,9 @@ or more input matrices multiplied by one shared two-dimensional weight matrix.
 
 The Conv implementation is a direct scalar loop with no im2col allocation. A
 single grouped implementation covers the model's normal, grouped, and
-Depthwise configurations, including its 1x5 Depthwise layer. This is the
-correctness baseline, not a performance claim.
+Depthwise configurations, including its 1x5 Depthwise layer. Its first
+profile-directed optimization hoists valid kernel bounds and reuses
+row/channel pointers while preserving FP32 accumulation order; it still uses
+no SIMD or threads. The test-only executor profiler is private and is not part
+of the installed API or packages. See
+[`kernel-optimization.md`](kernel-optimization.md) for the measured A/B result.

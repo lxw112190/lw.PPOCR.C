@@ -234,12 +234,13 @@ static lw_status dispatch_node(
     }
 }
 
-lw_status lw_execute_session_f32(
+static lw_status execute_session_f32(
     lw_session* session,
     const float* input,
     uint64_t input_element_count,
     float* output,
     uint64_t output_element_count,
+    lw_execution_profile* profile,
     lw_error* error) {
     const lw_model* model;
     uint32_t graph_input_index;
@@ -269,7 +270,22 @@ lw_status lw_execute_session_f32(
     for (node_index = 0u; node_index < model->info.node_count; ++node_index) {
         const uint8_t* node = model->bytes + (size_t)model->node_offset +
             (size_t)node_index * LWM_V0_NODE_SIZE;
+        uint32_t operation = (uint32_t)lwm_read_u16(node);
+        uint64_t started = 0u;
+        if (profile != NULL) {
+            started = profile->clock(profile->clock_context);
+        }
         status = dispatch_node(session, node, graph_input_index, input);
+        if (profile != NULL && operation < LW_EXECUTION_PROFILE_OPERATOR_CAPACITY) {
+            uint64_t finished = profile->clock(profile->clock_context);
+            if (finished >= started &&
+                profile->operator_nanoseconds[operation] <=
+                    UINT64_MAX - (finished - started) &&
+                profile->operator_invocations[operation] != UINT64_MAX) {
+                profile->operator_nanoseconds[operation] += finished - started;
+                profile->operator_invocations[operation] += 1u;
+            }
+        }
         if (status != LW_STATUS_OK) {
 #if defined(_MSC_VER)
             (void)sprintf_s(message, sizeof(message),
@@ -288,4 +304,35 @@ lw_status lw_execute_session_f32(
            (size_t)session->tensors[graph_output_index].byte_size);
     lw_set_error(error, LW_STATUS_OK, "");
     return LW_STATUS_OK;
+}
+
+lw_status lw_execute_session_f32(
+    lw_session* session,
+    const float* input,
+    uint64_t input_element_count,
+    float* output,
+    uint64_t output_element_count,
+    lw_error* error) {
+    return execute_session_f32(
+        session, input, input_element_count, output, output_element_count,
+        NULL, error);
+}
+
+lw_status lw_execute_session_f32_profiled(
+    lw_session* session,
+    const float* input,
+    uint64_t input_element_count,
+    float* output,
+    uint64_t output_element_count,
+    lw_execution_profile* profile,
+    lw_error* error) {
+    if (profile == NULL || profile->struct_size != sizeof(*profile) ||
+        profile->reserved != 0u || profile->clock == NULL) {
+        lw_set_error(error, LW_STATUS_INVALID_ARGUMENT,
+                     "an initialized execution profile and clock are required");
+        return LW_STATUS_INVALID_ARGUMENT;
+    }
+    return execute_session_f32(
+        session, input, input_element_count, output, output_element_count,
+        profile, error);
 }

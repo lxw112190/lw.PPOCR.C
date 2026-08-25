@@ -67,6 +67,8 @@ def expected_results() -> dict[str, np.ndarray]:
     grouped_weights = fill_values(108, 11, 29, 14, 7.0).reshape(6, 2, 3, 3)
     depthwise_input = fill_values(60, 13, 31, 15, 8.0).reshape(1, 3, 4, 5)
     depthwise_weights = fill_values(18, 5, 13, 6, 5.0).reshape(3, 1, 3, 2)
+    asymmetric_input = fill_values(6, 3, 11, 5, 4.0).reshape(1, 1, 2, 3)
+    asymmetric_weights = fill_values(4, 5, 13, 6, 3.0).reshape(1, 1, 2, 2)
     batch_norm_input = fill_values(24, 7, 21, 10, 4.0).reshape(2, 3, 2, 2)
     scale = np.asarray([1.5, -0.75, 0.25], dtype=np.float32).reshape(1, 3, 1, 1)
     bias = np.asarray([0.1, 0.5, -1.0], dtype=np.float32).reshape(1, 3, 1, 1)
@@ -103,6 +105,10 @@ def expected_results() -> dict[str, np.ndarray]:
         "depthwise_conv": conv2d_reference(
             depthwise_input, depthwise_weights, None,
             (1, 1), (1, 2), (1, 1, 1, 1), 3,
+        ).ravel(),
+        "asymmetric_conv": conv2d_reference(
+            asymmetric_input, asymmetric_weights, None,
+            (1, 2), (2, 1), (2, 1, 1, 2), 1,
         ).ravel(),
         "batch_norm": batch_norm.ravel(),
         "batch_norm_in_place": batch_norm.ravel(),

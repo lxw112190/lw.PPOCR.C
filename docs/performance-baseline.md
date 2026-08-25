@@ -44,3 +44,16 @@ Both runs produced exactly `纯臻营养护发素` on every warm-up and measured
 The runtime planned 2,948,160 workspace bytes and 1,289,280 preallocated
 input/output bytes. Future optimization reports must use the same fixture and
 protocol, retain the Golden Tests, and compare both latency and memory.
+
+## First optimized result
+
+The first profile-directed Scalar Conv change used the same machine, build,
+fixture, and 3+20 protocol:
+
+| Process | Baseline mean | Optimized mean | Reduction | Speedup | Optimized throughput | RSS growth |
+|---|---:|---:|---:|---:|---:|---:|
+| Windows x64 | 570.752 ms | 381.206 ms | 33.21% | 1.497x | 2.623/s | 0 B |
+| Windows x86 | 1416.520 ms | 669.329 ms | 52.75% | 2.116x | 1.494/s | 0 B |
+
+The profile, implementation boundary, correctness checks, and complete A/B
+report are recorded in [`kernel-optimization.md`](kernel-optimization.md).

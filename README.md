@@ -17,7 +17,9 @@ executor now binds LWM constants and planned workspace and matches the original
 ONNX REC output at two dynamic widths. Private pure-C BGR preprocessing and
 UTF-8 CTC decoding now complete a real cropped-text recognition golden path.
 That path is regression-tested on ten real text-line crops against the original
-ONNX model before runtime-only optimization begins.
+ONNX model and remains a mandatory gate during runtime-only optimization. The
+first profile-directed Scalar Conv address/bounds optimization is complete with
+Windows x64/x86 A/B measurements and unchanged recognition results.
 The public recognizer C API exposes that path with caller-owned UTF-8 output
 buffers and bounded, preallocated inference memory. Image-file decoding remains
 outside the core: applications currently provide decoded BGR8 pixels.
@@ -81,6 +83,9 @@ The ten-crop ONNX-versus-pure-C correctness gate is documented in
 [`docs/rec-golden-corpus.md`](docs/rec-golden-corpus.md).
 The optimization baseline and benchmark protocol are documented in
 [`docs/performance-baseline.md`](docs/performance-baseline.md).
+The first profile-directed Scalar Conv optimization and its Windows x64/x86
+A/B result are documented in
+[`docs/kernel-optimization.md`](docs/kernel-optimization.md).
 Development package contents and Demo commands are documented in
 [`docs/package.md`](docs/package.md).
 

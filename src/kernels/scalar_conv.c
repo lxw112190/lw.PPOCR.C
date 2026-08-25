@@ -130,59 +130,99 @@ lw_status lw_scalar_conv2d_f32(
             uint32_t output_channel_in_group;
             uint32_t input_channel_start = group * input_channels_per_group;
             uint32_t output_channel_start = group * output_channels_per_group;
+            uint64_t input_channel_plane =
+                (uint64_t)(uint32_t)input_dimensions[2] *
+                (uint32_t)input_dimensions[3];
+            uint64_t output_channel_plane =
+                (uint64_t)(uint32_t)expected_height *
+                (uint32_t)expected_width;
+            uint64_t kernel_channel_plane =
+                (uint64_t)(uint32_t)kernel[0] * (uint32_t)kernel[1];
+            const float* group_input = input + (size_t)(
+                ((uint64_t)batch * (uint32_t)input_dimensions[1] +
+                 input_channel_start) * input_channel_plane);
+            float* group_output = output + (size_t)(
+                ((uint64_t)batch * (uint32_t)output_dimensions[1] +
+                 output_channel_start) * output_channel_plane);
             for (output_channel_in_group = 0u;
                  output_channel_in_group < output_channels_per_group;
                  ++output_channel_in_group) {
                 uint32_t output_channel = output_channel_start + output_channel_in_group;
+                const float* output_channel_weights = weights + (size_t)(
+                    (uint64_t)output_channel * input_channels_per_group *
+                    kernel_channel_plane);
+                float* output_channel_data = group_output +
+                    (size_t)((uint64_t)output_channel_in_group * output_channel_plane);
                 uint32_t output_y;
                 for (output_y = 0u; output_y < (uint32_t)expected_height; ++output_y) {
                     int64_t input_y_start =
                         (int64_t)output_y * strides[0] - pads[0];
+                    uint32_t kernel_y_begin = 0u;
+                    uint32_t kernel_y_end = (uint32_t)kernel[0];
                     uint32_t output_x;
+                    while (kernel_y_begin < kernel_y_end &&
+                           input_y_start +
+                               (int64_t)kernel_y_begin * dilations[0] < 0) {
+                        ++kernel_y_begin;
+                    }
+                    while (kernel_y_end > kernel_y_begin &&
+                           input_y_start +
+                               (int64_t)(kernel_y_end - 1u) * dilations[0] >=
+                                   input_dimensions[2]) {
+                        --kernel_y_end;
+                    }
                     for (output_x = 0u; output_x < (uint32_t)expected_width; ++output_x) {
                         int64_t input_x_start =
                             (int64_t)output_x * strides[1] - pads[1];
+                        uint32_t kernel_x_begin = 0u;
+                        uint32_t kernel_x_end = (uint32_t)kernel[1];
                         float sum = bias == NULL ? 0.0f : bias[output_channel];
                         uint32_t input_channel_in_group;
+                        while (kernel_x_begin < kernel_x_end &&
+                               input_x_start +
+                                   (int64_t)kernel_x_begin * dilations[1] < 0) {
+                            ++kernel_x_begin;
+                        }
+                        while (kernel_x_end > kernel_x_begin &&
+                               input_x_start +
+                                   (int64_t)(kernel_x_end - 1u) * dilations[1] >=
+                                       input_dimensions[3]) {
+                            --kernel_x_end;
+                        }
                         for (input_channel_in_group = 0u;
                              input_channel_in_group < input_channels_per_group;
                              ++input_channel_in_group) {
-                            uint32_t input_channel =
-                                input_channel_start + input_channel_in_group;
+                            const float* input_channel_data = group_input +
+                                (size_t)((uint64_t)input_channel_in_group *
+                                         input_channel_plane);
+                            const float* weight_channel_data =
+                                output_channel_weights +
+                                (size_t)((uint64_t)input_channel_in_group *
+                                         kernel_channel_plane);
                             uint32_t kernel_y;
-                            for (kernel_y = 0u; kernel_y < (uint32_t)kernel[0]; ++kernel_y) {
-                                int64_t input_y = input_y_start +
-                                    (int64_t)kernel_y * dilations[0];
+                            for (kernel_y = kernel_y_begin;
+                                 kernel_y < kernel_y_end; ++kernel_y) {
+                                uint32_t input_y = (uint32_t)(input_y_start +
+                                    (int64_t)kernel_y * dilations[0]);
+                                const float* input_row = input_channel_data +
+                                    (size_t)((uint64_t)input_y *
+                                             (uint32_t)input_dimensions[3]);
+                                const float* weight_row = weight_channel_data +
+                                    (size_t)((uint64_t)kernel_y *
+                                             (uint32_t)kernel[1]);
                                 uint32_t kernel_x;
-                                if (input_y < 0 || input_y >= input_dimensions[2]) {
-                                    continue;
-                                }
-                                for (kernel_x = 0u; kernel_x < (uint32_t)kernel[1]; ++kernel_x) {
-                                    int64_t input_x = input_x_start +
-                                        (int64_t)kernel_x * dilations[1];
-                                    uint64_t input_offset;
-                                    uint64_t weight_offset;
-                                    if (input_x < 0 || input_x >= input_dimensions[3]) {
-                                        continue;
-                                    }
-                                    input_offset =
-                                        (((uint64_t)batch * (uint32_t)input_dimensions[1] +
-                                          input_channel) * (uint32_t)input_dimensions[2] +
-                                         (uint32_t)input_y) * (uint32_t)input_dimensions[3] +
-                                        (uint32_t)input_x;
-                                    weight_offset =
-                                        (((uint64_t)output_channel * input_channels_per_group +
-                                          input_channel_in_group) * (uint32_t)kernel[0] +
-                                         kernel_y) * (uint32_t)kernel[1] + kernel_x;
-                                    sum += input[(size_t)input_offset] *
-                                           weights[(size_t)weight_offset];
+                                for (kernel_x = kernel_x_begin;
+                                     kernel_x < kernel_x_end; ++kernel_x) {
+                                    uint32_t input_x = (uint32_t)(input_x_start +
+                                        (int64_t)kernel_x * dilations[1]);
+                                    sum += input_row[(size_t)input_x] *
+                                           weight_row[kernel_x];
                                 }
                             }
                         }
-                        output[(size_t)(
-                            (((uint64_t)batch * (uint32_t)output_dimensions[1] +
-                              output_channel) * (uint32_t)expected_height + output_y) *
-                             (uint32_t)expected_width + output_x)] = sum;
+                        output_channel_data[(size_t)(
+                            (uint64_t)output_y * (uint32_t)expected_width +
+                            output_x)] = sum;
                     }
                 }
             }

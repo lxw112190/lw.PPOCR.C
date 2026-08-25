@@ -57,6 +57,13 @@ int main(void) {
     const int32_t depthwise_output_dimensions[4] = {1, 3, 4, 5};
     const int32_t depthwise_kernel[2] = {3, 2};
     const int32_t depthwise_dilations[2] = {1, 2};
+    const int32_t asymmetric_input_dimensions[4] = {1, 1, 2, 3};
+    const int32_t asymmetric_weight_dimensions[4] = {1, 1, 2, 2};
+    const int32_t asymmetric_output_dimensions[4] = {1, 1, 3, 3};
+    const int32_t asymmetric_kernel[2] = {2, 2};
+    const int32_t asymmetric_strides[2] = {1, 2};
+    const int32_t asymmetric_dilations[2] = {2, 1};
+    const int32_t asymmetric_pads[4] = {2, 1, 1, 2};
     const int32_t batch_norm_dimensions[4] = {2, 3, 2, 2};
     const float normal_bias[3] = {0.25f, -0.5f, 1.0f};
     const float batch_norm_scale[3] = {1.5f, -0.75f, 0.25f};
@@ -73,6 +80,9 @@ int main(void) {
     float depthwise_input[60];
     float depthwise_weights[18];
     float depthwise_output[60];
+    float asymmetric_input[6];
+    float asymmetric_weights[4];
+    float asymmetric_output[9];
     float batch_norm_input[24];
     float batch_norm_output[24];
     float batch_norm_in_place[24];
@@ -113,6 +123,18 @@ int main(void) {
         return 1;
     }
     print_values("depthwise_conv", depthwise_output, 60u);
+
+    fill_values(asymmetric_input, 6u, 3u, 11u, 5, 4.0f);
+    fill_values(asymmetric_weights, 4u, 5u, 13u, 6, 3.0f);
+    status = lw_scalar_conv2d_f32(
+        asymmetric_input, asymmetric_weights, NULL, 0u, asymmetric_output,
+        asymmetric_input_dimensions, asymmetric_weight_dimensions,
+        asymmetric_output_dimensions, asymmetric_kernel, asymmetric_strides,
+        asymmetric_dilations, asymmetric_pads, 1u);
+    if (!expect_status("asymmetric dilated conv", status, LW_STATUS_OK)) {
+        return 1;
+    }
+    print_values("asymmetric_conv", asymmetric_output, 9u);
 
     fill_values(batch_norm_input, 24u, 7u, 21u, 10, 4.0f);
     status = lw_scalar_batch_normalization_f32(
