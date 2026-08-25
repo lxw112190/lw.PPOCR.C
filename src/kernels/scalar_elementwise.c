@@ -1,4 +1,6 @@
 #include "scalar_kernels.h"
+#include "cpu_features.h"
+#include "simd_kernels.h"
 
 #include <stddef.h>
 #include <stdint.h>
@@ -26,6 +28,91 @@ static lw_status make_contiguous_strides(
     }
     *element_count = count;
     return LW_STATUS_OK;
+}
+
+void lw_scalar_binary_contiguous_f32(
+    lw_scalar_binary_op operation,
+    const float* left,
+    const float* right,
+    float* output,
+    uint64_t element_count) {
+    uint64_t index;
+    if (operation == LW_SCALAR_BINARY_ADD) {
+        for (index = 0u; index < element_count; ++index) {
+            output[(size_t)index] =
+                left[(size_t)index] + right[(size_t)index];
+        }
+    } else if (operation == LW_SCALAR_BINARY_MUL) {
+        for (index = 0u; index < element_count; ++index) {
+            output[(size_t)index] =
+                left[(size_t)index] * right[(size_t)index];
+        }
+    } else {
+        for (index = 0u; index < element_count; ++index) {
+            output[(size_t)index] =
+                left[(size_t)index] / right[(size_t)index];
+        }
+    }
+}
+
+void lw_scalar_binary_right_scalar_f32(
+    lw_scalar_binary_op operation,
+    const float* left,
+    float right,
+    float* output,
+    uint64_t element_count) {
+    uint64_t index;
+    if (operation == LW_SCALAR_BINARY_ADD) {
+        for (index = 0u; index < element_count; ++index) {
+            output[(size_t)index] = left[(size_t)index] + right;
+        }
+    } else if (operation == LW_SCALAR_BINARY_MUL) {
+        for (index = 0u; index < element_count; ++index) {
+            output[(size_t)index] = left[(size_t)index] * right;
+        }
+    } else {
+        for (index = 0u; index < element_count; ++index) {
+            output[(size_t)index] = left[(size_t)index] / right;
+        }
+    }
+}
+
+static void dispatch_binary_contiguous_f32(
+    lw_scalar_binary_op operation,
+    const float* left,
+    const float* right,
+    float* output,
+    uint64_t element_count) {
+    lw_simd_level simd_level = lw_detect_simd_level();
+    if (simd_level >= LW_SIMD_LEVEL_AVX2) {
+        lw_avx2_binary_contiguous_f32(
+            operation, left, right, output, element_count);
+    } else if (simd_level >= LW_SIMD_LEVEL_SSE2) {
+        lw_sse2_binary_contiguous_f32(
+            operation, left, right, output, element_count);
+    } else {
+        lw_scalar_binary_contiguous_f32(
+            operation, left, right, output, element_count);
+    }
+}
+
+static void dispatch_binary_right_scalar_f32(
+    lw_scalar_binary_op operation,
+    const float* left,
+    float right,
+    float* output,
+    uint64_t element_count) {
+    lw_simd_level simd_level = lw_detect_simd_level();
+    if (simd_level >= LW_SIMD_LEVEL_AVX2) {
+        lw_avx2_binary_right_scalar_f32(
+            operation, left, right, output, element_count);
+    } else if (simd_level >= LW_SIMD_LEVEL_SSE2) {
+        lw_sse2_binary_right_scalar_f32(
+            operation, left, right, output, element_count);
+    } else {
+        lw_scalar_binary_right_scalar_f32(
+            operation, left, right, output, element_count);
+    }
 }
 
 lw_status lw_scalar_binary_f32(
@@ -73,9 +160,6 @@ lw_status lw_scalar_binary_f32(
     if (status != LW_STATUS_OK) {
         return status;
     }
-    (void)left_count;
-    (void)right_count;
-
     for (axis = 0u; axis < output_rank; ++axis) {
         uint32_t left_padding = output_rank - left_rank;
         uint32_t right_padding = output_rank - right_rank;
@@ -103,6 +187,17 @@ lw_status lw_scalar_binary_f32(
     }
     if (output_count > (uint64_t)(SIZE_MAX / sizeof(float))) {
         return LW_STATUS_OUT_OF_BOUNDS;
+    }
+
+    if (left_count == output_count && right_count == output_count) {
+        dispatch_binary_contiguous_f32(
+            operation, left, right, output, output_count);
+        return LW_STATUS_OK;
+    }
+    if (left_count == output_count && right_count == 1u) {
+        dispatch_binary_right_scalar_f32(
+            operation, left, right[0], output, output_count);
+        return LW_STATUS_OK;
     }
 
     for (output_index = 0u; output_index < output_count; ++output_index) {

@@ -85,8 +85,14 @@ and architecture-specific kernels are isolated under `src/simd`.
     four- and eight-lane spatial loops retain the input-channel accumulation
     order, direct reference tests require byte-identical output, and grouped
     pointwise Conv retains the scalar fallback.
-18. Next: reprofile the now-balanced Conv and elementwise work before
-    considering another SIMD target, threads, CLS, DET, or full OCR.
+18. Flat binary SSE2/AVX2 dispatch — complete locally; profiling showed 55 of
+    87 Add/Mul/Div nodes use either two same-shaped contiguous inputs or one
+    contiguous input plus a right scalar. These modes now bypass per-element
+    broadcast coordinate tracking, while all other broadcasts retain the
+    general implementation.
+19. Next: compare block-wise channel/trailing-vector broadcasts with the
+    remaining ordinary/depthwise Conv work before considering threads, CLS,
+    DET, or full OCR.
 
 ## Compatibility claims
 

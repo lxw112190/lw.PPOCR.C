@@ -11,6 +11,19 @@ typedef enum lw_scalar_binary_op {
     LW_SCALAR_BINARY_DIV = 3
 } lw_scalar_binary_op;
 
+void lw_scalar_binary_contiguous_f32(
+    lw_scalar_binary_op operation,
+    const float* left,
+    const float* right,
+    float* output,
+    uint64_t element_count);
+void lw_scalar_binary_right_scalar_f32(
+    lw_scalar_binary_op operation,
+    const float* left,
+    float right,
+    float* output,
+    uint64_t element_count);
+
 lw_status lw_scalar_binary_f32(
     lw_scalar_binary_op operation,
     const float* left,

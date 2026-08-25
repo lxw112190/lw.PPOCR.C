@@ -48,10 +48,25 @@ def expected_results() -> dict[str, np.ndarray]:
     shifted = softmax_input - np.max(softmax_input, axis=1, keepdims=True)
     exponentials = np.exp(shifted)
     softmax = exponentials / np.sum(exponentials, axis=1, keepdims=True)
+    flat_left = np.asarray(
+        [-4.0, -2.5, -1.0, -0.25, 0.0, 0.5, 1.25, 2.0, 3.5, 5.0],
+        dtype=np.float32,
+    )
+    flat_right = np.asarray(
+        [0.5, -2.0, 4.0, 0.25, -0.75, 2.5, -1.25, 8.0, 1.75, -4.0],
+        dtype=np.float32,
+    )
+    flat_scalar = np.float32(1.25)
     return {
         "add": (left + add_right).ravel(),
         "mul": (left * mul_right).ravel(),
         "div": (left / div_right).ravel(),
+        "flat_add": flat_left + flat_right,
+        "right_scalar_add": flat_left + flat_scalar,
+        "flat_mul": flat_left * flat_right,
+        "right_scalar_mul": flat_left * flat_scalar,
+        "flat_div": flat_left / flat_right,
+        "right_scalar_div": flat_left / flat_scalar,
         "relu": np.maximum(activation_input, np.float32(0.0)),
         "erf": np.asarray(
             [math.erf(float(value)) for value in activation_input], dtype=np.float32

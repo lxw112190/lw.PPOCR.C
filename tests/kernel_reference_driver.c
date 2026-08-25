@@ -1,4 +1,6 @@
 #include "scalar_kernels.h"
+#include "cpu_features.h"
+#include "simd_kernels.h"
 
 #include <inttypes.h>
 #include <math.h>
@@ -30,6 +32,7 @@ int main(void) {
     const int32_t output_dimensions[3] = {2, 3, 4};
     const int32_t invalid_output_dimensions[3] = {2, 3, 5};
     const int32_t softmax_dimensions[3] = {2, 3, 4};
+    const int32_t flat_dimensions[1] = {10};
     const float add_right[3] = {0.25f, -1.0f, 2.0f};
     const float mul_right[3] = {-2.0f, 0.5f, 3.0f};
     const float div_right[3] = {0.5f, -2.0f, 4.0f};
@@ -42,11 +45,25 @@ int main(void) {
         -500.0f, 500.0f, 10.0f, -10.0f,
         -501.0f, 501.0f, 12.0f, -9.0f,
         -499.0f, 499.0f, 8.0f, -11.0f};
+    const float flat_left[10] = {
+        -4.0f, -2.5f, -1.0f, -0.25f, 0.0f,
+        0.5f, 1.25f, 2.0f, 3.5f, 5.0f};
+    const float flat_right[10] = {
+        0.5f, -2.0f, 4.0f, 0.25f, -0.75f,
+        2.5f, -1.25f, 8.0f, 1.75f, -4.0f};
+    const float flat_scalar[1] = {1.25f};
+    const char* flat_names[3] = {"flat_add", "flat_mul", "flat_div"};
+    const char* scalar_names[3] = {
+        "right_scalar_add", "right_scalar_mul", "right_scalar_div"};
     float left[24];
     float binary_output[24];
+    float flat_output[10];
+    float flat_dispatched_output[10];
+    float flat_simd_output[10];
     float activation_output[9];
     float softmax_output[24];
     float softmax_in_place[24];
+    lw_simd_level simd_level;
     uint32_t index;
     lw_status status;
 
@@ -77,6 +94,70 @@ int main(void) {
         return 1;
     }
     print_values("div", binary_output, 24u);
+
+    simd_level = lw_detect_simd_level();
+    for (index = 0u; index < 3u; ++index) {
+        lw_scalar_binary_op operation = (lw_scalar_binary_op)(index + 1u);
+        lw_scalar_binary_contiguous_f32(
+            operation, flat_left, flat_right, flat_output, 10u);
+        if (simd_level >= LW_SIMD_LEVEL_SSE2) {
+            lw_sse2_binary_contiguous_f32(
+                operation, flat_left, flat_right, flat_simd_output, 10u);
+            if (memcmp(flat_output, flat_simd_output, sizeof(flat_output)) != 0) {
+                fprintf(stderr, "SSE2 flat binary differs from scalar output\n");
+                return 1;
+            }
+        }
+        if (simd_level >= LW_SIMD_LEVEL_AVX2) {
+            lw_avx2_binary_contiguous_f32(
+                operation, flat_left, flat_right, flat_simd_output, 10u);
+            if (memcmp(flat_output, flat_simd_output, sizeof(flat_output)) != 0) {
+                fprintf(stderr, "AVX2 flat binary differs from scalar output\n");
+                return 1;
+            }
+        }
+        status = lw_scalar_binary_f32(
+            operation, flat_left, 1u, flat_dimensions,
+            flat_right, 1u, flat_dimensions, flat_dispatched_output,
+            1u, flat_dimensions);
+        if (!expect_status("flat binary", status, LW_STATUS_OK) ||
+            memcmp(flat_output, flat_dispatched_output,
+                   sizeof(flat_output)) != 0) {
+            fprintf(stderr, "dispatched flat binary differs from scalar output\n");
+            return 1;
+        }
+        print_values(flat_names[index], flat_output, 10u);
+
+        lw_scalar_binary_right_scalar_f32(
+            operation, flat_left, flat_scalar[0], flat_output, 10u);
+        if (simd_level >= LW_SIMD_LEVEL_SSE2) {
+            lw_sse2_binary_right_scalar_f32(
+                operation, flat_left, flat_scalar[0], flat_simd_output, 10u);
+            if (memcmp(flat_output, flat_simd_output, sizeof(flat_output)) != 0) {
+                fprintf(stderr, "SSE2 scalar binary differs from scalar output\n");
+                return 1;
+            }
+        }
+        if (simd_level >= LW_SIMD_LEVEL_AVX2) {
+            lw_avx2_binary_right_scalar_f32(
+                operation, flat_left, flat_scalar[0], flat_simd_output, 10u);
+            if (memcmp(flat_output, flat_simd_output, sizeof(flat_output)) != 0) {
+                fprintf(stderr, "AVX2 scalar binary differs from scalar output\n");
+                return 1;
+            }
+        }
+        status = lw_scalar_binary_f32(
+            operation, flat_left, 1u, flat_dimensions,
+            flat_scalar, 0u, NULL, flat_dispatched_output,
+            1u, flat_dimensions);
+        if (!expect_status("right-scalar binary", status, LW_STATUS_OK) ||
+            memcmp(flat_output, flat_dispatched_output,
+                   sizeof(flat_output)) != 0) {
+            fprintf(stderr, "dispatched scalar binary differs from scalar output\n");
+            return 1;
+        }
+        print_values(scalar_names[index], flat_output, 10u);
+    }
 
     status = lw_scalar_relu_f32(activation_input, activation_output, 9u);
     if (!expect_status("relu", status, LW_STATUS_OK)) {

@@ -251,6 +251,50 @@ int main(int argc, char** argv) {
                    lwm_read_i32(params + 40u), lwm_read_i32(params + 44u));
         }
     }
+    printf("],\"binary_nodes\":[");
+    {
+        uint32_t node_index;
+        int first = 1;
+        for (node_index = 0u; node_index < model->info.node_count; ++node_index) {
+            const uint8_t* node = model->bytes + (size_t)model->node_offset +
+                (size_t)node_index * LWM_V0_NODE_SIZE;
+            uint16_t operation = lwm_read_u16(node);
+            uint32_t left_index;
+            uint32_t right_index;
+            uint32_t output_index;
+            const lw_runtime_tensor* left_tensor;
+            const lw_runtime_tensor* right_tensor;
+            const lw_runtime_tensor* output_tensor;
+            if (operation < 2u || operation > 4u) {
+                continue;
+            }
+            left_index = lwm_read_u32(node + 8u);
+            right_index = lwm_read_u32(node + 12u);
+            output_index = lwm_read_u32(node + 40u);
+            left_tensor = &session->tensors[left_index];
+            right_tensor = &session->tensors[right_index];
+            output_tensor = &session->tensors[output_index];
+            if (!first) {
+                putchar(',');
+            }
+            first = 0;
+            printf("{\"node\":%u,\"operation\":\"%s\","
+                   "\"nanoseconds\":%llu,\"invocations\":%llu,\"left\":",
+                   node_index, names[operation],
+                   (unsigned long long)profile.node_nanoseconds[node_index],
+                   (unsigned long long)profile.node_invocations[node_index]);
+            print_tensor_dimensions(left_tensor);
+            printf(",\"right\":");
+            print_tensor_dimensions(right_tensor);
+            printf(",\"output\":");
+            print_tensor_dimensions(output_tensor);
+            printf(",\"left_constant\":%s,\"right_constant\":%s}",
+                   (left_tensor->flags & LWM_V0_TENSOR_FLAG_CONSTANT) != 0u ?
+                       "true" : "false",
+                   (right_tensor->flags & LWM_V0_TENSOR_FLAG_CONSTANT) != 0u ?
+                       "true" : "false");
+        }
+    }
     printf("],\"matmul_nodes\":[");
     {
         uint32_t node_index;

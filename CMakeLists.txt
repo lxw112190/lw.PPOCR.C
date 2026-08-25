@@ -60,15 +60,17 @@ set(LW_PPOCR_C_SOURCES
     src/runtime/session.c
     src/runtime/shape.c
     src/runtime/validate.c
+    src/simd/avx2_binary.c
     src/simd/avx2_conv1x1.c
     src/simd/avx2_matmul.c
     src/simd/cpu_features.c
+    src/simd/sse2_binary.c
     src/simd/sse2_conv1x1.c
     src/simd/sse2_matmul.c)
 
 if(MSVC AND MSVC_C_ARCHITECTURE_ID MATCHES "^(x64|X86)$")
-    set_property(SOURCE src/simd/avx2_conv1x1.c src/simd/avx2_matmul.c
-        APPEND PROPERTY
+    set_property(SOURCE src/simd/avx2_binary.c src/simd/avx2_conv1x1.c
+        src/simd/avx2_matmul.c APPEND PROPERTY
         COMPILE_OPTIONS /arch:AVX2 /fp:strict)
     set_property(SOURCE src/simd/cpu_features.c APPEND PROPERTY
         COMPILE_OPTIONS /arch:AVX)
@@ -285,7 +287,8 @@ if(BUILD_TESTING)
     add_executable(kernel-reference-driver tests/kernel_reference_driver.c)
     target_link_libraries(kernel-reference-driver PRIVATE lw_ppocr_c)
     target_include_directories(kernel-reference-driver PRIVATE
-        "${CMAKE_CURRENT_SOURCE_DIR}/src/kernels")
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/kernels"
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/simd")
     target_compile_features(kernel-reference-driver PRIVATE c_std_11)
     if(MSVC)
         target_compile_options(kernel-reference-driver PRIVATE /W4 /WX /utf-8)

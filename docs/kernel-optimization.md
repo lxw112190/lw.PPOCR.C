@@ -11,7 +11,9 @@ An internal, test-only executor entry point accepts a monotonic-clock callback
 and accumulates elapsed nanoseconds and invocation counts by LWM operator ID
 and node index. The profiler reports Conv input, weight, output, group, kernel,
 stride, dilation, and padding metadata, plus MatMul input, weight, output, and
-derived matrix dimensions, so optimization targets are selected from evidence.
+derived matrix dimensions. It also reports Add/Mul/Div input/output shapes and
+constant-input flags so broadcasting costs can be classified from resolved
+runtime tensors. Optimization targets are therefore selected from evidence.
 It does not change the public C ABI, exported symbols, installed headers, or
 package contents. The normal executor does not read the clock.
 
@@ -275,6 +277,48 @@ exact text and score, every benchmark identified the selected backend as
 `avx2`, and every run reported zero RSS growth. The remaining profile is now
 spread across ordinary/depthwise Conv and elementwise operators, so another
 target should be selected only after a fresh node-level comparison.
+
+## Eighth profile: flat binary SIMD
+
+The expanded profile classified 87 binary nodes by resolved runtime shape. Of
+these, 25 use two same-shaped contiguous inputs and 30 use a contiguous left
+input with a scalar right input. The remaining 32 use channel or trailing-vector
+broadcasting. Five pre-change profiles measured median Add/Mul/Div totals of
+7.854 ms on x64 and 15.981 ms on x86, making the two flat modes a larger and
+lower-risk target than another convolution shape specialization.
+
+The eighth change adds:
+
+- direct contiguous-pair and contiguous-plus-right-scalar loops for Add, Mul,
+  and Div;
+- isolated four-value SSE2 and eight-value AVX2 implementations with scalar
+  tails and the existing runtime fallback hierarchy;
+- unchanged validation and general coordinate traversal for every other
+  NumPy/ONNX broadcast pattern;
+- binary-node shape and constant metadata in the private profiler.
+
+There is no public C ABI, allocation, thread, model, workspace, or package
+layout change. Ten-value direct tests exercise non-vector-aligned tails and
+require scalar, direct SSE2, direct AVX2, and dispatched output to match byte
+for byte for all six pair/scalar operation combinations before NumPy comparison.
+Release disassembly confirmed `addps/mulps/divps` and
+`vaddps/vmulps/vdivps/vzeroupper` in both x64 and x86 objects, with no FMA.
+
+Across five final profiles, the x64 Add/Mul/Div median total fell from 7.854 ms
+to 3.066 ms, a 60.97% reduction (2.562x). The x86 total fell from 15.981 ms to
+6.511 ms, a 59.26% reduction (2.454x). Complex broadcast Add remains untouched
+and accounts for most of the remaining binary time.
+
+## Eighth end-to-end A/B result
+
+| Process | Prior mean | Flat binary SIMD mean | Further reduction | Further speedup | Original baseline speedup | Throughput | RSS growth |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| Windows x64 | 29.537 ms | 25.295 ms | 14.36% | 1.168x | 22.564x | 39.534/s | 0 B |
+| Windows x86 | 59.349 ms | 49.291 ms | 16.95% | 1.204x | 28.738x | 20.288/s | 0 B |
+
+These values are medians from five repeated 3+20 runs. Every call retained the
+exact text and score, every benchmark identified the selected backend as
+`avx2`, and every run reported zero RSS growth.
 
 All results in this document describe one machine, compiler, model, and
 fixture. They should be reproduced on target machines before being used for

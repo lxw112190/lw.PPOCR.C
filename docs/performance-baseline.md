@@ -155,3 +155,20 @@ The larger x86 result reflects that its prior MSVC build kept this loop scalar,
 while the x64 compiler had already generated some SSE2 instructions. Every run
 reported `avx2`, retained the exact text and score, and had zero measured RSS
 growth.
+
+## Flat binary SIMD result
+
+Profiling classified all 87 Add/Mul/Div nodes by their resolved runtime shapes.
+The 55 same-shaped or right-scalar nodes now bypass general broadcast coordinate
+tracking and use AVX2/SSE2/scalar flat loops. Under the same five repeated 3+20
+protocol:
+
+| Process | Pointwise SIMD stage | Flat binary SIMD stage | Further reduction | Further speedup | Original baseline speedup | Throughput | RSS growth |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| Windows x64 | 29.537 ms | 25.295 ms | 14.36% | 1.168x | 22.564x | 39.534/s | 0 B |
+| Windows x86 | 59.349 ms | 49.291 ms | 16.95% | 1.204x | 28.738x | 20.288/s | 0 B |
+
+The x64 Add/Mul/Div operator median total fell from 7.854 ms to 3.066 ms, a
+60.97% reduction (2.562x). The x86 total fell from 15.981 ms to 6.511 ms, a
+59.26% reduction (2.454x). Every run reported `avx2`, retained the exact text
+and score, and had zero measured RSS growth.

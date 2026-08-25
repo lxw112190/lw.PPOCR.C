@@ -52,6 +52,19 @@ class RecProfileTest(unittest.TestCase):
         self.assertTrue(all(len(item["input"]) == 4 for item in conv_nodes))
         self.assertTrue(all(len(item["weights"]) == 4 for item in conv_nodes))
         self.assertTrue(all(len(item["output"]) == 4 for item in conv_nodes))
+        binary_nodes = report["binary_nodes"]
+        self.assertEqual(len(binary_nodes), 87)
+        self.assertEqual(sum(item["invocations"] for item in binary_nodes), 87 * 2)
+        self.assertTrue(all(item["nanoseconds"] > 0 for item in binary_nodes))
+        self.assertEqual(
+            {item["operation"] for item in binary_nodes}, {"Add", "Mul", "Div"}
+        )
+        self.assertTrue(all(item["output"] for item in binary_nodes))
+        self.assertTrue(
+            all(isinstance(item["left_constant"], bool) and
+                isinstance(item["right_constant"], bool)
+                for item in binary_nodes)
+        )
         matmul_nodes = report["matmul_nodes"]
         self.assertEqual(len(matmul_nodes), 2)
         self.assertEqual(sum(item["invocations"] for item in matmul_nodes), 2 * 2)
