@@ -71,8 +71,12 @@ isolated under `src/simd` after scalar correctness.
 13. Ordinary 3x3 stride-2 Conv spatially local path — complete locally with
     unchanged x64/x86 reference and Golden results; median end-to-end latency
     is now 12.842x and 11.174x faster than the original baselines respectively.
-14. Next: profile and optimize MatMul, now about 29% of x64 operator time, then
-    consider explicit SIMD and threads before CLS, DET, and full OCR.
+14. Cache-contiguous, four-row-blocked MatMul — complete locally; the x64
+    MatMul median fell 57.23%, and x64/x86 end-to-end latency improved again
+    with unchanged reference, Golden, determinism, and memory gates.
+15. Next: add isolated CPU-feature dispatch and explicit SIMD for the now
+    distributed Conv, MatMul, and elementwise hotspots before considering
+    threads, CLS, DET, and full OCR.
 
 ## Compatibility claims
 

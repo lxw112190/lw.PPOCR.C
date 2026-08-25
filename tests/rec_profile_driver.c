@@ -66,6 +66,18 @@ static int parse_positive_i32(const char* text, int32_t* value) {
     return 1;
 }
 
+static void print_tensor_dimensions(const lw_runtime_tensor* tensor) {
+    uint32_t dimension;
+    putchar('[');
+    for (dimension = 0u; dimension < tensor->rank; ++dimension) {
+        if (dimension != 0u) {
+            putchar(',');
+        }
+        printf("%d", tensor->dimensions[dimension]);
+    }
+    putchar(']');
+}
+
 int main(int argc, char** argv) {
     static const char* names[LW_EXECUTION_PROFILE_OPERATOR_CAPACITY] = {
         "unknown", "Conv", "Add", "Mul", "Div", "Erf", "HardSigmoid",
@@ -237,6 +249,55 @@ int main(int argc, char** argv) {
                    lwm_read_i32(params + 24u), lwm_read_i32(params + 28u),
                    lwm_read_i32(params + 32u), lwm_read_i32(params + 36u),
                    lwm_read_i32(params + 40u), lwm_read_i32(params + 44u));
+        }
+    }
+    printf("],\"matmul_nodes\":[");
+    {
+        uint32_t node_index;
+        int first = 1;
+        for (node_index = 0u; node_index < model->info.node_count; ++node_index) {
+            const uint8_t* node = model->bytes + (size_t)model->node_offset +
+                (size_t)node_index * LWM_V0_NODE_SIZE;
+            uint32_t input_index;
+            uint32_t weight_index;
+            uint32_t output_index;
+            const lw_runtime_tensor* input_tensor;
+            const lw_runtime_tensor* weight_tensor;
+            const lw_runtime_tensor* output_tensor;
+            uint64_t batch_count = 1u;
+            uint32_t dimension;
+            if (lwm_read_u16(node) != 14u) {
+                continue;
+            }
+            input_index = lwm_read_u32(node + 8u);
+            weight_index = lwm_read_u32(node + 12u);
+            output_index = lwm_read_u32(node + 40u);
+            input_tensor = &session->tensors[input_index];
+            weight_tensor = &session->tensors[weight_index];
+            output_tensor = &session->tensors[output_index];
+            for (dimension = 0u; dimension + 2u < input_tensor->rank; ++dimension) {
+                batch_count *= (uint32_t)input_tensor->dimensions[dimension];
+            }
+            if (!first) {
+                putchar(',');
+            }
+            first = 0;
+            printf("{\"node\":%u,\"nanoseconds\":%llu,\"invocations\":%llu,"
+                   "\"batch_count\":%llu,\"rows\":%d,"
+                   "\"inner_dimension\":%d,\"columns\":%d,\"input\":",
+                   node_index,
+                   (unsigned long long)profile.node_nanoseconds[node_index],
+                   (unsigned long long)profile.node_invocations[node_index],
+                   (unsigned long long)batch_count,
+                   input_tensor->dimensions[input_tensor->rank - 2u],
+                   input_tensor->dimensions[input_tensor->rank - 1u],
+                   weight_tensor->dimensions[1]);
+            print_tensor_dimensions(input_tensor);
+            printf(",\"weights\":");
+            print_tensor_dimensions(weight_tensor);
+            printf(",\"output\":");
+            print_tensor_dimensions(output_tensor);
+            putchar('}');
         }
     }
     printf("]}\n");

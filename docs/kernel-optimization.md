@@ -10,8 +10,8 @@ measurements, not a performance guarantee.
 An internal, test-only executor entry point accepts a monotonic-clock callback
 and accumulates elapsed nanoseconds and invocation counts by LWM operator ID
 and node index. The profiler reports Conv input, weight, output, group, kernel,
-stride, dilation, and padding metadata so optimization targets are selected
-from evidence.
+stride, dilation, and padding metadata, plus MatMul input, weight, output, and
+derived matrix dimensions, so optimization targets are selected from evidence.
 It does not change the public C ABI, exported symbols, installed headers, or
 package contents. The normal executor does not read the clock.
 
@@ -127,6 +127,43 @@ so the two-node MatMul implementation becomes the next concentrated target.
 The optimized mean and throughput values are medians from five repeated 3+20
 runs. Every run retained the exact text and score, deterministic output, and
 zero measured RSS growth.
+
+## Fourth profile: shared-weight MatMul
+
+Five repeated 20-iteration profiles identified the exact MatMul shapes:
+
+| Node | Input | Shared weights | Output | Median time |
+|---:|---|---|---|---:|
+| 156 | `1x40x160` | `160x80` | `1x40x80` | 0.273 ms |
+| 158 | `1x40x80` | `80x6906` | `1x40x6906` | 13.693 ms |
+
+The original column-outer loop crossed the 6906-column weight stride for each
+multiply. The fourth change initializes four output rows at a time, visits the
+inner dimension in the original order, and scans the corresponding weight row
+and output row contiguously across columns. Reusing that weight row across four
+outputs reduced memory traffic without an allocation, intrinsic, assembly,
+thread, public ABI, or CPU-dispatch change.
+
+The existing batched `2x3x4` by `4x5` reference case covers multiple batches,
+multiple rows, and a non-multiple-of-four column tail. Complete REC ONNX output,
+ten-crop Golden Corpus, deterministic-repeat, alias validation, and x64/x86
+tests remain unchanged.
+
+Across five final x64 profiles, median MatMul time was 5.970 ms, down 57.23%
+from 13.957 ms (2.338x). The large node fell to 5.844 ms. Median operator time
+was 38.586 ms: Conv 19.308 ms, MatMul 5.970 ms, Add 4.263 ms, and Erf 3.129 ms.
+MatMul is now 15.40% of measured operator time instead of 29.33%.
+
+## Fourth end-to-end A/B result
+
+| Process | 3x3 optimized mean | MatMul optimized mean | Further reduction | Further speedup | Original baseline speedup | Throughput | RSS growth |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| Windows x64 | 44.444 ms | 37.405 ms | 15.84% | 1.188x | 15.259x | 26.734/s | 0 B |
+| Windows x86 | 126.773 ms | 115.728 ms | 8.71% | 1.095x | 12.240x | 8.641/s | 0 B |
+
+These are medians from five repeated 3+20 runs after a clean Release build.
+Every run returned exactly `纯臻营养护发素` with score `0.998993874`, was
+bit-deterministic within the run, and reported zero RSS growth.
 
 All results in this document describe one machine, compiler, model, and
 fixture. They should be reproduced on target machines before being used for

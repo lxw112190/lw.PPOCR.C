@@ -57,6 +57,11 @@ all 161 converted REC nodes, binds constants/workspace, and passes
 complete-output comparison. The MatMul contract deliberately
 matches the supported REC graph: one
 or more input matrices multiplied by one shared two-dimensional weight matrix.
+Its cache-contiguous implementation initializes four output rows at a time,
+then scans each shared weight row contiguously across columns. This reuses the
+weight row across the block while preserving the inner-dimension accumulation
+order for every output element. It adds no allocation, explicit SIMD, or
+threads.
 
 The Conv implementation is a direct scalar loop with no im2col allocation. A
 single grouped implementation covers the model's normal, grouped, and
@@ -69,5 +74,6 @@ Conv, including batched and grouped inputs, while retaining the input-channel
 accumulation order. A third cache-local path covers ordinary 3x3, stride-2,
 unit-dilation, pad-1 Conv and keeps the same addition order. These paths add no
 allocation, explicit SIMD, or threads. The test-only executor profiler is
-private and is not part of the installed API or packages. See
+private, reports Conv and MatMul node shapes, and is not part of the installed
+API or packages. See
 [`kernel-optimization.md`](kernel-optimization.md) for the measured A/B result.

@@ -85,6 +85,21 @@ portable-C path. Under the same 3+20 protocol:
 The 3x3 result uses the median reported mean and throughput from five repeated
 3+20 runs; all five runs had zero measured RSS growth.
 
-The latest profile makes Conv and MatMul comparable hotspots; further work
-should follow the new operator evidence rather than continue specializing
-low-cost Depthwise nodes.
+## MatMul optimized result
+
+The two REC MatMul nodes now scan each shared weight row contiguously and reuse
+it across a four-row output block. Under the same five repeated 3+20 protocol:
+
+| Process | 3x3 optimized | MatMul optimized | Further reduction | Further speedup | Original baseline speedup | Throughput | RSS growth |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| Windows x64 | 44.444 ms | 37.405 ms | 15.84% | 1.188x | 15.259x | 26.734/s | 0 B |
+| Windows x86 | 126.773 ms | 115.728 ms | 8.71% | 1.095x | 12.240x | 8.641/s | 0 B |
+
+The x64 node profile measured median MatMul time at 5.970 ms, down 57.23%
+from 13.957 ms. Every measured call retained the exact text and score, and all
+ten runs had zero measured RSS growth.
+
+The latest operator profile is distributed across Conv, MatMul, and
+elementwise work. Further specialization should therefore be selected using
+CPU-dispatched SIMD measurements rather than adding another narrow scalar
+shape path.

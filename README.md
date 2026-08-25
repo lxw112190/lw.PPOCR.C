@@ -18,10 +18,10 @@ ONNX REC output at two dynamic widths. Private pure-C BGR preprocessing and
 UTF-8 CTC decoding now complete a real cropped-text recognition golden path.
 That path is regression-tested on ten real text-line crops against the original
 ONNX model and remains a mandatory gate during runtime-only optimization. The
-three profile-directed Scalar Conv optimizations are complete: general
-address/bounds simplification, a cache-contiguous pointwise path, and a
-spatially local 3x3 downsampling path. Windows x64/x86 A/B measurements retain
-unchanged recognition results.
+profile-directed scalar optimizations now cover general Conv address/bounds
+simplification, a cache-contiguous pointwise path, a spatially local 3x3
+downsampling path, and cache-contiguous row-blocked MatMul. Windows x64/x86 A/B
+measurements retain unchanged recognition results.
 The public recognizer C API exposes that path with caller-owned UTF-8 output
 buffers and bounded, preallocated inference memory. Image-file decoding remains
 outside the core: applications currently provide decoded BGR8 pixels.

@@ -44,19 +44,32 @@ lw_status lw_scalar_matmul_shared_f32(
         return LW_STATUS_OUT_OF_BOUNDS;
     }
     for (batch = 0u; batch < batch_count; ++batch) {
-        for (row = 0u; row < rows; ++row) {
-            uint64_t input_base =
-                ((uint64_t)batch * rows + row) * inner_dimension;
-            uint64_t output_base = ((uint64_t)batch * rows + row) * columns;
-            for (column = 0u; column < columns; ++column) {
-                uint32_t inner;
-                float sum = 0.0f;
-                for (inner = 0u; inner < inner_dimension; ++inner) {
-                    sum += input[(size_t)(input_base + inner)] *
-                           weights[(size_t)((uint64_t)inner * columns + column)];
+        for (row = 0u; row < rows;) {
+            uint32_t row_end = rows - row < 4u ? rows : row + 4u;
+            uint32_t inner;
+            uint32_t current_row;
+            for (current_row = row; current_row < row_end; ++current_row) {
+                uint64_t output_base =
+                    ((uint64_t)batch * rows + current_row) * columns;
+                for (column = 0u; column < columns; ++column) {
+                    output[(size_t)(output_base + column)] = 0.0f;
                 }
-                output[(size_t)(output_base + column)] = sum;
             }
+            for (inner = 0u; inner < inner_dimension; ++inner) {
+                uint64_t weight_base = (uint64_t)inner * columns;
+                for (current_row = row; current_row < row_end; ++current_row) {
+                    uint64_t input_base =
+                        ((uint64_t)batch * rows + current_row) * inner_dimension;
+                    uint64_t output_base =
+                        ((uint64_t)batch * rows + current_row) * columns;
+                    float input_value = input[(size_t)(input_base + inner)];
+                    for (column = 0u; column < columns; ++column) {
+                        output[(size_t)(output_base + column)] += input_value *
+                            weights[(size_t)(weight_base + column)];
+                    }
+                }
+            }
+            row = row_end;
         }
     }
     return LW_STATUS_OK;

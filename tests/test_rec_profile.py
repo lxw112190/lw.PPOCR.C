@@ -52,6 +52,20 @@ class RecProfileTest(unittest.TestCase):
         self.assertTrue(all(len(item["input"]) == 4 for item in conv_nodes))
         self.assertTrue(all(len(item["weights"]) == 4 for item in conv_nodes))
         self.assertTrue(all(len(item["output"]) == 4 for item in conv_nodes))
+        matmul_nodes = report["matmul_nodes"]
+        self.assertEqual(len(matmul_nodes), 2)
+        self.assertEqual(sum(item["invocations"] for item in matmul_nodes), 2 * 2)
+        self.assertTrue(all(item["nanoseconds"] > 0 for item in matmul_nodes))
+        for item in matmul_nodes:
+            self.assertGreater(item["batch_count"], 0)
+            self.assertGreater(item["rows"], 0)
+            self.assertGreater(item["inner_dimension"], 0)
+            self.assertGreater(item["columns"], 0)
+            self.assertEqual(item["input"][-2], item["rows"])
+            self.assertEqual(item["input"][-1], item["inner_dimension"])
+            self.assertEqual(item["weights"][0], item["inner_dimension"])
+            self.assertEqual(item["weights"][1], item["columns"])
+            self.assertEqual(item["output"][-2:], [item["rows"], item["columns"]])
 
 
 def parse_args() -> argparse.Namespace:
