@@ -217,7 +217,7 @@ static lw_status dispatch_node(
             if (batch_count > UINT32_MAX) {
                 return LW_STATUS_OUT_OF_BOUNDS;
             }
-            return lw_scalar_matmul_shared_f32(
+            return lw_matmul_shared_f32(
                 inputs[0], inputs[1], output, (uint32_t)batch_count,
                 (uint32_t)input_tensors[0]->dimensions[rank - 2u],
                 (uint32_t)input_tensors[0]->dimensions[rank - 1u],

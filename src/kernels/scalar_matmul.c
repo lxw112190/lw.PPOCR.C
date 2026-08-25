@@ -1,4 +1,6 @@
 #include "scalar_kernels.h"
+#include "cpu_features.h"
+#include "simd_kernels.h"
 
 #include <stddef.h>
 #include <stdint.h>
@@ -20,7 +22,7 @@ static int buffer_fits(uint32_t first, uint32_t second, uint32_t third) {
     return count <= (uint64_t)(SIZE_MAX / sizeof(float));
 }
 
-lw_status lw_scalar_matmul_shared_f32(
+static lw_status validate_matmul_shared_f32(
     const float* input,
     const float* weights,
     float* output,
@@ -28,9 +30,6 @@ lw_status lw_scalar_matmul_shared_f32(
     uint32_t rows,
     uint32_t inner_dimension,
     uint32_t columns) {
-    uint32_t batch;
-    uint32_t row;
-    uint32_t column;
     if (input == NULL || weights == NULL || output == NULL ||
         output == input || output == weights) {
         return LW_STATUS_INVALID_ARGUMENT;
@@ -43,6 +42,20 @@ lw_status lw_scalar_matmul_shared_f32(
         !buffer_fits(batch_count, rows, columns)) {
         return LW_STATUS_OUT_OF_BOUNDS;
     }
+    return LW_STATUS_OK;
+}
+
+static void scalar_matmul_shared_f32(
+    const float* input,
+    const float* weights,
+    float* output,
+    uint32_t batch_count,
+    uint32_t rows,
+    uint32_t inner_dimension,
+    uint32_t columns) {
+    uint32_t batch;
+    uint32_t row;
+    uint32_t column;
     for (batch = 0u; batch < batch_count; ++batch) {
         for (row = 0u; row < rows;) {
             uint32_t row_end = rows - row < 4u ? rows : row + 4u;
@@ -71,6 +84,46 @@ lw_status lw_scalar_matmul_shared_f32(
             }
             row = row_end;
         }
+    }
+}
+
+lw_status lw_scalar_matmul_shared_f32(
+    const float* input,
+    const float* weights,
+    float* output,
+    uint32_t batch_count,
+    uint32_t rows,
+    uint32_t inner_dimension,
+    uint32_t columns) {
+    lw_status status = validate_matmul_shared_f32(
+        input, weights, output, batch_count, rows, inner_dimension, columns);
+    if (status != LW_STATUS_OK) {
+        return status;
+    }
+    scalar_matmul_shared_f32(
+        input, weights, output, batch_count, rows, inner_dimension, columns);
+    return LW_STATUS_OK;
+}
+
+lw_status lw_matmul_shared_f32(
+    const float* input,
+    const float* weights,
+    float* output,
+    uint32_t batch_count,
+    uint32_t rows,
+    uint32_t inner_dimension,
+    uint32_t columns) {
+    lw_status status = validate_matmul_shared_f32(
+        input, weights, output, batch_count, rows, inner_dimension, columns);
+    if (status != LW_STATUS_OK) {
+        return status;
+    }
+    if (lw_detect_simd_level() >= LW_SIMD_LEVEL_SSE2) {
+        lw_sse2_matmul_shared_f32(
+            input, weights, output, batch_count, rows, inner_dimension, columns);
+    } else {
+        scalar_matmul_shared_f32(
+            input, weights, output, batch_count, rows, inner_dimension, columns);
     }
     return LW_STATUS_OK;
 }

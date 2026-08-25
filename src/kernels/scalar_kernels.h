@@ -92,6 +92,14 @@ lw_status lw_scalar_matmul_shared_f32(
     uint32_t rows,
     uint32_t inner_dimension,
     uint32_t columns);
+lw_status lw_matmul_shared_f32(
+    const float* input,
+    const float* weights,
+    float* output,
+    uint32_t batch_count,
+    uint32_t rows,
+    uint32_t inner_dimension,
+    uint32_t columns);
 lw_status lw_scalar_conv2d_f32(
     const float* input,
     const float* weights,

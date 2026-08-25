@@ -21,7 +21,8 @@ ONNX model and remains a mandatory gate during runtime-only optimization. The
 profile-directed scalar optimizations now cover general Conv address/bounds
 simplification, a cache-contiguous pointwise path, a spatially local 3x3
 downsampling path, and cache-contiguous row-blocked MatMul. Windows x64/x86 A/B
-measurements retain unchanged recognition results.
+measurements retain unchanged recognition results. On x86/x64, MatMul now uses
+runtime-detected SSE2 with an automatic scalar fallback.
 The public recognizer C API exposes that path with caller-owned UTF-8 output
 buffers and bounded, preallocated inference memory. Image-file decoding remains
 outside the core: applications currently provide decoded BGR8 pixels.
@@ -30,7 +31,8 @@ Current scope:
 
 - PP-OCRv6 tiny;
 - REC first;
-- FP32, CPU, scalar, single-threaded; 15/15 REC operator types implemented;
+- FP32, CPU, scalar/SSE2 runtime dispatch, single-threaded; 15/15 REC operator
+  types implemented;
 - custom, non-frozen LWM v0.1 format;
 - Windows x64 and Linux x64 first;
 - Windows 7 x86 compatibility preserved by design.
@@ -85,7 +87,7 @@ The ten-crop ONNX-versus-pure-C correctness gate is documented in
 [`docs/rec-golden-corpus.md`](docs/rec-golden-corpus.md).
 The optimization baseline and benchmark protocol are documented in
 [`docs/performance-baseline.md`](docs/performance-baseline.md).
-The profile-directed Scalar Conv optimizations and their Windows x64/x86 A/B
+The profile-directed kernel optimizations and their Windows x64/x86 A/B
 results are documented in
 [`docs/kernel-optimization.md`](docs/kernel-optimization.md).
 Development package contents and Demo commands are documented in

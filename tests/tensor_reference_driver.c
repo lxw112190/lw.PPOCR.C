@@ -4,6 +4,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <string.h>
 
 static void print_values(const char* name, const float* values, uint64_t count) {
     uint64_t index;
@@ -60,6 +61,7 @@ int main(void) {
     float matmul_input[24];
     float matmul_weights[20];
     float matmul_output[30];
+    float matmul_dispatched_output[30];
     uint32_t index;
     lw_status status;
 
@@ -142,6 +144,18 @@ int main(void) {
         return 1;
     }
     print_values("matmul", matmul_output, 30u);
+    status = lw_matmul_shared_f32(
+        matmul_input, matmul_weights, matmul_dispatched_output,
+        2u, 3u, 4u, 5u);
+    if (!expect_status("dispatched matmul", status, LW_STATUS_OK)) {
+        return 1;
+    }
+    if (memcmp(matmul_output, matmul_dispatched_output,
+               sizeof(matmul_output)) != 0) {
+        fprintf(stderr, "dispatched matmul differs from scalar output\n");
+        return 1;
+    }
+    print_values("matmul_dispatched", matmul_dispatched_output, 30u);
 
     status = lw_scalar_transpose_f32(
         tensor_input, transpose_output, 3u, transpose_input_dimensions,
@@ -179,7 +193,7 @@ int main(void) {
     if (!expect_status("pool output shape", status, LW_STATUS_INVALID_SHAPE)) {
         return 1;
     }
-    status = lw_scalar_matmul_shared_f32(
+    status = lw_matmul_shared_f32(
         matmul_input, matmul_weights, matmul_output, 0u, 3u, 4u, 5u);
     if (!expect_status("matmul empty batch", status, LW_STATUS_INVALID_SHAPE)) {
         return 1;

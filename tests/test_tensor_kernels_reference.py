@@ -80,6 +80,7 @@ def expected_results() -> dict[str, np.ndarray]:
         "average_pool": average_pool_reference(pool_input, False).ravel(),
         "average_pool_include_pad": average_pool_reference(pool_input, True).ravel(),
         "matmul": np.matmul(matmul_input, matmul_weights).ravel(),
+        "matmul_dispatched": np.matmul(matmul_input, matmul_weights).ravel(),
     }
 
 

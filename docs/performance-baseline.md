@@ -23,6 +23,7 @@ From a Release build tree:
 
 The final two arguments are warm-up count and measured iteration count. Both
 must be in `1..10000`. The output is UTF-8 JSON with `schema_version: 1`.
+The `backend` field reports the selected `scalar` or `sse2` kernel level.
 
 ## Local baseline
 
@@ -103,3 +104,20 @@ The latest operator profile is distributed across Conv, MatMul, and
 elementwise work. Further specialization should therefore be selected using
 CPU-dispatched SIMD measurements rather than adding another narrow scalar
 shape path.
+
+## SSE2 MatMul result
+
+The first explicit SIMD milestone adds runtime CPU detection and a four-column
+SSE2 MatMul loop while retaining the scalar implementation as the fallback.
+Under the same five repeated 3+20 protocol:
+
+| Process | Scalar MatMul stage | SSE2 stage | Further reduction | Further speedup | Original baseline speedup | Throughput | RSS growth |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| Windows x64 | 37.405 ms | 35.344 ms | 5.51% | 1.058x | 16.148x | 28.293/s | 0 B |
+| Windows x86 | 115.728 ms | 114.763 ms | 0.83% | 1.008x | 12.343x | 8.714/s | 0 B |
+
+The x64 MatMul operator median fell from 5.970 ms to 2.845 ms, a 52.34%
+reduction. The x86 MatMul median fell from 5.860 ms to 2.869 ms, a 51.04%
+reduction; its smaller end-to-end change reflects the remaining Conv and
+elementwise cost and normal run-to-run variance. Every run reported `sse2`,
+retained the exact text and score, and had zero measured RSS growth.

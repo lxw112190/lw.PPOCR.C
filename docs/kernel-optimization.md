@@ -165,6 +165,40 @@ These are medians from five repeated 3+20 runs after a clean Release build.
 Every run returned exactly `纯臻营养护发素` with score `0.998993874`, was
 bit-deterministic within the run, and reported zero RSS growth.
 
+## Fifth profile: runtime-dispatched SSE2 MatMul
+
+Release disassembly showed the portable MatMul column loop still used scalar
+`mulss/addss` instructions under MSVC `/O2`. The fifth change therefore adds:
+
+- architecture-isolated CPU detection under `src/simd`;
+- x64 SSE2 selection as an architectural baseline and x86 CPUID feature-bit
+  validation, with scalar fallback elsewhere;
+- an explicit four-column `mulps/addps` MatMul loop plus the existing scalar
+  tail;
+- a dynamic `scalar` or `sse2` value in the benchmark JSON `backend` field.
+
+There is no public C ABI, allocation, thread, model, workspace, or package
+layout change. The tensor reference driver executes both scalar and dispatched
+MatMul for batched rows and five columns, requires byte-identical output, and
+then checks both against NumPy. Complete graph, ONNX, Golden Corpus,
+deterministic-repeat, x64/x86, and installed-package gates remain mandatory.
+
+Across five x64 profiles, median MatMul time fell from 5.970 ms to 2.845 ms,
+a 52.34% reduction (2.098x). Release disassembly confirmed `mulps/addps` in
+both x64 and x86 objects. Median measured operator time was 35.345 ms and
+MatMul's share fell from 15.40% to about 8.05%.
+
+## Fifth end-to-end A/B result
+
+| Process | Scalar MatMul mean | SSE2 mean | Further reduction | Further speedup | Original baseline speedup | Throughput | RSS growth |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| Windows x64 | 37.405 ms | 35.344 ms | 5.51% | 1.058x | 16.148x | 28.293/s | 0 B |
+| Windows x86 | 115.728 ms | 114.763 ms | 0.83% | 1.008x | 12.343x | 8.714/s | 0 B |
+
+These values are medians from five repeated 3+20 runs. Every call retained the
+exact text and score, every benchmark identified the selected backend as
+`sse2`, and every run reported zero RSS growth.
+
 All results in this document describe one machine, compiler, model, and
 fixture. They should be reproduced on target machines before being used for
 capacity planning.

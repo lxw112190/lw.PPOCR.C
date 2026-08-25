@@ -3,6 +3,7 @@
 #endif
 
 #include "lw_infer.h"
+#include "cpu_features.h"
 #include "ppm_image.h"
 
 #include <math.h>
@@ -276,7 +277,8 @@ static int benchmark_main(int argc, char** argv) {
     rss_growth = (int64_t)memory_final.current_rss_bytes -
         (int64_t)memory_after_warmup.current_rss_bytes;
     printf("{");
-    printf("\"schema_version\":1,\"backend\":\"scalar\",");
+    printf("\"schema_version\":1,\"backend\":\"%s\",",
+           lw_simd_level_name(lw_detect_simd_level()));
     printf("\"text\":");
     print_json_string(reference_text);
     printf(",\"score\":%.9g,\"characters\":%u,", reference_score,

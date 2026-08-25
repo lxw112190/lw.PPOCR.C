@@ -8,7 +8,7 @@ from pathlib import Path
 
 
 class RecBenchmarkTest(unittest.TestCase):
-    def test_scalar_benchmark_schema_and_stability(self) -> None:
+    def test_runtime_benchmark_schema_and_stability(self) -> None:
         completed = subprocess.run(
             [
                 str(ARGUMENTS.benchmark),
@@ -28,7 +28,7 @@ class RecBenchmarkTest(unittest.TestCase):
         self.assertEqual(completed.returncode, 0, completed.stdout + completed.stderr)
         report = json.loads(completed.stdout)
         self.assertEqual(report["schema_version"], 1)
-        self.assertEqual(report["backend"], "scalar")
+        self.assertIn(report["backend"], {"scalar", "sse2"})
         self.assertEqual(report["text"], "纯臻营养护发素")
         self.assertEqual(report["characters"], 7)
         self.assertEqual(report["warmup"], 2)

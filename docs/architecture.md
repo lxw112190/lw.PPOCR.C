@@ -32,15 +32,15 @@ models + converter
         |
        LWM
         |
-runtime loader -> tensor/memory -> executor -> scalar kernels
+runtime loader -> tensor/memory -> executor -> scalar/SIMD kernels
                                            |
                               REC preprocess + CTC
 ```
 
 `src/runtime` must not know about OCR text, dictionaries, boxes, or DB
 post-processing. `src/ppocr` may use the runtime API but not its private model
-layout. Platform code is isolated under `src/platform`; SIMD dispatch will be
-isolated under `src/simd` after scalar correctness.
+layout. Platform code is isolated under `src/platform`; CPU feature detection
+and architecture-specific kernels are isolated under `src/simd`.
 
 ## Development gates
 
@@ -74,9 +74,12 @@ isolated under `src/simd` after scalar correctness.
 14. Cache-contiguous, four-row-blocked MatMul — complete locally; the x64
     MatMul median fell 57.23%, and x64/x86 end-to-end latency improved again
     with unchanged reference, Golden, determinism, and memory gates.
-15. Next: add isolated CPU-feature dispatch and explicit SIMD for the now
-    distributed Conv, MatMul, and elementwise hotspots before considering
-    threads, CLS, DET, and full OCR.
+15. x86/x64 SSE2 MatMul dispatch — complete locally; x64 uses its architectural
+    SSE2 baseline, x86 checks CPUID bit 26, other architectures retain the
+    scalar path, and the benchmark reports the selected backend.
+16. Next: add AVX2 detection with OS state validation and compare wider MatMul,
+    Conv, and elementwise candidates before considering threads, CLS, DET, and
+    full OCR.
 
 ## Compatibility claims
 

@@ -63,6 +63,14 @@ weight row across the block while preserving the inner-dimension accumulation
 order for every output element. It adds no allocation, explicit SIMD, or
 threads.
 
+The executor now dispatches this MatMul contract to an isolated SSE2 kernel on
+x86/x64 CPUs that support it. The SSE2 loop processes four independent columns
+per instruction and uses the same scalar tail. x64 selects SSE2 as an
+architectural baseline; x86 checks CPUID at runtime; non-x86 and unsupported
+x86 CPUs retain the scalar implementation. Both paths are allocation-free and
+single-threaded, and the dispatched reference test requires byte-identical
+output from scalar and SSE2 before comparing it with NumPy.
+
 The Conv implementation is a direct scalar loop with no im2col allocation. A
 single grouped implementation covers the model's normal, grouped, and
 Depthwise configurations, including its 1x5 Depthwise layer. Its first

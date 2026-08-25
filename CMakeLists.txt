@@ -59,7 +59,9 @@ set(LW_PPOCR_C_SOURCES
     src/runtime/model.c
     src/runtime/session.c
     src/runtime/shape.c
-    src/runtime/validate.c)
+    src/runtime/validate.c
+    src/simd/cpu_features.c
+    src/simd/sse2_matmul.c)
 
 function(lw_configure_runtime_target target)
     target_include_directories(${target}
@@ -69,7 +71,8 @@ function(lw_configure_runtime_target target)
         PRIVATE
             "${CMAKE_CURRENT_SOURCE_DIR}/src/kernels"
             "${CMAKE_CURRENT_SOURCE_DIR}/src/runtime"
-            "${CMAKE_CURRENT_SOURCE_DIR}/src/ppocr")
+            "${CMAKE_CURRENT_SOURCE_DIR}/src/ppocr"
+            "${CMAKE_CURRENT_SOURCE_DIR}/src/simd")
     target_compile_features(${target} PUBLIC c_std_11)
     if(MSVC)
         target_compile_options(${target} PRIVATE /W4 /WX /utf-8)
@@ -126,7 +129,10 @@ else()
 endif()
 
 add_executable(lw-rec-benchmark examples/benchmark_ppm.c)
+target_sources(lw-rec-benchmark PRIVATE src/simd/cpu_features.c)
 target_link_libraries(lw-rec-benchmark PRIVATE lw_ppocr_c_shared)
+target_include_directories(lw-rec-benchmark PRIVATE
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/simd")
 target_compile_features(lw-rec-benchmark PRIVATE c_std_11)
 add_dependencies(lw-rec-benchmark convert_rec_model rec_demo_fixture)
 if(WIN32)
