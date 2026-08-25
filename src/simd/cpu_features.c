@@ -7,28 +7,65 @@
 #endif
 
 lw_simd_level lw_detect_simd_level(void) {
-#if defined(_M_X64) || defined(__x86_64__)
-    return LW_SIMD_LEVEL_SSE2;
-#elif defined(_M_IX86)
+#if defined(_M_IX86) || defined(_M_X64)
     int registers[4];
+    int maximum_leaf;
+    int has_sse2;
+    __cpuid(registers, 0);
+    maximum_leaf = registers[0];
+    if (maximum_leaf < 1) {
+        return LW_SIMD_LEVEL_SCALAR;
+    }
     __cpuid(registers, 1);
-    return (registers[3] & (1 << 26)) != 0 ?
-        LW_SIMD_LEVEL_SSE2 : LW_SIMD_LEVEL_SCALAR;
-#elif defined(__i386__)
+    has_sse2 = (registers[3] & (1 << 26)) != 0;
+    if (maximum_leaf >= 7 &&
+        (registers[2] & (1 << 27)) != 0 &&
+        (registers[2] & (1 << 28)) != 0 &&
+        (_xgetbv(0) & 6u) == 6u) {
+        __cpuidex(registers, 7, 0);
+        if ((registers[1] & (1 << 5)) != 0) {
+            return LW_SIMD_LEVEL_AVX2;
+        }
+    }
+    return has_sse2 ? LW_SIMD_LEVEL_SSE2 : LW_SIMD_LEVEL_SCALAR;
+#elif defined(__i386__) || defined(__x86_64__)
     unsigned int eax;
     unsigned int ebx;
     unsigned int ecx;
     unsigned int edx;
-    if (__get_cpuid(1u, &eax, &ebx, &ecx, &edx) != 0 &&
-        (edx & bit_SSE2) != 0u) {
-        return LW_SIMD_LEVEL_SSE2;
+    unsigned int maximum_leaf = __get_cpuid_max(0u, NULL);
+    int has_sse2;
+    if (maximum_leaf < 1u ||
+        __get_cpuid(1u, &eax, &ebx, &ecx, &edx) == 0) {
+        return LW_SIMD_LEVEL_SCALAR;
     }
-    return LW_SIMD_LEVEL_SCALAR;
+    has_sse2 = (edx & bit_SSE2) != 0u;
+    if (maximum_leaf >= 7u &&
+        (ecx & bit_OSXSAVE) != 0u &&
+        (ecx & bit_AVX) != 0u) {
+        unsigned int xcr0_eax;
+        unsigned int xcr0_edx;
+        __asm__ volatile(
+            ".byte 0x0f, 0x01, 0xd0"
+            : "=a"(xcr0_eax), "=d"(xcr0_edx)
+            : "c"(0u));
+        (void)xcr0_edx;
+        if ((xcr0_eax & 6u) == 6u) {
+            __cpuid_count(7u, 0u, eax, ebx, ecx, edx);
+            if ((ebx & bit_AVX2) != 0u) {
+                return LW_SIMD_LEVEL_AVX2;
+            }
+        }
+    }
+    return has_sse2 ? LW_SIMD_LEVEL_SSE2 : LW_SIMD_LEVEL_SCALAR;
 #else
     return LW_SIMD_LEVEL_SCALAR;
 #endif
 }
 
 const char* lw_simd_level_name(lw_simd_level level) {
+    if (level >= LW_SIMD_LEVEL_AVX2) {
+        return "avx2";
+    }
     return level >= LW_SIMD_LEVEL_SSE2 ? "sse2" : "scalar";
 }

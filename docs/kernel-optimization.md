@@ -199,6 +199,44 @@ These values are medians from five repeated 3+20 runs. Every call retained the
 exact text and score, every benchmark identified the selected backend as
 `sse2`, and every run reported zero RSS growth.
 
+## Sixth profile: runtime-dispatched AVX2 MatMul
+
+The sixth change widens the explicit SIMD path while keeping dispatch safe on
+older CPUs and operating systems:
+
+- CPUID verifies AVX, OSXSAVE, and AVX2 support, while XGETBV verifies that the
+  operating system saves both XMM and YMM state;
+- an isolated eight-column AVX2 loop uses `vmulps/vaddps`, followed by the same
+  scalar tail;
+- SSE2 and scalar implementations remain the automatic fallbacks;
+- the benchmark reports `avx2` when that implementation is selected.
+
+There is no public C ABI, allocation, thread, model, workspace, or package
+layout change. Direct scalar, SSE2, AVX2, and dispatched tensor checks require
+byte-identical MatMul output on supported hardware before NumPy comparison.
+Release x64 and x86 disassembly confirmed `vmulps/vaddps` and `vzeroupper` in
+the isolated AVX2 object and confirmed that no fused multiply-add instruction
+was emitted. The CPU-detection object contains no AVX instruction before the
+runtime checks.
+
+Across five x64 profiles, median MatMul time fell from 2.845 ms with SSE2 to
+1.906 ms with AVX2, a 33.01% reduction (1.493x). Relative to the portable
+row-blocked scalar implementation's 5.970 ms, the reduction is 68.07% (3.132x).
+Median measured operator time was 34.036 ms and MatMul's share fell to 5.58%.
+On x86, MatMul fell from 2.869 ms to 1.898 ms, a 33.84% reduction (1.511x).
+
+## Sixth end-to-end A/B result
+
+| Process | SSE2 mean | AVX2 mean | Further reduction | Further speedup | Original baseline speedup | Throughput | RSS growth |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| Windows x64 | 35.344 ms | 33.324 ms | 5.72% | 1.061x | 17.128x | 30.009/s | 0 B |
+| Windows x86 | 114.763 ms | 112.594 ms | 1.89% | 1.019x | 12.581x | 8.881/s | 0 B |
+
+These values are medians from five repeated 3+20 runs. Every call retained the
+exact text and score, every benchmark identified the selected backend as
+`avx2`, and every run reported zero RSS growth. With MatMul at 5.58% of the x64
+operator profile, pointwise Conv SIMD is the next measured candidate.
+
 All results in this document describe one machine, compiler, model, and
 fixture. They should be reproduced on target machines before being used for
 capacity planning.

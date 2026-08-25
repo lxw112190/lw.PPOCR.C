@@ -1,4 +1,6 @@
 #include "scalar_kernels.h"
+#include "cpu_features.h"
+#include "simd_kernels.h"
 
 #include <inttypes.h>
 #include <stddef.h>
@@ -62,7 +64,9 @@ int main(void) {
     float matmul_weights[20];
     float matmul_output[30];
     float matmul_dispatched_output[30];
+    float matmul_simd_output[30];
     uint32_t index;
+    lw_simd_level simd_level;
     lw_status status;
 
     for (index = 0u; index < 30u; ++index) {
@@ -144,6 +148,27 @@ int main(void) {
         return 1;
     }
     print_values("matmul", matmul_output, 30u);
+    simd_level = lw_detect_simd_level();
+    if (simd_level >= LW_SIMD_LEVEL_SSE2) {
+        lw_sse2_matmul_shared_f32(
+            matmul_input, matmul_weights, matmul_simd_output,
+            2u, 3u, 4u, 5u);
+        if (memcmp(matmul_output, matmul_simd_output,
+                   sizeof(matmul_output)) != 0) {
+            fprintf(stderr, "SSE2 matmul differs from scalar output\n");
+            return 1;
+        }
+    }
+    if (simd_level >= LW_SIMD_LEVEL_AVX2) {
+        lw_avx2_matmul_shared_f32(
+            matmul_input, matmul_weights, matmul_simd_output,
+            2u, 3u, 4u, 5u);
+        if (memcmp(matmul_output, matmul_simd_output,
+                   sizeof(matmul_output)) != 0) {
+            fprintf(stderr, "AVX2 matmul differs from scalar output\n");
+            return 1;
+        }
+    }
     status = lw_matmul_shared_f32(
         matmul_input, matmul_weights, matmul_dispatched_output,
         2u, 3u, 4u, 5u);

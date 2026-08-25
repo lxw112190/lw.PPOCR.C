@@ -77,9 +77,12 @@ and architecture-specific kernels are isolated under `src/simd`.
 15. x86/x64 SSE2 MatMul dispatch — complete locally; x64 uses its architectural
     SSE2 baseline, x86 checks CPUID bit 26, other architectures retain the
     scalar path, and the benchmark reports the selected backend.
-16. Next: add AVX2 detection with OS state validation and compare wider MatMul,
-    Conv, and elementwise candidates before considering threads, CLS, DET, and
-    full OCR.
+16. x86/x64 AVX2 MatMul dispatch — complete locally; CPUID, OSXSAVE, and XGETBV
+    checks prevent AVX state use on unsupported operating systems, the isolated
+    eight-column kernel avoids FMA so it preserves the scalar accumulation
+    order, and SSE2/scalar fallbacks remain available.
+17. Next: profile and compare SSE2/AVX2 pointwise Conv candidates before
+    considering threads, CLS, DET, and full OCR.
 
 ## Compatibility claims
 

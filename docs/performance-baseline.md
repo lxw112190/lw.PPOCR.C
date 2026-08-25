@@ -23,7 +23,8 @@ From a Release build tree:
 
 The final two arguments are warm-up count and measured iteration count. Both
 must be in `1..10000`. The output is UTF-8 JSON with `schema_version: 1`.
-The `backend` field reports the selected `scalar` or `sse2` kernel level.
+The `backend` field reports the selected `scalar`, `sse2`, or `avx2` kernel
+level.
 
 ## Local baseline
 
@@ -121,3 +122,19 @@ reduction. The x86 MatMul median fell from 5.860 ms to 2.869 ms, a 51.04%
 reduction; its smaller end-to-end change reflects the remaining Conv and
 elementwise cost and normal run-to-run variance. Every run reported `sse2`,
 retained the exact text and score, and had zero measured RSS growth.
+
+## AVX2 MatMul result
+
+The next SIMD milestone adds OS-safe AVX2 detection and an eight-column MatMul
+loop, while retaining SSE2 and scalar fallbacks. Under the same five repeated
+3+20 protocol:
+
+| Process | SSE2 stage | AVX2 stage | Further reduction | Further speedup | Original baseline speedup | Throughput | RSS growth |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| Windows x64 | 35.344 ms | 33.324 ms | 5.72% | 1.061x | 17.128x | 30.009/s | 0 B |
+| Windows x86 | 114.763 ms | 112.594 ms | 1.89% | 1.019x | 12.581x | 8.881/s | 0 B |
+
+The x64 MatMul operator median fell from 2.845 ms with SSE2 to 1.906 ms with
+AVX2, a 33.01% reduction. The x86 MatMul median fell from 2.869 ms to 1.898 ms,
+a 33.84% reduction. Every run reported `avx2`, retained the exact text and
+score, and had zero measured RSS growth.

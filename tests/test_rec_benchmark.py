@@ -28,7 +28,7 @@ class RecBenchmarkTest(unittest.TestCase):
         self.assertEqual(completed.returncode, 0, completed.stdout + completed.stderr)
         report = json.loads(completed.stdout)
         self.assertEqual(report["schema_version"], 1)
-        self.assertIn(report["backend"], {"scalar", "sse2"})
+        self.assertIn(report["backend"], {"scalar", "sse2", "avx2"})
         self.assertEqual(report["text"], "纯臻营养护发素")
         self.assertEqual(report["characters"], 7)
         self.assertEqual(report["warmup"], 2)

@@ -3,7 +3,8 @@
 
 typedef enum lw_simd_level {
     LW_SIMD_LEVEL_SCALAR = 0,
-    LW_SIMD_LEVEL_SSE2 = 1
+    LW_SIMD_LEVEL_SSE2 = 1,
+    LW_SIMD_LEVEL_AVX2 = 2
 } lw_simd_level;
 
 lw_simd_level lw_detect_simd_level(void);

@@ -60,8 +60,16 @@ set(LW_PPOCR_C_SOURCES
     src/runtime/session.c
     src/runtime/shape.c
     src/runtime/validate.c
+    src/simd/avx2_matmul.c
     src/simd/cpu_features.c
     src/simd/sse2_matmul.c)
+
+if(MSVC AND MSVC_C_ARCHITECTURE_ID MATCHES "^(x64|X86)$")
+    set_property(SOURCE src/simd/avx2_matmul.c APPEND PROPERTY
+        COMPILE_OPTIONS /arch:AVX2 /fp:strict)
+    set_property(SOURCE src/simd/cpu_features.c APPEND PROPERTY
+        COMPILE_OPTIONS /arch:AVX)
+endif()
 
 function(lw_configure_runtime_target target)
     target_include_directories(${target}
@@ -293,7 +301,8 @@ if(BUILD_TESTING)
     add_executable(tensor-reference-driver tests/tensor_reference_driver.c)
     target_link_libraries(tensor-reference-driver PRIVATE lw_ppocr_c)
     target_include_directories(tensor-reference-driver PRIVATE
-        "${CMAKE_CURRENT_SOURCE_DIR}/src/kernels")
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/kernels"
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/simd")
     target_compile_features(tensor-reference-driver PRIVATE c_std_11)
     if(MSVC)
         target_compile_options(tensor-reference-driver PRIVATE /W4 /WX /utf-8)

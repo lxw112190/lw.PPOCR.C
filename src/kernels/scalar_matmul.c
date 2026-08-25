@@ -113,12 +113,17 @@ lw_status lw_matmul_shared_f32(
     uint32_t rows,
     uint32_t inner_dimension,
     uint32_t columns) {
+    lw_simd_level simd_level;
     lw_status status = validate_matmul_shared_f32(
         input, weights, output, batch_count, rows, inner_dimension, columns);
     if (status != LW_STATUS_OK) {
         return status;
     }
-    if (lw_detect_simd_level() >= LW_SIMD_LEVEL_SSE2) {
+    simd_level = lw_detect_simd_level();
+    if (simd_level >= LW_SIMD_LEVEL_AVX2) {
+        lw_avx2_matmul_shared_f32(
+            input, weights, output, batch_count, rows, inner_dimension, columns);
+    } else if (simd_level >= LW_SIMD_LEVEL_SSE2) {
         lw_sse2_matmul_shared_f32(
             input, weights, output, batch_count, rows, inner_dimension, columns);
     } else {
