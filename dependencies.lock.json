@@ -1,0 +1,83 @@
+{
+  "lock_version": 1,
+  "runtime_dependencies": [],
+  "development_dependencies": [
+    {
+      "name": "numpy",
+      "version": "1.26.4",
+      "license": "BSD-3-Clause",
+      "scope": "converter-and-tests",
+      "source": "https://github.com/numpy/numpy",
+      "purl": "pkg:pypi/numpy@1.26.4"
+    },
+    {
+      "name": "onnx",
+      "version": "1.22.0",
+      "license": "Apache-2.0",
+      "scope": "converter-and-tests",
+      "source": "https://github.com/onnx/onnx",
+      "purl": "pkg:pypi/onnx@1.22.0"
+    },
+    {
+      "name": "protobuf",
+      "version": "4.25.3",
+      "license": "BSD-3-Clause",
+      "scope": "converter-transitive",
+      "source": "https://github.com/protocolbuffers/protobuf",
+      "purl": "pkg:pypi/protobuf@4.25.3"
+    },
+    {
+      "name": "ml_dtypes",
+      "version": "0.5.4",
+      "license": "Apache-2.0",
+      "scope": "converter-transitive",
+      "source": "https://github.com/jax-ml/ml_dtypes",
+      "purl": "pkg:pypi/ml_dtypes@0.5.4"
+    },
+    {
+      "name": "typing_extensions",
+      "version": "4.15.0",
+      "license": "PSF-2.0",
+      "scope": "converter-transitive",
+      "source": "https://github.com/python/typing_extensions",
+      "purl": "pkg:pypi/typing_extensions@4.15.0"
+    }
+  ],
+  "model_assets": [
+    {
+      "name": "PP-OCRv6 tiny detector",
+      "version": "workspace-2026-08-25",
+      "license": "Apache-2.0",
+      "path": "models/ppocrv6-tiny/det.onnx",
+      "sha256": "193bab7a04fca699a6c82e6abb5b81bdb28177f0abd4062552b04908dafb19f8"
+    },
+    {
+      "name": "PP-OCRv6 tiny classifier",
+      "version": "workspace-2026-08-25",
+      "license": "Apache-2.0",
+      "path": "models/ppocrv6-tiny/cls.onnx",
+      "sha256": "dd8b2b61983d76ab230a58da9e0e0e84956b71c3877f2ce6e438fe22d74d2cf2"
+    },
+    {
+      "name": "PP-OCRv6 tiny recognizer",
+      "version": "workspace-2026-08-25",
+      "license": "Apache-2.0",
+      "path": "models/ppocrv6-tiny/rec.onnx",
+      "sha256": "9ef676d6ed3c88256a2d92c640c44f25b0c40947e111b14b8be8f594091563e6"
+    },
+    {
+      "name": "PP-OCR dictionary",
+      "version": "workspace-2026-08-25",
+      "license": "Apache-2.0",
+      "path": "models/ppocrv6-tiny/ppocr_keys.txt",
+      "sha256": "46e1b34ef45684cb46d75ac76d355341fe7f0a2c38d6ee02e63ae6b3878019fc"
+    },
+    {
+      "name": "PP-OCR sample image",
+      "version": "workspace-2026-08-25",
+      "license": "Apache-2.0",
+      "path": "models/ppocrv6-tiny/sample.jpg",
+      "sha256": "30c417c9f758a3b62718729f5a944f7d2e10cdd2bde0e8ce6785523ddb68ffe9"
+    }
+  ]
+}

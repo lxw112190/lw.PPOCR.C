@@ -1,0 +1,32 @@
+name: model-analysis
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  analyze:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-22.04]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install converter dependencies
+        run: python -m pip install -r requirements-converter.txt
+      - name: Configure
+        run: cmake -S . -B build -DBUILD_TESTING=ON
+      - name: Regenerate analysis
+        run: cmake --build build --target analyze_models
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
+      - name: Verify generated reports are current
+        shell: bash
+        run: git diff --exit-code -- docs/SUPPORTED_OPS_V0.md docs/ppocrv6-tiny-analysis.json

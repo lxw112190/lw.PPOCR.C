@@ -1,0 +1,15 @@
+* text=auto eol=lf
+*.md text eol=lf
+*.py text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.sh text eol=lf
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+*.onnx binary
+*.lwm binary
+models/**/*.txt binary
+*.png binary
+*.jpg binary
+*.jpeg binary

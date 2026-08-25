@@ -1,0 +1,6929 @@
+{
+  "analysis_schema_version": 1,
+  "models": [
+    {
+      "constant_fold_candidates": [],
+      "constant_nodes": [],
+      "dynamic_node_counts": {
+        "Add": 36,
+        "Concat": 2,
+        "Conv": 83,
+        "ConvTranspose": 2,
+        "Div": 13,
+        "Erf": 13,
+        "GlobalAveragePool": 8,
+        "HardSigmoid": 13,
+        "MaxPool": 1,
+        "Mul": 39,
+        "ReduceMean": 5,
+        "Relu": 20,
+        "Resize": 6,
+        "Sigmoid": 1
+      },
+      "dynamic_values": [
+        {
+          "name": "Add.107",
+          "shape": [
+            "DynamicDimension.0",
+            128,
+            "floor(floor(floor(floor(DynamicDimension.1/2 - 1/2)/2)/2)/2) + 1",
+            "floor(floor(floor(floor(DynamicDimension.2/2 - 1/2)/2)/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Add.111",
+          "shape": [
+            "DynamicDimension.0",
+            64,
+            "floor(floor(floor(floor(DynamicDimension.1/2 - 1/2)/2)/2)/2) + 1",
+            "floor(floor(floor(floor(DynamicDimension.2/2 - 1/2)/2)/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Add.117",
+          "shape": [
+            "DynamicDimension.0",
+            128,
+            "floor(floor(floor(floor(DynamicDimension.1/2 - 1/2)/2)/2)/2) + 1",
+            "floor(floor(floor(floor(DynamicDimension.2/2 - 1/2)/2)/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Add.121",
+          "shape": [
+            "DynamicDimension.0",
+            64,
+            "floor(floor(floor(floor(DynamicDimension.1/2 - 1/2)/2)/2)/2) + 1",
+            "floor(floor(floor(floor(DynamicDimension.2/2 - 1/2)/2)/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Add.127",
+          "shape": [
+            "DynamicDimension.0",
+            128,
+            "floor(floor(floor(floor(floor(DynamicDimension.1/2 - 1/2)/2)/2)/2)/2) + 1",
+            "floor(floor(floor(floor(floor(DynamicDimension.2/2 - 1/2)/2)/2)/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Add.139",
+          "shape": [
+            "DynamicDimension.0",
+            320,
+            "floor(floor(floor(floor(floor(DynamicDimension.1/2 - 1/2)/2)/2)/2)/2) + 1",
+            "floor(floor(floor(floor(floor(DynamicDimension.2/2 - 1/2)/2)/2)/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Add.143",
+          "shape": [
+            "DynamicDimension.0",
+            160,
+            "floor(floor(floor(floor(floor(DynamicDimension.1/2 - 1/2)/2)/2)/2)/2) + 1",
+            "floor(floor(floor(floor(floor(DynamicDimension.2/2 - 1/2)/2)/2)/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Add.149",
+          "shape": [
+            "DynamicDimension.0",
+            320,
+            "floor(floor(floor(floor(floor(DynamicDimension.1/2 - 1/2)/2)/2)/2)/2) + 1",
+            "floor(floor(floor(floor(floor(DynamicDimension.2/2 - 1/2)/2)/2)/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Add.153",
+          "shape": [
+            "DynamicDimension.0",
+            160,
+            "floor(floor(floor(floor(floor(DynamicDimension.1/2 - 1/2)/2)/2)/2)/2) + 1",
+            "floor(floor(floor(floor(floor(DynamicDimension.2/2 - 1/2)/2)/2)/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Add.159",
+          "shape": [
+            "DynamicDimension.0",
+            64,
+            "floor(floor(floor(floor(floor(DynamicDimension.1/2 - 1/2)/2)/2)/2)/2) + 1",
+            "floor(floor(floor(floor(floor(DynamicDimension.2/2 - 1/2)/2)/2)/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Add.165",
+          "shape": [
+            "DynamicDimension.0",
+            64,
+            "floor(floor(floor(floor(DynamicDimension.1/2 - 1/2)/2)/2)/2) + 1",
+            "floor(floor(floor(floor(DynamicDimension.2/2 - 1/2)/2)/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Add.171",
+          "shape": [
+            "DynamicDimension.0",
+            64,
+            "floor(floor(floor(DynamicDimension.1/2 - 1/2)/2)/2) + 1",
+            "floor(floor(floor(DynamicDimension.2/2 - 1/2)/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Add.177",
+          "shape": [
+            "DynamicDimension.0",
+            64,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1",
+            "floor(floor(DynamicDimension.2/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Add.179",
+          "shape": [
+            "DynamicDimension.0",
+            64,
+            "floor(floor(floor(floor(DynamicDimension.1/2 - 1/2)/2)/2)/2) + 1",
+            "floor(floor(floor(floor(DynamicDimension.2/2 - 1/2)/2)/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Add.181",
+          "shape": [
+            "DynamicDimension.0",
+            64,
+            "floor(floor(floor(DynamicDimension.1/2 - 1/2)/2)/2) + 1",
+            "floor(floor(floor(DynamicDimension.2/2 - 1/2)/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Add.183",
+          "shape": [
+            "DynamicDimension.0",
+            64,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1",
+            "floor(floor(DynamicDimension.2/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Add.19",
+          "shape": [
+            "DynamicDimension.0",
+            64,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1",
+            "floor(floor(DynamicDimension.2/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Add.191",
+          "shape": [
+            "DynamicDimension.0",
+            16,
+            "floor(floor(floor(floor(floor(DynamicDimension.1/2 - 1/2)/2)/2)/2)/2) + 1",
+            "floor(floor(floor(floor(floor(DynamicDimension.2/2 - 1/2)/2)/2)/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Add.199",
+          "shape": [
+            "DynamicDimension.0",
+            16,
+            "floor(floor(floor(floor(DynamicDimension.1/2 - 1/2)/2)/2)/2) + 1",
+            "floor(floor(floor(floor(DynamicDimension.2/2 - 1/2)/2)/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Add.207",
+          "shape": [
+            "DynamicDimension.0",
+            16,
+            "floor(floor(floor(DynamicDimension.1/2 - 1/2)/2)/2) + 1",
+            "floor(floor(floor(DynamicDimension.2/2 - 1/2)/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Add.215",
+          "shape": [
+            "DynamicDimension.0",
+            16,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1",
+            "floor(floor(DynamicDimension.2/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Add.219",
+          "shape": [
+            "ConvTranspose_453_o0__d0",
+            16,
+            "ConvTranspose_453_o0__d2",
+            "ConvTranspose_453_o0__d3"
+          ]
+        },
+        {
+          "name": "Add.221",
+          "shape": [
+            "ConvTranspose_459_o0__d0",
+            1,
+            "ConvTranspose_459_o0__d2",
+            "ConvTranspose_459_o0__d3"
+          ]
+        },
+        {
+          "name": "Add.23",
+          "shape": [
+            "DynamicDimension.0",
+            32,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1",
+            "floor(floor(DynamicDimension.2/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Add.29",
+          "shape": [
+            "DynamicDimension.0",
+            64,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1",
+            "floor(floor(DynamicDimension.2/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Add.33",
+          "shape": [
+            "DynamicDimension.0",
+            32,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1",
+            "floor(floor(DynamicDimension.2/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Add.39",
+          "shape": [
+            "DynamicDimension.0",
+            64,
+            "floor(floor(floor(DynamicDimension.1/2 - 1/2)/2)/2) + 1",
+            "floor(floor(floor(DynamicDimension.2/2 - 1/2)/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Add.51",
+          "shape": [
+            "DynamicDimension.0",
+            96,
+            "floor(floor(floor(DynamicDimension.1/2 - 1/2)/2)/2) + 1",
+            "floor(floor(floor(DynamicDimension.2/2 - 1/2)/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Add.55",
+          "shape": [
+            "DynamicDimension.0",
+            48,
+            "floor(floor(floor(DynamicDimension.1/2 - 1/2)/2)/2) + 1",
+            "floor(floor(floor(DynamicDimension.2/2 - 1/2)/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Add.61",
+          "shape": [
+            "DynamicDimension.0",
+            96,
+            "floor(floor(floor(DynamicDimension.1/2 - 1/2)/2)/2) + 1",
+            "floor(floor(floor(DynamicDimension.2/2 - 1/2)/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Add.65",
+          "shape": [
+            "DynamicDimension.0",
+            48,
+            "floor(floor(floor(DynamicDimension.1/2 - 1/2)/2)/2) + 1",
+            "floor(floor(floor(DynamicDimension.2/2 - 1/2)/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Add.71",
+          "shape": [
+            "DynamicDimension.0",
+            96,
+            "floor(floor(floor(floor(DynamicDimension.1/2 - 1/2)/2)/2)/2) + 1",
+            "floor(floor(floor(floor(DynamicDimension.2/2 - 1/2)/2)/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Add.83",
+          "shape": [
+            "DynamicDimension.0",
+            128,
+            "floor(floor(floor(floor(DynamicDimension.1/2 - 1/2)/2)/2)/2) + 1",
+            "floor(floor(floor(floor(DynamicDimension.2/2 - 1/2)/2)/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Add.87",
+          "shape": [
+            "DynamicDimension.0",
+            64,
+            "floor(floor(floor(floor(DynamicDimension.1/2 - 1/2)/2)/2)/2) + 1",
+            "floor(floor(floor(floor(DynamicDimension.2/2 - 1/2)/2)/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Add.93",
+          "shape": [
+            "DynamicDimension.0",
+            128,
+            "floor(floor(floor(floor(DynamicDimension.1/2 - 1/2)/2)/2)/2) + 1",
+            "floor(floor(floor(floor(DynamicDimension.2/2 - 1/2)/2)/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Add.97",
+          "shape": [
+            "DynamicDimension.0",
+            64,
+            "floor(floor(floor(floor(DynamicDimension.1/2 - 1/2)/2)/2)/2) + 1",
+            "floor(floor(floor(floor(DynamicDimension.2/2 - 1/2)/2)/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Concat.1",
+          "shape": [
+            "DynamicDimension.0",
+            32,
+            "floor(DynamicDimension.1/2 - 1/2) + 1",
+            "floor(DynamicDimension.2/2 - 1/2) + 1"
+          ]
+        },
+        {
+          "name": "Concat.3",
+          "shape": [
+            "DynamicDimension.0",
+            64,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1",
+            "floor(floor(DynamicDimension.2/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "ConvTranspose.1",
+          "shape": [
+            "ConvTranspose_453_o0__d0",
+            16,
+            "ConvTranspose_453_o0__d2",
+            "ConvTranspose_453_o0__d3"
+          ]
+        },
+        {
+          "name": "ConvTranspose.3",
+          "shape": [
+            "ConvTranspose_459_o0__d0",
+            1,
+            "ConvTranspose_459_o0__d2",
+            "ConvTranspose_459_o0__d3"
+          ]
+        },
+        {
+          "name": "Div.1",
+          "shape": [
+            "DynamicDimension.0",
+            64,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1",
+            "floor(floor(DynamicDimension.2/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Div.11",
+          "shape": [
+            "DynamicDimension.0",
+            96,
+            "floor(floor(floor(floor(DynamicDimension.1/2 - 1/2)/2)/2)/2) + 1",
+            "floor(floor(floor(floor(DynamicDimension.2/2 - 1/2)/2)/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Div.13",
+          "shape": [
+            "DynamicDimension.0",
+            128,
+            "floor(floor(floor(floor(DynamicDimension.1/2 - 1/2)/2)/2)/2) + 1",
+            "floor(floor(floor(floor(DynamicDimension.2/2 - 1/2)/2)/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Div.15",
+          "shape": [
+            "DynamicDimension.0",
+            128,
+            "floor(floor(floor(floor(DynamicDimension.1/2 - 1/2)/2)/2)/2) + 1",
+            "floor(floor(floor(floor(DynamicDimension.2/2 - 1/2)/2)/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Div.17",
+          "shape": [
+            "DynamicDimension.0",
+            128,
+            "floor(floor(floor(floor(DynamicDimension.1/2 - 1/2)/2)/2)/2) + 1",
+            "floor(floor(floor(floor(DynamicDimension.2/2 - 1/2)/2)/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Div.19",
+          "shape": [
+            "DynamicDimension.0",
+            128,
+            "floor(floor(floor(floor(DynamicDimension.1/2 - 1/2)/2)/2)/2) + 1",
+            "floor(floor(floor(floor(DynamicDimension.2/2 - 1/2)/2)/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Div.21",
+          "shape": [
+            "DynamicDimension.0",
+            128,
+            "floor(floor(floor(floor(floor(DynamicDimension.1/2 - 1/2)/2)/2)/2)/2) + 1",
+            "floor(floor(floor(floor(floor(DynamicDimension.2/2 - 1/2)/2)/2)/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Div.23",
+          "shape": [
+            "DynamicDimension.0",
+            320,
+            "floor(floor(floor(floor(floor(DynamicDimension.1/2 - 1/2)/2)/2)/2)/2) + 1",
+            "floor(floor(floor(floor(floor(DynamicDimension.2/2 - 1/2)/2)/2)/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Div.25",
+          "shape": [
+            "DynamicDimension.0",
+            320,
+            "floor(floor(floor(floor(floor(DynamicDimension.1/2 - 1/2)/2)/2)/2)/2) + 1",
+            "floor(floor(floor(floor(floor(DynamicDimension.2/2 - 1/2)/2)/2)/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Div.3",
+          "shape": [
+            "DynamicDimension.0",
+            64,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1",
+            "floor(floor(DynamicDimension.2/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Div.5",
+          "shape": [
+            "DynamicDimension.0",
+            64,
+            "floor(floor(floor(DynamicDimension.1/2 - 1/2)/2)/2) + 1",
+            "floor(floor(floor(DynamicDimension.2/2 - 1/2)/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Div.7",
+          "shape": [
+            "DynamicDimension.0",
+            96,
+            "floor(floor(floor(DynamicDimension.1/2 - 1/2)/2)/2) + 1",
+            "floor(floor(floor(DynamicDimension.2/2 - 1/2)/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Div.9",
+          "shape": [
+            "DynamicDimension.0",
+            96,
+            "floor(floor(floor(DynamicDimension.1/2 - 1/2)/2)/2) + 1",
+            "floor(floor(floor(DynamicDimension.2/2 - 1/2)/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Erf.1",
+          "shape": [
+            "DynamicDimension.0",
+            64,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1",
+            "floor(floor(DynamicDimension.2/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Erf.11",
+          "shape": [
+            "DynamicDimension.0",
+            96,
+            "floor(floor(floor(floor(DynamicDimension.1/2 - 1/2)/2)/2)/2) + 1",
+            "floor(floor(floor(floor(DynamicDimension.2/2 - 1/2)/2)/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Erf.13",
+          "shape": [
+            "DynamicDimension.0",
+            128,
+            "floor(floor(floor(floor(DynamicDimension.1/2 - 1/2)/2)/2)/2) + 1",
+            "floor(floor(floor(floor(DynamicDimension.2/2 - 1/2)/2)/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Erf.15",
+          "shape": [
+            "DynamicDimension.0",
+            128,
+            "floor(floor(floor(floor(DynamicDimension.1/2 - 1/2)/2)/2)/2) + 1",
+            "floor(floor(floor(floor(DynamicDimension.2/2 - 1/2)/2)/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Erf.17",
+          "shape": [
+            "DynamicDimension.0",
+            128,
+            "floor(floor(floor(floor(DynamicDimension.1/2 - 1/2)/2)/2)/2) + 1",
+            "floor(floor(floor(floor(DynamicDimension.2/2 - 1/2)/2)/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Erf.19",
+          "shape": [
+            "DynamicDimension.0",
+            128,
+            "floor(floor(floor(floor(DynamicDimension.1/2 - 1/2)/2)/2)/2) + 1",
+            "floor(floor(floor(floor(DynamicDimension.2/2 - 1/2)/2)/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Erf.21",
+          "shape": [
+            "DynamicDimension.0",
+            128,
+            "floor(floor(floor(floor(floor(DynamicDimension.1/2 - 1/2)/2)/2)/2)/2) + 1",
+            "floor(floor(floor(floor(floor(DynamicDimension.2/2 - 1/2)/2)/2)/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Erf.23",
+          "shape": [
+            "DynamicDimension.0",
+            320,
+            "floor(floor(floor(floor(floor(DynamicDimension.1/2 - 1/2)/2)/2)/2)/2) + 1",
+            "floor(floor(floor(floor(floor(DynamicDimension.2/2 - 1/2)/2)/2)/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Erf.25",
+          "shape": [
+            "DynamicDimension.0",
+            320,
+            "floor(floor(floor(floor(floor(DynamicDimension.1/2 - 1/2)/2)/2)/2)/2) + 1",
+            "floor(floor(floor(floor(floor(DynamicDimension.2/2 - 1/2)/2)/2)/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Erf.3",
+          "shape": [
+            "DynamicDimension.0",
+            64,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1",
+            "floor(floor(DynamicDimension.2/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Erf.5",
+          "shape": [
+            "DynamicDimension.0",
+            64,
+            "floor(floor(floor(DynamicDimension.1/2 - 1/2)/2)/2) + 1",
+            "floor(floor(floor(DynamicDimension.2/2 - 1/2)/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Erf.7",
+          "shape": [
+            "DynamicDimension.0",
+            96,
+            "floor(floor(floor(DynamicDimension.1/2 - 1/2)/2)/2) + 1",
+            "floor(floor(floor(DynamicDimension.2/2 - 1/2)/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Erf.9",
+          "shape": [
+            "DynamicDimension.0",
+            96,
+            "floor(floor(floor(DynamicDimension.1/2 - 1/2)/2)/2) + 1",
+            "floor(floor(floor(DynamicDimension.2/2 - 1/2)/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Mul.1",
+          "shape": [
+            "DynamicDimension.0",
+            32,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1",
+            "floor(floor(DynamicDimension.2/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Mul.12",
+          "shape": [
+            "DynamicDimension.0",
+            48,
+            "floor(floor(floor(DynamicDimension.1/2 - 1/2)/2)/2) + 1",
+            "floor(floor(floor(DynamicDimension.2/2 - 1/2)/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Mul.14",
+          "shape": [
+            "DynamicDimension.0",
+            96,
+            "floor(floor(floor(DynamicDimension.1/2 - 1/2)/2)/2) + 1",
+            "floor(floor(floor(DynamicDimension.2/2 - 1/2)/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Mul.17",
+          "shape": [
+            "DynamicDimension.0",
+            96,
+            "floor(floor(floor(DynamicDimension.1/2 - 1/2)/2)/2) + 1",
+            "floor(floor(floor(DynamicDimension.2/2 - 1/2)/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Mul.20",
+          "shape": [
+            "DynamicDimension.0",
+            96,
+            "floor(floor(floor(floor(DynamicDimension.1/2 - 1/2)/2)/2)/2) + 1",
+            "floor(floor(floor(floor(DynamicDimension.2/2 - 1/2)/2)/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Mul.23",
+          "shape": [
+            "DynamicDimension.0",
+            64,
+            "floor(floor(floor(floor(DynamicDimension.1/2 - 1/2)/2)/2)/2) + 1",
+            "floor(floor(floor(floor(DynamicDimension.2/2 - 1/2)/2)/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Mul.25",
+          "shape": [
+            "DynamicDimension.0",
+            128,
+            "floor(floor(floor(floor(DynamicDimension.1/2 - 1/2)/2)/2)/2) + 1",
+            "floor(floor(floor(floor(DynamicDimension.2/2 - 1/2)/2)/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Mul.28",
+          "shape": [
+            "DynamicDimension.0",
+            128,
+            "floor(floor(floor(floor(DynamicDimension.1/2 - 1/2)/2)/2)/2) + 1",
+            "floor(floor(floor(floor(DynamicDimension.2/2 - 1/2)/2)/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Mul.3",
+          "shape": [
+            "DynamicDimension.0",
+            64,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1",
+            "floor(floor(DynamicDimension.2/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Mul.31",
+          "shape": [
+            "DynamicDimension.0",
+            64,
+            "floor(floor(floor(floor(DynamicDimension.1/2 - 1/2)/2)/2)/2) + 1",
+            "floor(floor(floor(floor(DynamicDimension.2/2 - 1/2)/2)/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Mul.33",
+          "shape": [
+            "DynamicDimension.0",
+            128,
+            "floor(floor(floor(floor(DynamicDimension.1/2 - 1/2)/2)/2)/2) + 1",
+            "floor(floor(floor(floor(DynamicDimension.2/2 - 1/2)/2)/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Mul.36",
+          "shape": [
+            "DynamicDimension.0",
+            128,
+            "floor(floor(floor(floor(DynamicDimension.1/2 - 1/2)/2)/2)/2) + 1",
+            "floor(floor(floor(floor(DynamicDimension.2/2 - 1/2)/2)/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Mul.39",
+          "shape": [
+            "DynamicDimension.0",
+            128,
+            "floor(floor(floor(floor(floor(DynamicDimension.1/2 - 1/2)/2)/2)/2)/2) + 1",
+            "floor(floor(floor(floor(floor(DynamicDimension.2/2 - 1/2)/2)/2)/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Mul.42",
+          "shape": [
+            "DynamicDimension.0",
+            160,
+            "floor(floor(floor(floor(floor(DynamicDimension.1/2 - 1/2)/2)/2)/2)/2) + 1",
+            "floor(floor(floor(floor(floor(DynamicDimension.2/2 - 1/2)/2)/2)/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Mul.44",
+          "shape": [
+            "DynamicDimension.0",
+            320,
+            "floor(floor(floor(floor(floor(DynamicDimension.1/2 - 1/2)/2)/2)/2)/2) + 1",
+            "floor(floor(floor(floor(floor(DynamicDimension.2/2 - 1/2)/2)/2)/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Mul.47",
+          "shape": [
+            "DynamicDimension.0",
+            320,
+            "floor(floor(floor(floor(floor(DynamicDimension.1/2 - 1/2)/2)/2)/2)/2) + 1",
+            "floor(floor(floor(floor(floor(DynamicDimension.2/2 - 1/2)/2)/2)/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Mul.50",
+          "shape": [
+            "DynamicDimension.0",
+            64,
+            "floor(floor(floor(floor(floor(DynamicDimension.1/2 - 1/2)/2)/2)/2)/2) + 1",
+            "floor(floor(floor(floor(floor(DynamicDimension.2/2 - 1/2)/2)/2)/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Mul.52",
+          "shape": [
+            "DynamicDimension.0",
+            64,
+            "floor(floor(floor(floor(DynamicDimension.1/2 - 1/2)/2)/2)/2) + 1",
+            "floor(floor(floor(floor(DynamicDimension.2/2 - 1/2)/2)/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Mul.54",
+          "shape": [
+            "DynamicDimension.0",
+            64,
+            "floor(floor(floor(DynamicDimension.1/2 - 1/2)/2)/2) + 1",
+            "floor(floor(floor(DynamicDimension.2/2 - 1/2)/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Mul.56",
+          "shape": [
+            "DynamicDimension.0",
+            64,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1",
+            "floor(floor(DynamicDimension.2/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Mul.58",
+          "shape": [
+            "DynamicDimension.0",
+            16,
+            "floor(floor(floor(floor(floor(DynamicDimension.1/2 - 1/2)/2)/2)/2)/2) + 1",
+            "floor(floor(floor(floor(floor(DynamicDimension.2/2 - 1/2)/2)/2)/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Mul.6",
+          "shape": [
+            "DynamicDimension.0",
+            64,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1",
+            "floor(floor(DynamicDimension.2/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Mul.60",
+          "shape": [
+            "DynamicDimension.0",
+            16,
+            "floor(floor(floor(floor(DynamicDimension.1/2 - 1/2)/2)/2)/2) + 1",
+            "floor(floor(floor(floor(DynamicDimension.2/2 - 1/2)/2)/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Mul.62",
+          "shape": [
+            "DynamicDimension.0",
+            16,
+            "floor(floor(floor(DynamicDimension.1/2 - 1/2)/2)/2) + 1",
+            "floor(floor(floor(DynamicDimension.2/2 - 1/2)/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Mul.64",
+          "shape": [
+            "DynamicDimension.0",
+            16,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1",
+            "floor(floor(DynamicDimension.2/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Mul.9",
+          "shape": [
+            "DynamicDimension.0",
+            64,
+            "floor(floor(floor(DynamicDimension.1/2 - 1/2)/2)/2) + 1",
+            "floor(floor(floor(DynamicDimension.2/2 - 1/2)/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "ReduceMean.1",
+          "shape": [
+            "DynamicDimension.0",
+            32,
+            1,
+            1
+          ]
+        },
+        {
+          "name": "ReduceMean.3",
+          "shape": [
+            "DynamicDimension.0",
+            48,
+            1,
+            1
+          ]
+        },
+        {
+          "name": "ReduceMean.5",
+          "shape": [
+            "DynamicDimension.0",
+            64,
+            1,
+            1
+          ]
+        },
+        {
+          "name": "ReduceMean.7",
+          "shape": [
+            "DynamicDimension.0",
+            64,
+            1,
+            1
+          ]
+        },
+        {
+          "name": "ReduceMean.9",
+          "shape": [
+            "DynamicDimension.0",
+            160,
+            1,
+            1
+          ]
+        },
+        {
+          "name": "fetch_name_0",
+          "shape": [
+            "ConvTranspose_459_o0__d0",
+            1,
+            "ConvTranspose_459_o0__d2",
+            "ConvTranspose_459_o0__d3"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.conv2d.0.0",
+          "shape": [
+            "DynamicDimension.0",
+            16,
+            "floor(DynamicDimension.1/2 - 1/2) + 1",
+            "floor(DynamicDimension.2/2 - 1/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.conv2d.1.0",
+          "shape": [
+            "DynamicDimension.0",
+            8,
+            "floor(DynamicDimension.1/2 - 1/2) + 1",
+            "floor(DynamicDimension.2/2 - 1/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.conv2d.10.0",
+          "shape": [
+            "DynamicDimension.0",
+            32,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1",
+            "floor(floor(DynamicDimension.2/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.conv2d.11.0",
+          "shape": [
+            "DynamicDimension.0",
+            64,
+            "floor(floor(floor(DynamicDimension.1/2 - 1/2)/2)/2) + 1",
+            "floor(floor(floor(DynamicDimension.2/2 - 1/2)/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.conv2d.12.0",
+          "shape": [
+            "DynamicDimension.0",
+            48,
+            "floor(floor(floor(DynamicDimension.1/2 - 1/2)/2)/2) + 1",
+            "floor(floor(floor(DynamicDimension.2/2 - 1/2)/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.conv2d.13.0",
+          "shape": [
+            "DynamicDimension.0",
+            12,
+            1,
+            1
+          ]
+        },
+        {
+          "name": "p2o.pd_op.conv2d.14.0",
+          "shape": [
+            "DynamicDimension.0",
+            48,
+            1,
+            1
+          ]
+        },
+        {
+          "name": "p2o.pd_op.conv2d.15.0",
+          "shape": [
+            "DynamicDimension.0",
+            96,
+            "floor(floor(floor(DynamicDimension.1/2 - 1/2)/2)/2) + 1",
+            "floor(floor(floor(DynamicDimension.2/2 - 1/2)/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.conv2d.16.0",
+          "shape": [
+            "DynamicDimension.0",
+            48,
+            "floor(floor(floor(DynamicDimension.1/2 - 1/2)/2)/2) + 1",
+            "floor(floor(floor(DynamicDimension.2/2 - 1/2)/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.conv2d.17.0",
+          "shape": [
+            "DynamicDimension.0",
+            96,
+            "floor(floor(floor(DynamicDimension.1/2 - 1/2)/2)/2) + 1",
+            "floor(floor(floor(DynamicDimension.2/2 - 1/2)/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.conv2d.18.0",
+          "shape": [
+            "DynamicDimension.0",
+            48,
+            "floor(floor(floor(DynamicDimension.1/2 - 1/2)/2)/2) + 1",
+            "floor(floor(floor(DynamicDimension.2/2 - 1/2)/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.conv2d.19.0",
+          "shape": [
+            "DynamicDimension.0",
+            96,
+            "floor(floor(floor(floor(DynamicDimension.1/2 - 1/2)/2)/2)/2) + 1",
+            "floor(floor(floor(floor(DynamicDimension.2/2 - 1/2)/2)/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.conv2d.2.0",
+          "shape": [
+            "DynamicDimension.0",
+            16,
+            "floor(DynamicDimension.1/2 - 1/2) + 1",
+            "floor(DynamicDimension.2/2 - 1/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.conv2d.20.0",
+          "shape": [
+            "DynamicDimension.0",
+            64,
+            "floor(floor(floor(floor(DynamicDimension.1/2 - 1/2)/2)/2)/2) + 1",
+            "floor(floor(floor(floor(DynamicDimension.2/2 - 1/2)/2)/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.conv2d.21.0",
+          "shape": [
+            "DynamicDimension.0",
+            16,
+            1,
+            1
+          ]
+        },
+        {
+          "name": "p2o.pd_op.conv2d.22.0",
+          "shape": [
+            "DynamicDimension.0",
+            64,
+            1,
+            1
+          ]
+        },
+        {
+          "name": "p2o.pd_op.conv2d.23.0",
+          "shape": [
+            "DynamicDimension.0",
+            128,
+            "floor(floor(floor(floor(DynamicDimension.1/2 - 1/2)/2)/2)/2) + 1",
+            "floor(floor(floor(floor(DynamicDimension.2/2 - 1/2)/2)/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.conv2d.24.0",
+          "shape": [
+            "DynamicDimension.0",
+            64,
+            "floor(floor(floor(floor(DynamicDimension.1/2 - 1/2)/2)/2)/2) + 1",
+            "floor(floor(floor(floor(DynamicDimension.2/2 - 1/2)/2)/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.conv2d.25.0",
+          "shape": [
+            "DynamicDimension.0",
+            128,
+            "floor(floor(floor(floor(DynamicDimension.1/2 - 1/2)/2)/2)/2) + 1",
+            "floor(floor(floor(floor(DynamicDimension.2/2 - 1/2)/2)/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.conv2d.26.0",
+          "shape": [
+            "DynamicDimension.0",
+            64,
+            "floor(floor(floor(floor(DynamicDimension.1/2 - 1/2)/2)/2)/2) + 1",
+            "floor(floor(floor(floor(DynamicDimension.2/2 - 1/2)/2)/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.conv2d.27.0",
+          "shape": [
+            "DynamicDimension.0",
+            16,
+            1,
+            1
+          ]
+        },
+        {
+          "name": "p2o.pd_op.conv2d.28.0",
+          "shape": [
+            "DynamicDimension.0",
+            64,
+            1,
+            1
+          ]
+        },
+        {
+          "name": "p2o.pd_op.conv2d.29.0",
+          "shape": [
+            "DynamicDimension.0",
+            128,
+            "floor(floor(floor(floor(DynamicDimension.1/2 - 1/2)/2)/2)/2) + 1",
+            "floor(floor(floor(floor(DynamicDimension.2/2 - 1/2)/2)/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.conv2d.3.0",
+          "shape": [
+            "DynamicDimension.0",
+            16,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1",
+            "floor(floor(DynamicDimension.2/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.conv2d.30.0",
+          "shape": [
+            "DynamicDimension.0",
+            64,
+            "floor(floor(floor(floor(DynamicDimension.1/2 - 1/2)/2)/2)/2) + 1",
+            "floor(floor(floor(floor(DynamicDimension.2/2 - 1/2)/2)/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.conv2d.31.0",
+          "shape": [
+            "DynamicDimension.0",
+            128,
+            "floor(floor(floor(floor(DynamicDimension.1/2 - 1/2)/2)/2)/2) + 1",
+            "floor(floor(floor(floor(DynamicDimension.2/2 - 1/2)/2)/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.conv2d.32.0",
+          "shape": [
+            "DynamicDimension.0",
+            64,
+            "floor(floor(floor(floor(DynamicDimension.1/2 - 1/2)/2)/2)/2) + 1",
+            "floor(floor(floor(floor(DynamicDimension.2/2 - 1/2)/2)/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.conv2d.33.0",
+          "shape": [
+            "DynamicDimension.0",
+            128,
+            "floor(floor(floor(floor(floor(DynamicDimension.1/2 - 1/2)/2)/2)/2)/2) + 1",
+            "floor(floor(floor(floor(floor(DynamicDimension.2/2 - 1/2)/2)/2)/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.conv2d.34.0",
+          "shape": [
+            "DynamicDimension.0",
+            160,
+            "floor(floor(floor(floor(floor(DynamicDimension.1/2 - 1/2)/2)/2)/2)/2) + 1",
+            "floor(floor(floor(floor(floor(DynamicDimension.2/2 - 1/2)/2)/2)/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.conv2d.35.0",
+          "shape": [
+            "DynamicDimension.0",
+            40,
+            1,
+            1
+          ]
+        },
+        {
+          "name": "p2o.pd_op.conv2d.36.0",
+          "shape": [
+            "DynamicDimension.0",
+            160,
+            1,
+            1
+          ]
+        },
+        {
+          "name": "p2o.pd_op.conv2d.37.0",
+          "shape": [
+            "DynamicDimension.0",
+            320,
+            "floor(floor(floor(floor(floor(DynamicDimension.1/2 - 1/2)/2)/2)/2)/2) + 1",
+            "floor(floor(floor(floor(floor(DynamicDimension.2/2 - 1/2)/2)/2)/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.conv2d.38.0",
+          "shape": [
+            "DynamicDimension.0",
+            160,
+            "floor(floor(floor(floor(floor(DynamicDimension.1/2 - 1/2)/2)/2)/2)/2) + 1",
+            "floor(floor(floor(floor(floor(DynamicDimension.2/2 - 1/2)/2)/2)/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.conv2d.39.0",
+          "shape": [
+            "DynamicDimension.0",
+            320,
+            "floor(floor(floor(floor(floor(DynamicDimension.1/2 - 1/2)/2)/2)/2)/2) + 1",
+            "floor(floor(floor(floor(floor(DynamicDimension.2/2 - 1/2)/2)/2)/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.conv2d.4.0",
+          "shape": [
+            "DynamicDimension.0",
+            32,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1",
+            "floor(floor(DynamicDimension.2/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.conv2d.40.0",
+          "shape": [
+            "DynamicDimension.0",
+            160,
+            "floor(floor(floor(floor(floor(DynamicDimension.1/2 - 1/2)/2)/2)/2)/2) + 1",
+            "floor(floor(floor(floor(floor(DynamicDimension.2/2 - 1/2)/2)/2)/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.conv2d.41.0",
+          "shape": [
+            "DynamicDimension.0",
+            64,
+            "floor(floor(floor(floor(floor(DynamicDimension.1/2 - 1/2)/2)/2)/2)/2) + 1",
+            "floor(floor(floor(floor(floor(DynamicDimension.2/2 - 1/2)/2)/2)/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.conv2d.42.0",
+          "shape": [
+            "DynamicDimension.0",
+            16,
+            1,
+            1
+          ]
+        },
+        {
+          "name": "p2o.pd_op.conv2d.43.0",
+          "shape": [
+            "DynamicDimension.0",
+            64,
+            1,
+            1
+          ]
+        },
+        {
+          "name": "p2o.pd_op.conv2d.44.0",
+          "shape": [
+            "DynamicDimension.0",
+            64,
+            "floor(floor(floor(floor(DynamicDimension.1/2 - 1/2)/2)/2)/2) + 1",
+            "floor(floor(floor(floor(DynamicDimension.2/2 - 1/2)/2)/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.conv2d.45.0",
+          "shape": [
+            "DynamicDimension.0",
+            16,
+            1,
+            1
+          ]
+        },
+        {
+          "name": "p2o.pd_op.conv2d.46.0",
+          "shape": [
+            "DynamicDimension.0",
+            64,
+            1,
+            1
+          ]
+        },
+        {
+          "name": "p2o.pd_op.conv2d.47.0",
+          "shape": [
+            "DynamicDimension.0",
+            64,
+            "floor(floor(floor(DynamicDimension.1/2 - 1/2)/2)/2) + 1",
+            "floor(floor(floor(DynamicDimension.2/2 - 1/2)/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.conv2d.48.0",
+          "shape": [
+            "DynamicDimension.0",
+            16,
+            1,
+            1
+          ]
+        },
+        {
+          "name": "p2o.pd_op.conv2d.49.0",
+          "shape": [
+            "DynamicDimension.0",
+            64,
+            1,
+            1
+          ]
+        },
+        {
+          "name": "p2o.pd_op.conv2d.5.0",
+          "shape": [
+            "DynamicDimension.0",
+            8,
+            1,
+            1
+          ]
+        },
+        {
+          "name": "p2o.pd_op.conv2d.50.0",
+          "shape": [
+            "DynamicDimension.0",
+            64,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1",
+            "floor(floor(DynamicDimension.2/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.conv2d.51.0",
+          "shape": [
+            "DynamicDimension.0",
+            16,
+            1,
+            1
+          ]
+        },
+        {
+          "name": "p2o.pd_op.conv2d.52.0",
+          "shape": [
+            "DynamicDimension.0",
+            64,
+            1,
+            1
+          ]
+        },
+        {
+          "name": "p2o.pd_op.conv2d.53.0",
+          "shape": [
+            "DynamicDimension.0",
+            16,
+            "floor(floor(floor(floor(floor(DynamicDimension.1/2 - 1/2)/2)/2)/2)/2) + 1",
+            "floor(floor(floor(floor(floor(DynamicDimension.2/2 - 1/2)/2)/2)/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.conv2d.54.0",
+          "shape": [
+            "DynamicDimension.0",
+            4,
+            1,
+            1
+          ]
+        },
+        {
+          "name": "p2o.pd_op.conv2d.55.0",
+          "shape": [
+            "DynamicDimension.0",
+            16,
+            1,
+            1
+          ]
+        },
+        {
+          "name": "p2o.pd_op.conv2d.56.0",
+          "shape": [
+            "DynamicDimension.0",
+            16,
+            "floor(floor(floor(floor(DynamicDimension.1/2 - 1/2)/2)/2)/2) + 1",
+            "floor(floor(floor(floor(DynamicDimension.2/2 - 1/2)/2)/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.conv2d.57.0",
+          "shape": [
+            "DynamicDimension.0",
+            4,
+            1,
+            1
+          ]
+        },
+        {
+          "name": "p2o.pd_op.conv2d.58.0",
+          "shape": [
+            "DynamicDimension.0",
+            16,
+            1,
+            1
+          ]
+        },
+        {
+          "name": "p2o.pd_op.conv2d.59.0",
+          "shape": [
+            "DynamicDimension.0",
+            16,
+            "floor(floor(floor(DynamicDimension.1/2 - 1/2)/2)/2) + 1",
+            "floor(floor(floor(DynamicDimension.2/2 - 1/2)/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.conv2d.6.0",
+          "shape": [
+            "DynamicDimension.0",
+            32,
+            1,
+            1
+          ]
+        },
+        {
+          "name": "p2o.pd_op.conv2d.60.0",
+          "shape": [
+            "DynamicDimension.0",
+            4,
+            1,
+            1
+          ]
+        },
+        {
+          "name": "p2o.pd_op.conv2d.61.0",
+          "shape": [
+            "DynamicDimension.0",
+            16,
+            1,
+            1
+          ]
+        },
+        {
+          "name": "p2o.pd_op.conv2d.62.0",
+          "shape": [
+            "DynamicDimension.0",
+            16,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1",
+            "floor(floor(DynamicDimension.2/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.conv2d.63.0",
+          "shape": [
+            "DynamicDimension.0",
+            4,
+            1,
+            1
+          ]
+        },
+        {
+          "name": "p2o.pd_op.conv2d.64.0",
+          "shape": [
+            "DynamicDimension.0",
+            16,
+            1,
+            1
+          ]
+        },
+        {
+          "name": "p2o.pd_op.conv2d.65.0",
+          "shape": [
+            "DynamicDimension.0",
+            16,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1",
+            "floor(floor(DynamicDimension.2/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.conv2d.7.0",
+          "shape": [
+            "DynamicDimension.0",
+            64,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1",
+            "floor(floor(DynamicDimension.2/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.conv2d.8.0",
+          "shape": [
+            "DynamicDimension.0",
+            32,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1",
+            "floor(floor(DynamicDimension.2/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.conv2d.9.0",
+          "shape": [
+            "DynamicDimension.0",
+            64,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1",
+            "floor(floor(DynamicDimension.2/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.depthwise_conv2d.0.0",
+          "shape": [
+            "DynamicDimension.0",
+            32,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1",
+            "floor(floor(DynamicDimension.2/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.depthwise_conv2d.1.0",
+          "shape": [
+            "DynamicDimension.0",
+            32,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1",
+            "floor(floor(DynamicDimension.2/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.depthwise_conv2d.10.0",
+          "shape": [
+            "DynamicDimension.0",
+            64,
+            "floor(floor(floor(floor(floor(DynamicDimension.1/2 - 1/2)/2)/2)/2)/2) + 1",
+            "floor(floor(floor(floor(floor(DynamicDimension.2/2 - 1/2)/2)/2)/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.depthwise_conv2d.11.0",
+          "shape": [
+            "DynamicDimension.0",
+            160,
+            "floor(floor(floor(floor(floor(DynamicDimension.1/2 - 1/2)/2)/2)/2)/2) + 1",
+            "floor(floor(floor(floor(floor(DynamicDimension.2/2 - 1/2)/2)/2)/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.depthwise_conv2d.12.0",
+          "shape": [
+            "DynamicDimension.0",
+            160,
+            "floor(floor(floor(floor(floor(DynamicDimension.1/2 - 1/2)/2)/2)/2)/2) + 1",
+            "floor(floor(floor(floor(floor(DynamicDimension.2/2 - 1/2)/2)/2)/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.depthwise_conv2d.13.0",
+          "shape": [
+            "DynamicDimension.0",
+            64,
+            "floor(floor(floor(floor(floor(DynamicDimension.1/2 - 1/2)/2)/2)/2)/2) + 1",
+            "floor(floor(floor(floor(floor(DynamicDimension.2/2 - 1/2)/2)/2)/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.depthwise_conv2d.14.0",
+          "shape": [
+            "DynamicDimension.0",
+            64,
+            "floor(floor(floor(floor(DynamicDimension.1/2 - 1/2)/2)/2)/2) + 1",
+            "floor(floor(floor(floor(DynamicDimension.2/2 - 1/2)/2)/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.depthwise_conv2d.15.0",
+          "shape": [
+            "DynamicDimension.0",
+            64,
+            "floor(floor(floor(DynamicDimension.1/2 - 1/2)/2)/2) + 1",
+            "floor(floor(floor(DynamicDimension.2/2 - 1/2)/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.depthwise_conv2d.16.0",
+          "shape": [
+            "DynamicDimension.0",
+            64,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1",
+            "floor(floor(DynamicDimension.2/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.depthwise_conv2d.2.0",
+          "shape": [
+            "DynamicDimension.0",
+            32,
+            "floor(floor(floor(DynamicDimension.1/2 - 1/2)/2)/2) + 1",
+            "floor(floor(floor(DynamicDimension.2/2 - 1/2)/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.depthwise_conv2d.3.0",
+          "shape": [
+            "DynamicDimension.0",
+            48,
+            "floor(floor(floor(DynamicDimension.1/2 - 1/2)/2)/2) + 1",
+            "floor(floor(floor(DynamicDimension.2/2 - 1/2)/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.depthwise_conv2d.4.0",
+          "shape": [
+            "DynamicDimension.0",
+            48,
+            "floor(floor(floor(DynamicDimension.1/2 - 1/2)/2)/2) + 1",
+            "floor(floor(floor(DynamicDimension.2/2 - 1/2)/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.depthwise_conv2d.5.0",
+          "shape": [
+            "DynamicDimension.0",
+            48,
+            "floor(floor(floor(floor(DynamicDimension.1/2 - 1/2)/2)/2)/2) + 1",
+            "floor(floor(floor(floor(DynamicDimension.2/2 - 1/2)/2)/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.depthwise_conv2d.6.0",
+          "shape": [
+            "DynamicDimension.0",
+            64,
+            "floor(floor(floor(floor(DynamicDimension.1/2 - 1/2)/2)/2)/2) + 1",
+            "floor(floor(floor(floor(DynamicDimension.2/2 - 1/2)/2)/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.depthwise_conv2d.7.0",
+          "shape": [
+            "DynamicDimension.0",
+            64,
+            "floor(floor(floor(floor(DynamicDimension.1/2 - 1/2)/2)/2)/2) + 1",
+            "floor(floor(floor(floor(DynamicDimension.2/2 - 1/2)/2)/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.depthwise_conv2d.8.0",
+          "shape": [
+            "DynamicDimension.0",
+            64,
+            "floor(floor(floor(floor(DynamicDimension.1/2 - 1/2)/2)/2)/2) + 1",
+            "floor(floor(floor(floor(DynamicDimension.2/2 - 1/2)/2)/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.depthwise_conv2d.9.0",
+          "shape": [
+            "DynamicDimension.0",
+            64,
+            "floor(floor(floor(floor(DynamicDimension.1/2 - 1/2)/2)/2)/2) + 1",
+            "floor(floor(floor(floor(DynamicDimension.2/2 - 1/2)/2)/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.gelu.0.0",
+          "shape": [
+            "DynamicDimension.0",
+            64,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1",
+            "floor(floor(DynamicDimension.2/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.gelu.1.0",
+          "shape": [
+            "DynamicDimension.0",
+            64,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1",
+            "floor(floor(DynamicDimension.2/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.gelu.10.0",
+          "shape": [
+            "DynamicDimension.0",
+            128,
+            "floor(floor(floor(floor(floor(DynamicDimension.1/2 - 1/2)/2)/2)/2)/2) + 1",
+            "floor(floor(floor(floor(floor(DynamicDimension.2/2 - 1/2)/2)/2)/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.gelu.11.0",
+          "shape": [
+            "DynamicDimension.0",
+            320,
+            "floor(floor(floor(floor(floor(DynamicDimension.1/2 - 1/2)/2)/2)/2)/2) + 1",
+            "floor(floor(floor(floor(floor(DynamicDimension.2/2 - 1/2)/2)/2)/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.gelu.12.0",
+          "shape": [
+            "DynamicDimension.0",
+            320,
+            "floor(floor(floor(floor(floor(DynamicDimension.1/2 - 1/2)/2)/2)/2)/2) + 1",
+            "floor(floor(floor(floor(floor(DynamicDimension.2/2 - 1/2)/2)/2)/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.gelu.2.0",
+          "shape": [
+            "DynamicDimension.0",
+            64,
+            "floor(floor(floor(DynamicDimension.1/2 - 1/2)/2)/2) + 1",
+            "floor(floor(floor(DynamicDimension.2/2 - 1/2)/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.gelu.3.0",
+          "shape": [
+            "DynamicDimension.0",
+            96,
+            "floor(floor(floor(DynamicDimension.1/2 - 1/2)/2)/2) + 1",
+            "floor(floor(floor(DynamicDimension.2/2 - 1/2)/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.gelu.4.0",
+          "shape": [
+            "DynamicDimension.0",
+            96,
+            "floor(floor(floor(DynamicDimension.1/2 - 1/2)/2)/2) + 1",
+            "floor(floor(floor(DynamicDimension.2/2 - 1/2)/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.gelu.5.0",
+          "shape": [
+            "DynamicDimension.0",
+            96,
+            "floor(floor(floor(floor(DynamicDimension.1/2 - 1/2)/2)/2)/2) + 1",
+            "floor(floor(floor(floor(DynamicDimension.2/2 - 1/2)/2)/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.gelu.6.0",
+          "shape": [
+            "DynamicDimension.0",
+            128,
+            "floor(floor(floor(floor(DynamicDimension.1/2 - 1/2)/2)/2)/2) + 1",
+            "floor(floor(floor(floor(DynamicDimension.2/2 - 1/2)/2)/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.gelu.7.0",
+          "shape": [
+            "DynamicDimension.0",
+            128,
+            "floor(floor(floor(floor(DynamicDimension.1/2 - 1/2)/2)/2)/2) + 1",
+            "floor(floor(floor(floor(DynamicDimension.2/2 - 1/2)/2)/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.gelu.8.0",
+          "shape": [
+            "DynamicDimension.0",
+            128,
+            "floor(floor(floor(floor(DynamicDimension.1/2 - 1/2)/2)/2)/2) + 1",
+            "floor(floor(floor(floor(DynamicDimension.2/2 - 1/2)/2)/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.gelu.9.0",
+          "shape": [
+            "DynamicDimension.0",
+            128,
+            "floor(floor(floor(floor(DynamicDimension.1/2 - 1/2)/2)/2)/2) + 1",
+            "floor(floor(floor(floor(DynamicDimension.2/2 - 1/2)/2)/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.hardsigmoid.0.0",
+          "shape": [
+            "DynamicDimension.0",
+            32,
+            1,
+            1
+          ]
+        },
+        {
+          "name": "p2o.pd_op.hardsigmoid.1.0",
+          "shape": [
+            "DynamicDimension.0",
+            48,
+            1,
+            1
+          ]
+        },
+        {
+          "name": "p2o.pd_op.hardsigmoid.10.0",
+          "shape": [
+            "DynamicDimension.0",
+            16,
+            1,
+            1
+          ]
+        },
+        {
+          "name": "p2o.pd_op.hardsigmoid.11.0",
+          "shape": [
+            "DynamicDimension.0",
+            16,
+            1,
+            1
+          ]
+        },
+        {
+          "name": "p2o.pd_op.hardsigmoid.12.0",
+          "shape": [
+            "DynamicDimension.0",
+            16,
+            1,
+            1
+          ]
+        },
+        {
+          "name": "p2o.pd_op.hardsigmoid.2.0",
+          "shape": [
+            "DynamicDimension.0",
+            64,
+            1,
+            1
+          ]
+        },
+        {
+          "name": "p2o.pd_op.hardsigmoid.3.0",
+          "shape": [
+            "DynamicDimension.0",
+            64,
+            1,
+            1
+          ]
+        },
+        {
+          "name": "p2o.pd_op.hardsigmoid.4.0",
+          "shape": [
+            "DynamicDimension.0",
+            160,
+            1,
+            1
+          ]
+        },
+        {
+          "name": "p2o.pd_op.hardsigmoid.5.0",
+          "shape": [
+            "DynamicDimension.0",
+            64,
+            1,
+            1
+          ]
+        },
+        {
+          "name": "p2o.pd_op.hardsigmoid.6.0",
+          "shape": [
+            "DynamicDimension.0",
+            64,
+            1,
+            1
+          ]
+        },
+        {
+          "name": "p2o.pd_op.hardsigmoid.7.0",
+          "shape": [
+            "DynamicDimension.0",
+            64,
+            1,
+            1
+          ]
+        },
+        {
+          "name": "p2o.pd_op.hardsigmoid.8.0",
+          "shape": [
+            "DynamicDimension.0",
+            64,
+            1,
+            1
+          ]
+        },
+        {
+          "name": "p2o.pd_op.hardsigmoid.9.0",
+          "shape": [
+            "DynamicDimension.0",
+            16,
+            1,
+            1
+          ]
+        },
+        {
+          "name": "p2o.pd_op.nearest_interp.0.0",
+          "shape": [
+            "DynamicDimension.0",
+            64,
+            "floor(floor(floor(floor(DynamicDimension.1/2 - 1/2)/2)/2)/2) + 1",
+            "floor(floor(floor(floor(DynamicDimension.2/2 - 1/2)/2)/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.nearest_interp.1.0",
+          "shape": [
+            "DynamicDimension.0",
+            64,
+            "floor(floor(floor(DynamicDimension.1/2 - 1/2)/2)/2) + 1",
+            "floor(floor(floor(DynamicDimension.2/2 - 1/2)/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.nearest_interp.2.0",
+          "shape": [
+            "DynamicDimension.0",
+            64,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1",
+            "floor(floor(DynamicDimension.2/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.nearest_interp.3.0",
+          "shape": [
+            "DynamicDimension.0",
+            16,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1",
+            "floor(floor(DynamicDimension.2/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.nearest_interp.4.0",
+          "shape": [
+            "DynamicDimension.0",
+            16,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1",
+            "floor(floor(DynamicDimension.2/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.nearest_interp.5.0",
+          "shape": [
+            "DynamicDimension.0",
+            16,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1",
+            "floor(floor(DynamicDimension.2/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.pool2d.0.0",
+          "shape": [
+            "DynamicDimension.0",
+            16,
+            "floor(DynamicDimension.1/2 - 1/2) + 1",
+            "floor(DynamicDimension.2/2 - 1/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.pool2d.1.0",
+          "shape": [
+            "DynamicDimension.0",
+            64,
+            1,
+            1
+          ]
+        },
+        {
+          "name": "p2o.pd_op.pool2d.2.0",
+          "shape": [
+            "DynamicDimension.0",
+            64,
+            1,
+            1
+          ]
+        },
+        {
+          "name": "p2o.pd_op.pool2d.3.0",
+          "shape": [
+            "DynamicDimension.0",
+            64,
+            1,
+            1
+          ]
+        },
+        {
+          "name": "p2o.pd_op.pool2d.4.0",
+          "shape": [
+            "DynamicDimension.0",
+            64,
+            1,
+            1
+          ]
+        },
+        {
+          "name": "p2o.pd_op.pool2d.5.0",
+          "shape": [
+            "DynamicDimension.0",
+            16,
+            1,
+            1
+          ]
+        },
+        {
+          "name": "p2o.pd_op.pool2d.6.0",
+          "shape": [
+            "DynamicDimension.0",
+            16,
+            1,
+            1
+          ]
+        },
+        {
+          "name": "p2o.pd_op.pool2d.7.0",
+          "shape": [
+            "DynamicDimension.0",
+            16,
+            1,
+            1
+          ]
+        },
+        {
+          "name": "p2o.pd_op.pool2d.8.0",
+          "shape": [
+            "DynamicDimension.0",
+            16,
+            1,
+            1
+          ]
+        },
+        {
+          "name": "p2o.pd_op.relu.0.0",
+          "shape": [
+            "DynamicDimension.0",
+            16,
+            "floor(DynamicDimension.1/2 - 1/2) + 1",
+            "floor(DynamicDimension.2/2 - 1/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.relu.1.0",
+          "shape": [
+            "DynamicDimension.0",
+            8,
+            "floor(DynamicDimension.1/2 - 1/2) + 1",
+            "floor(DynamicDimension.2/2 - 1/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.relu.10.0",
+          "shape": [
+            "DynamicDimension.0",
+            16,
+            1,
+            1
+          ]
+        },
+        {
+          "name": "p2o.pd_op.relu.11.0",
+          "shape": [
+            "DynamicDimension.0",
+            16,
+            1,
+            1
+          ]
+        },
+        {
+          "name": "p2o.pd_op.relu.12.0",
+          "shape": [
+            "DynamicDimension.0",
+            16,
+            1,
+            1
+          ]
+        },
+        {
+          "name": "p2o.pd_op.relu.13.0",
+          "shape": [
+            "DynamicDimension.0",
+            16,
+            1,
+            1
+          ]
+        },
+        {
+          "name": "p2o.pd_op.relu.14.0",
+          "shape": [
+            "DynamicDimension.0",
+            4,
+            1,
+            1
+          ]
+        },
+        {
+          "name": "p2o.pd_op.relu.15.0",
+          "shape": [
+            "DynamicDimension.0",
+            4,
+            1,
+            1
+          ]
+        },
+        {
+          "name": "p2o.pd_op.relu.16.0",
+          "shape": [
+            "DynamicDimension.0",
+            4,
+            1,
+            1
+          ]
+        },
+        {
+          "name": "p2o.pd_op.relu.17.0",
+          "shape": [
+            "DynamicDimension.0",
+            4,
+            1,
+            1
+          ]
+        },
+        {
+          "name": "p2o.pd_op.relu.18.0",
+          "shape": [
+            "DynamicDimension.0",
+            16,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1",
+            "floor(floor(DynamicDimension.2/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.relu.19.0",
+          "shape": [
+            "ConvTranspose_453_o0__d0",
+            16,
+            "ConvTranspose_453_o0__d2",
+            "ConvTranspose_453_o0__d3"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.relu.2.0",
+          "shape": [
+            "DynamicDimension.0",
+            16,
+            "floor(DynamicDimension.1/2 - 1/2) + 1",
+            "floor(DynamicDimension.2/2 - 1/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.relu.3.0",
+          "shape": [
+            "DynamicDimension.0",
+            16,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1",
+            "floor(floor(DynamicDimension.2/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.relu.4.0",
+          "shape": [
+            "DynamicDimension.0",
+            32,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1",
+            "floor(floor(DynamicDimension.2/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.relu.5.0",
+          "shape": [
+            "DynamicDimension.0",
+            8,
+            1,
+            1
+          ]
+        },
+        {
+          "name": "p2o.pd_op.relu.6.0",
+          "shape": [
+            "DynamicDimension.0",
+            12,
+            1,
+            1
+          ]
+        },
+        {
+          "name": "p2o.pd_op.relu.7.0",
+          "shape": [
+            "DynamicDimension.0",
+            16,
+            1,
+            1
+          ]
+        },
+        {
+          "name": "p2o.pd_op.relu.8.0",
+          "shape": [
+            "DynamicDimension.0",
+            16,
+            1,
+            1
+          ]
+        },
+        {
+          "name": "p2o.pd_op.relu.9.0",
+          "shape": [
+            "DynamicDimension.0",
+            40,
+            1,
+            1
+          ]
+        },
+        {
+          "name": "x",
+          "shape": [
+            "DynamicDimension.0",
+            3,
+            "DynamicDimension.1",
+            "DynamicDimension.2"
+          ]
+        }
+      ],
+      "file_bytes": 1780590,
+      "flops": {
+        "by_operator": {
+          "Conv": 2583708928,
+          "ConvTranspose": 212992000
+        },
+        "note": "Approximate multiply-add count as two FLOPs; preprocessing and elementwise ops are excluded.",
+        "top_nodes": [
+          {
+            "flops": 471859200,
+            "index": 234,
+            "name": "Conv.82",
+            "op": "Conv"
+          },
+          {
+            "flops": 235929600,
+            "index": 8,
+            "name": "Conv.3",
+            "op": "Conv"
+          },
+          {
+            "flops": 209715200,
+            "index": 236,
+            "name": "ConvTranspose.0",
+            "op": "ConvTranspose"
+          },
+          {
+            "flops": 104857600,
+            "index": 2,
+            "name": "Conv.1",
+            "op": "Conv"
+          },
+          {
+            "flops": 104857600,
+            "index": 4,
+            "name": "Conv.2",
+            "op": "Conv"
+          },
+          {
+            "flops": 104857600,
+            "index": 19,
+            "name": "Conv.8",
+            "op": "Conv"
+          },
+          {
+            "flops": 104857600,
+            "index": 25,
+            "name": "Conv.9",
+            "op": "Conv"
+          },
+          {
+            "flops": 104857600,
+            "index": 28,
+            "name": "Conv.11",
+            "op": "Conv"
+          },
+          {
+            "flops": 104857600,
+            "index": 34,
+            "name": "Conv.12",
+            "op": "Conv"
+          },
+          {
+            "flops": 104857600,
+            "index": 180,
+            "name": "Conv.63",
+            "op": "Conv"
+          },
+          {
+            "flops": 88473600,
+            "index": 0,
+            "name": "Conv.0",
+            "op": "Conv"
+          },
+          {
+            "flops": 81920000,
+            "index": 221,
+            "name": "Conv.78",
+            "op": "Conv"
+          }
+        ],
+        "total": 2796700928,
+        "unestimated_heavy_nodes": {}
+      },
+      "fusion_candidates": {
+        "conv_batch_normalization": 0
+      },
+      "identity_nodes": 0,
+      "initializer_bytes": 1713680,
+      "initializer_count": 169,
+      "initializer_dtype_counts": {
+        "float": 169
+      },
+      "inputs": [
+        {
+          "dtype": "float",
+          "name": "x",
+          "shape": [
+            "DynamicDimension.0",
+            3,
+            "DynamicDimension.1",
+            "DynamicDimension.2"
+          ]
+        }
+      ],
+      "ir_version": 10,
+      "label": "det",
+      "largest_initializers": [
+        {
+          "bytes": 204800,
+          "dtype": "float",
+          "name": "conv2d_156.w_0",
+          "shape": [
+            320,
+            160,
+            1,
+            1
+          ]
+        },
+        {
+          "bytes": 204800,
+          "dtype": "float",
+          "name": "conv2d_157.w_0",
+          "shape": [
+            160,
+            320,
+            1,
+            1
+          ]
+        },
+        {
+          "bytes": 204800,
+          "dtype": "float",
+          "name": "conv2d_160.w_0",
+          "shape": [
+            320,
+            160,
+            1,
+            1
+          ]
+        },
+        {
+          "bytes": 204800,
+          "dtype": "float",
+          "name": "conv2d_161.w_0",
+          "shape": [
+            160,
+            320,
+            1,
+            1
+          ]
+        },
+        {
+          "bytes": 81920,
+          "dtype": "float",
+          "name": "conv2d_153.w_0",
+          "shape": [
+            160,
+            128,
+            1,
+            1
+          ]
+        },
+        {
+          "bytes": 40960,
+          "dtype": "float",
+          "name": "conv2d_91.w_0",
+          "shape": [
+            64,
+            160,
+            1,
+            1
+          ]
+        },
+        {
+          "bytes": 36864,
+          "dtype": "float",
+          "name": "conv2d_166.w_0",
+          "shape": [
+            16,
+            64,
+            3,
+            3
+          ]
+        },
+        {
+          "bytes": 32768,
+          "dtype": "float",
+          "name": "conv2d_137.w_0",
+          "shape": [
+            128,
+            64,
+            1,
+            1
+          ]
+        },
+        {
+          "bytes": 32768,
+          "dtype": "float",
+          "name": "conv2d_138.w_0",
+          "shape": [
+            64,
+            128,
+            1,
+            1
+          ]
+        },
+        {
+          "bytes": 32768,
+          "dtype": "float",
+          "name": "conv2d_141.w_0",
+          "shape": [
+            128,
+            64,
+            1,
+            1
+          ]
+        },
+        {
+          "bytes": 32768,
+          "dtype": "float",
+          "name": "conv2d_142.w_0",
+          "shape": [
+            64,
+            128,
+            1,
+            1
+          ]
+        },
+        {
+          "bytes": 32768,
+          "dtype": "float",
+          "name": "conv2d_145.w_0",
+          "shape": [
+            128,
+            64,
+            1,
+            1
+          ]
+        }
+      ],
+      "node_count": 242,
+      "operator_attributes": {
+        "Add": {},
+        "Concat": {
+          "axis": [
+            1
+          ]
+        },
+        "Conv": {
+          "auto_pad": [
+            "SAME_UPPER"
+          ],
+          "dilations": [
+            [
+              1,
+              1
+            ]
+          ],
+          "group": [
+            1,
+            160,
+            32,
+            48,
+            64
+          ],
+          "kernel_shape": [
+            [
+              1,
+              1
+            ],
+            [
+              2,
+              2
+            ],
+            [
+              3,
+              3
+            ],
+            [
+              5,
+              5
+            ]
+          ],
+          "pads": [
+            [
+              0,
+              0,
+              0,
+              0
+            ],
+            [
+              1,
+              1,
+              1,
+              1
+            ],
+            [
+              2,
+              2,
+              2,
+              2
+            ]
+          ],
+          "strides": [
+            [
+              1,
+              1
+            ],
+            [
+              2,
+              2
+            ]
+          ]
+        },
+        "ConvTranspose": {
+          "dilations": [
+            [
+              1,
+              1
+            ]
+          ],
+          "group": [
+            1
+          ],
+          "kernel_shape": [
+            [
+              2,
+              2
+            ]
+          ],
+          "pads": [
+            [
+              0,
+              0,
+              0,
+              0
+            ]
+          ],
+          "strides": [
+            [
+              2,
+              2
+            ]
+          ]
+        },
+        "Div": {},
+        "Erf": {},
+        "GlobalAveragePool": {},
+        "HardSigmoid": {
+          "alpha": [
+            0.16666670143604279,
+            0.20000000298023224
+          ],
+          "beta": [
+            0.5
+          ]
+        },
+        "MaxPool": {
+          "auto_pad": [
+            "SAME_UPPER"
+          ],
+          "ceil_mode": [
+            0
+          ],
+          "kernel_shape": [
+            [
+              2,
+              2
+            ]
+          ],
+          "strides": [
+            [
+              1,
+              1
+            ]
+          ]
+        },
+        "Mul": {},
+        "ReduceMean": {
+          "axes": [
+            [
+              2,
+              3
+            ]
+          ],
+          "keepdims": [
+            1
+          ]
+        },
+        "Relu": {},
+        "Resize": {
+          "coordinate_transformation_mode": [
+            "asymmetric"
+          ],
+          "mode": [
+            "nearest"
+          ],
+          "nearest_mode": [
+            "floor"
+          ]
+        },
+        "Sigmoid": {}
+      },
+      "operator_counts": {
+        "Add": 36,
+        "Concat": 2,
+        "Conv": 83,
+        "ConvTranspose": 2,
+        "Div": 13,
+        "Erf": 13,
+        "GlobalAveragePool": 8,
+        "HardSigmoid": 13,
+        "MaxPool": 1,
+        "Mul": 39,
+        "ReduceMean": 5,
+        "Relu": 20,
+        "Resize": 6,
+        "Sigmoid": 1
+      },
+      "opsets": [
+        {
+          "domain": "ai.onnx",
+          "version": 14
+        }
+      ],
+      "outputs": [
+        {
+          "dtype": "float",
+          "name": "fetch_name_0",
+          "shape": [
+            "ConvTranspose_459_o0__d0",
+            1,
+            "ConvTranspose_459_o0__d2",
+            "ConvTranspose_459_o0__d3"
+          ]
+        }
+      ],
+      "path": "models/ppocrv6-tiny/det.onnx",
+      "producer": {
+        "name": "",
+        "version": ""
+      },
+      "representative_input_shape": [
+        1,
+        3,
+        640,
+        640
+      ],
+      "representative_outputs": [
+        {
+          "dtype": "float",
+          "name": "fetch_name_0",
+          "shape": [
+            1,
+            1,
+            640,
+            640
+          ]
+        }
+      ],
+      "sha256": "193bab7a04fca699a6c82e6abb5b81bdb28177f0abd4062552b04908dafb19f8",
+      "shape_inference_error": null,
+      "shape_only_nodes": []
+    },
+    {
+      "constant_fold_candidates": [],
+      "constant_nodes": [],
+      "dynamic_node_counts": {
+        "Add": 5,
+        "BatchNormalization": 27,
+        "Conv": 32,
+        "GlobalAveragePool": 3,
+        "HardSigmoid": 30,
+        "Identity": 7,
+        "MatMul": 1,
+        "Mul": 31,
+        "Relu": 2,
+        "Reshape": 1,
+        "Softmax": 1
+      },
+      "dynamic_values": [
+        {
+          "name": "Add.1",
+          "shape": [
+            "DynamicDimension.0",
+            16,
+            1,
+            1
+          ]
+        },
+        {
+          "name": "Add.3",
+          "shape": [
+            "DynamicDimension.0",
+            64,
+            1,
+            1
+          ]
+        },
+        {
+          "name": "Add.5",
+          "shape": [
+            "DynamicDimension.0",
+            32,
+            1,
+            1
+          ]
+        },
+        {
+          "name": "Add.7",
+          "shape": [
+            "DynamicDimension.0",
+            128,
+            1,
+            1
+          ]
+        },
+        {
+          "name": "Add.9",
+          "shape": [
+            "DynamicDimension.0",
+            2
+          ]
+        },
+        {
+          "name": "HardSigmoid.1",
+          "shape": [
+            "DynamicDimension.0",
+            8,
+            40,
+            80
+          ]
+        },
+        {
+          "name": "HardSigmoid.11",
+          "shape": [
+            "DynamicDimension.0",
+            16,
+            20,
+            80
+          ]
+        },
+        {
+          "name": "HardSigmoid.13",
+          "shape": [
+            "DynamicDimension.0",
+            16,
+            20,
+            80
+          ]
+        },
+        {
+          "name": "HardSigmoid.15",
+          "shape": [
+            "DynamicDimension.0",
+            16,
+            10,
+            80
+          ]
+        },
+        {
+          "name": "HardSigmoid.17",
+          "shape": [
+            "DynamicDimension.0",
+            32,
+            10,
+            80
+          ]
+        },
+        {
+          "name": "HardSigmoid.19",
+          "shape": [
+            "DynamicDimension.0",
+            32,
+            10,
+            80
+          ]
+        },
+        {
+          "name": "HardSigmoid.21",
+          "shape": [
+            "DynamicDimension.0",
+            32,
+            10,
+            80
+          ]
+        },
+        {
+          "name": "HardSigmoid.23",
+          "shape": [
+            "DynamicDimension.0",
+            32,
+            5,
+            80
+          ]
+        },
+        {
+          "name": "HardSigmoid.25",
+          "shape": [
+            "DynamicDimension.0",
+            64,
+            5,
+            80
+          ]
+        },
+        {
+          "name": "HardSigmoid.27",
+          "shape": [
+            "DynamicDimension.0",
+            64,
+            5,
+            80
+          ]
+        },
+        {
+          "name": "HardSigmoid.29",
+          "shape": [
+            "DynamicDimension.0",
+            64,
+            5,
+            80
+          ]
+        },
+        {
+          "name": "HardSigmoid.3",
+          "shape": [
+            "DynamicDimension.0",
+            8,
+            40,
+            80
+          ]
+        },
+        {
+          "name": "HardSigmoid.31",
+          "shape": [
+            "DynamicDimension.0",
+            64,
+            5,
+            80
+          ]
+        },
+        {
+          "name": "HardSigmoid.33",
+          "shape": [
+            "DynamicDimension.0",
+            64,
+            5,
+            80
+          ]
+        },
+        {
+          "name": "HardSigmoid.35",
+          "shape": [
+            "DynamicDimension.0",
+            64,
+            5,
+            80
+          ]
+        },
+        {
+          "name": "HardSigmoid.37",
+          "shape": [
+            "DynamicDimension.0",
+            64,
+            5,
+            80
+          ]
+        },
+        {
+          "name": "HardSigmoid.39",
+          "shape": [
+            "DynamicDimension.0",
+            64,
+            5,
+            80
+          ]
+        },
+        {
+          "name": "HardSigmoid.41",
+          "shape": [
+            "DynamicDimension.0",
+            64,
+            5,
+            80
+          ]
+        },
+        {
+          "name": "HardSigmoid.43",
+          "shape": [
+            "DynamicDimension.0",
+            64,
+            5,
+            80
+          ]
+        },
+        {
+          "name": "HardSigmoid.45",
+          "shape": [
+            "DynamicDimension.0",
+            64,
+            5,
+            80
+          ]
+        },
+        {
+          "name": "HardSigmoid.47",
+          "shape": [
+            "DynamicDimension.0",
+            64,
+            3,
+            80
+          ]
+        },
+        {
+          "name": "HardSigmoid.5",
+          "shape": [
+            "DynamicDimension.0",
+            8,
+            40,
+            80
+          ]
+        },
+        {
+          "name": "HardSigmoid.50",
+          "shape": [
+            "DynamicDimension.0",
+            128,
+            3,
+            80
+          ]
+        },
+        {
+          "name": "HardSigmoid.52",
+          "shape": [
+            "DynamicDimension.0",
+            128,
+            3,
+            80
+          ]
+        },
+        {
+          "name": "HardSigmoid.55",
+          "shape": [
+            "DynamicDimension.0",
+            128,
+            3,
+            80
+          ]
+        },
+        {
+          "name": "HardSigmoid.57",
+          "shape": [
+            "DynamicDimension.0",
+            1280,
+            1,
+            1
+          ]
+        },
+        {
+          "name": "HardSigmoid.7",
+          "shape": [
+            "DynamicDimension.0",
+            8,
+            20,
+            80
+          ]
+        },
+        {
+          "name": "HardSigmoid.9",
+          "shape": [
+            "DynamicDimension.0",
+            16,
+            20,
+            80
+          ]
+        },
+        {
+          "name": "Mul.25",
+          "shape": [
+            "DynamicDimension.0",
+            64,
+            3,
+            80
+          ]
+        },
+        {
+          "name": "Mul.29",
+          "shape": [
+            "DynamicDimension.0",
+            128,
+            3,
+            80
+          ]
+        },
+        {
+          "name": "fetch_name_0",
+          "shape": [
+            "DynamicDimension.0",
+            2
+          ]
+        },
+        {
+          "name": "p2o.pd_op.add.0.0",
+          "shape": [
+            "DynamicDimension.0",
+            16,
+            1,
+            1
+          ]
+        },
+        {
+          "name": "p2o.pd_op.add.1.0",
+          "shape": [
+            "DynamicDimension.0",
+            64,
+            1,
+            1
+          ]
+        },
+        {
+          "name": "p2o.pd_op.add.2.0",
+          "shape": [
+            "DynamicDimension.0",
+            32,
+            1,
+            1
+          ]
+        },
+        {
+          "name": "p2o.pd_op.add.3.0",
+          "shape": [
+            "DynamicDimension.0",
+            128,
+            1,
+            1
+          ]
+        },
+        {
+          "name": "p2o.pd_op.add.4.0",
+          "shape": [
+            "DynamicDimension.0",
+            2
+          ]
+        },
+        {
+          "name": "p2o.pd_op.batch_norm_.0.0",
+          "shape": [
+            "DynamicDimension.0",
+            8,
+            40,
+            80
+          ]
+        },
+        {
+          "name": "p2o.pd_op.batch_norm_.1.0",
+          "shape": [
+            "DynamicDimension.0",
+            8,
+            40,
+            80
+          ]
+        },
+        {
+          "name": "p2o.pd_op.batch_norm_.10.0",
+          "shape": [
+            "DynamicDimension.0",
+            32,
+            10,
+            80
+          ]
+        },
+        {
+          "name": "p2o.pd_op.batch_norm_.11.0",
+          "shape": [
+            "DynamicDimension.0",
+            32,
+            5,
+            80
+          ]
+        },
+        {
+          "name": "p2o.pd_op.batch_norm_.12.0",
+          "shape": [
+            "DynamicDimension.0",
+            64,
+            5,
+            80
+          ]
+        },
+        {
+          "name": "p2o.pd_op.batch_norm_.13.0",
+          "shape": [
+            "DynamicDimension.0",
+            64,
+            5,
+            80
+          ]
+        },
+        {
+          "name": "p2o.pd_op.batch_norm_.14.0",
+          "shape": [
+            "DynamicDimension.0",
+            64,
+            5,
+            80
+          ]
+        },
+        {
+          "name": "p2o.pd_op.batch_norm_.15.0",
+          "shape": [
+            "DynamicDimension.0",
+            64,
+            5,
+            80
+          ]
+        },
+        {
+          "name": "p2o.pd_op.batch_norm_.16.0",
+          "shape": [
+            "DynamicDimension.0",
+            64,
+            5,
+            80
+          ]
+        },
+        {
+          "name": "p2o.pd_op.batch_norm_.17.0",
+          "shape": [
+            "DynamicDimension.0",
+            64,
+            5,
+            80
+          ]
+        },
+        {
+          "name": "p2o.pd_op.batch_norm_.18.0",
+          "shape": [
+            "DynamicDimension.0",
+            64,
+            5,
+            80
+          ]
+        },
+        {
+          "name": "p2o.pd_op.batch_norm_.19.0",
+          "shape": [
+            "DynamicDimension.0",
+            64,
+            5,
+            80
+          ]
+        },
+        {
+          "name": "p2o.pd_op.batch_norm_.2.0",
+          "shape": [
+            "DynamicDimension.0",
+            8,
+            40,
+            80
+          ]
+        },
+        {
+          "name": "p2o.pd_op.batch_norm_.20.0",
+          "shape": [
+            "DynamicDimension.0",
+            64,
+            5,
+            80
+          ]
+        },
+        {
+          "name": "p2o.pd_op.batch_norm_.21.0",
+          "shape": [
+            "DynamicDimension.0",
+            64,
+            5,
+            80
+          ]
+        },
+        {
+          "name": "p2o.pd_op.batch_norm_.22.0",
+          "shape": [
+            "DynamicDimension.0",
+            64,
+            5,
+            80
+          ]
+        },
+        {
+          "name": "p2o.pd_op.batch_norm_.23.0",
+          "shape": [
+            "DynamicDimension.0",
+            64,
+            3,
+            80
+          ]
+        },
+        {
+          "name": "p2o.pd_op.batch_norm_.24.0",
+          "shape": [
+            "DynamicDimension.0",
+            128,
+            3,
+            80
+          ]
+        },
+        {
+          "name": "p2o.pd_op.batch_norm_.25.0",
+          "shape": [
+            "DynamicDimension.0",
+            128,
+            3,
+            80
+          ]
+        },
+        {
+          "name": "p2o.pd_op.batch_norm_.26.0",
+          "shape": [
+            "DynamicDimension.0",
+            128,
+            3,
+            80
+          ]
+        },
+        {
+          "name": "p2o.pd_op.batch_norm_.3.0",
+          "shape": [
+            "DynamicDimension.0",
+            8,
+            20,
+            80
+          ]
+        },
+        {
+          "name": "p2o.pd_op.batch_norm_.4.0",
+          "shape": [
+            "DynamicDimension.0",
+            16,
+            20,
+            80
+          ]
+        },
+        {
+          "name": "p2o.pd_op.batch_norm_.5.0",
+          "shape": [
+            "DynamicDimension.0",
+            16,
+            20,
+            80
+          ]
+        },
+        {
+          "name": "p2o.pd_op.batch_norm_.6.0",
+          "shape": [
+            "DynamicDimension.0",
+            16,
+            20,
+            80
+          ]
+        },
+        {
+          "name": "p2o.pd_op.batch_norm_.7.0",
+          "shape": [
+            "DynamicDimension.0",
+            16,
+            10,
+            80
+          ]
+        },
+        {
+          "name": "p2o.pd_op.batch_norm_.8.0",
+          "shape": [
+            "DynamicDimension.0",
+            32,
+            10,
+            80
+          ]
+        },
+        {
+          "name": "p2o.pd_op.batch_norm_.9.0",
+          "shape": [
+            "DynamicDimension.0",
+            32,
+            10,
+            80
+          ]
+        },
+        {
+          "name": "p2o.pd_op.conv2d.0.0",
+          "shape": [
+            "DynamicDimension.0",
+            8,
+            40,
+            80
+          ]
+        },
+        {
+          "name": "p2o.pd_op.conv2d.1.0",
+          "shape": [
+            "DynamicDimension.0",
+            8,
+            40,
+            80
+          ]
+        },
+        {
+          "name": "p2o.pd_op.conv2d.10.0",
+          "shape": [
+            "DynamicDimension.0",
+            64,
+            5,
+            80
+          ]
+        },
+        {
+          "name": "p2o.pd_op.conv2d.11.0",
+          "shape": [
+            "DynamicDimension.0",
+            64,
+            5,
+            80
+          ]
+        },
+        {
+          "name": "p2o.pd_op.conv2d.12.0",
+          "shape": [
+            "DynamicDimension.0",
+            16,
+            1,
+            1
+          ]
+        },
+        {
+          "name": "p2o.pd_op.conv2d.13.0",
+          "shape": [
+            "DynamicDimension.0",
+            64,
+            1,
+            1
+          ]
+        },
+        {
+          "name": "p2o.pd_op.conv2d.14.0",
+          "shape": [
+            "DynamicDimension.0",
+            128,
+            3,
+            80
+          ]
+        },
+        {
+          "name": "p2o.pd_op.conv2d.15.0",
+          "shape": [
+            "DynamicDimension.0",
+            32,
+            1,
+            1
+          ]
+        },
+        {
+          "name": "p2o.pd_op.conv2d.16.0",
+          "shape": [
+            "DynamicDimension.0",
+            128,
+            1,
+            1
+          ]
+        },
+        {
+          "name": "p2o.pd_op.conv2d.17.0",
+          "shape": [
+            "DynamicDimension.0",
+            128,
+            3,
+            80
+          ]
+        },
+        {
+          "name": "p2o.pd_op.conv2d.18.0",
+          "shape": [
+            "DynamicDimension.0",
+            1280,
+            1,
+            1
+          ]
+        },
+        {
+          "name": "p2o.pd_op.conv2d.2.0",
+          "shape": [
+            "DynamicDimension.0",
+            16,
+            20,
+            80
+          ]
+        },
+        {
+          "name": "p2o.pd_op.conv2d.3.0",
+          "shape": [
+            "DynamicDimension.0",
+            16,
+            20,
+            80
+          ]
+        },
+        {
+          "name": "p2o.pd_op.conv2d.4.0",
+          "shape": [
+            "DynamicDimension.0",
+            32,
+            10,
+            80
+          ]
+        },
+        {
+          "name": "p2o.pd_op.conv2d.5.0",
+          "shape": [
+            "DynamicDimension.0",
+            32,
+            10,
+            80
+          ]
+        },
+        {
+          "name": "p2o.pd_op.conv2d.6.0",
+          "shape": [
+            "DynamicDimension.0",
+            64,
+            5,
+            80
+          ]
+        },
+        {
+          "name": "p2o.pd_op.conv2d.7.0",
+          "shape": [
+            "DynamicDimension.0",
+            64,
+            5,
+            80
+          ]
+        },
+        {
+          "name": "p2o.pd_op.conv2d.8.0",
+          "shape": [
+            "DynamicDimension.0",
+            64,
+            5,
+            80
+          ]
+        },
+        {
+          "name": "p2o.pd_op.conv2d.9.0",
+          "shape": [
+            "DynamicDimension.0",
+            64,
+            5,
+            80
+          ]
+        },
+        {
+          "name": "p2o.pd_op.depthwise_conv2d.0.0",
+          "shape": [
+            "DynamicDimension.0",
+            8,
+            40,
+            80
+          ]
+        },
+        {
+          "name": "p2o.pd_op.depthwise_conv2d.1.0",
+          "shape": [
+            "DynamicDimension.0",
+            8,
+            20,
+            80
+          ]
+        },
+        {
+          "name": "p2o.pd_op.depthwise_conv2d.10.0",
+          "shape": [
+            "DynamicDimension.0",
+            64,
+            5,
+            80
+          ]
+        },
+        {
+          "name": "p2o.pd_op.depthwise_conv2d.11.0",
+          "shape": [
+            "DynamicDimension.0",
+            64,
+            3,
+            80
+          ]
+        },
+        {
+          "name": "p2o.pd_op.depthwise_conv2d.12.0",
+          "shape": [
+            "DynamicDimension.0",
+            128,
+            3,
+            80
+          ]
+        },
+        {
+          "name": "p2o.pd_op.depthwise_conv2d.2.0",
+          "shape": [
+            "DynamicDimension.0",
+            16,
+            20,
+            80
+          ]
+        },
+        {
+          "name": "p2o.pd_op.depthwise_conv2d.3.0",
+          "shape": [
+            "DynamicDimension.0",
+            16,
+            10,
+            80
+          ]
+        },
+        {
+          "name": "p2o.pd_op.depthwise_conv2d.4.0",
+          "shape": [
+            "DynamicDimension.0",
+            32,
+            10,
+            80
+          ]
+        },
+        {
+          "name": "p2o.pd_op.depthwise_conv2d.5.0",
+          "shape": [
+            "DynamicDimension.0",
+            32,
+            5,
+            80
+          ]
+        },
+        {
+          "name": "p2o.pd_op.depthwise_conv2d.6.0",
+          "shape": [
+            "DynamicDimension.0",
+            64,
+            5,
+            80
+          ]
+        },
+        {
+          "name": "p2o.pd_op.depthwise_conv2d.7.0",
+          "shape": [
+            "DynamicDimension.0",
+            64,
+            5,
+            80
+          ]
+        },
+        {
+          "name": "p2o.pd_op.depthwise_conv2d.8.0",
+          "shape": [
+            "DynamicDimension.0",
+            64,
+            5,
+            80
+          ]
+        },
+        {
+          "name": "p2o.pd_op.depthwise_conv2d.9.0",
+          "shape": [
+            "DynamicDimension.0",
+            64,
+            5,
+            80
+          ]
+        },
+        {
+          "name": "p2o.pd_op.dropout.0.0",
+          "shape": [
+            "DynamicDimension.0",
+            1280,
+            1,
+            1
+          ]
+        },
+        {
+          "name": "p2o.pd_op.flatten.0.0",
+          "shape": [
+            "DynamicDimension.0",
+            1280
+          ]
+        },
+        {
+          "name": "p2o.pd_op.hardsigmoid.0.0",
+          "shape": [
+            "DynamicDimension.0",
+            64,
+            1,
+            1
+          ]
+        },
+        {
+          "name": "p2o.pd_op.hardsigmoid.1.0",
+          "shape": [
+            "DynamicDimension.0",
+            128,
+            1,
+            1
+          ]
+        },
+        {
+          "name": "p2o.pd_op.hardswish.0.0",
+          "shape": [
+            "DynamicDimension.0",
+            8,
+            40,
+            80
+          ]
+        },
+        {
+          "name": "p2o.pd_op.hardswish.1.0",
+          "shape": [
+            "DynamicDimension.0",
+            8,
+            40,
+            80
+          ]
+        },
+        {
+          "name": "p2o.pd_op.hardswish.10.0",
+          "shape": [
+            "DynamicDimension.0",
+            32,
+            10,
+            80
+          ]
+        },
+        {
+          "name": "p2o.pd_op.hardswish.11.0",
+          "shape": [
+            "DynamicDimension.0",
+            32,
+            5,
+            80
+          ]
+        },
+        {
+          "name": "p2o.pd_op.hardswish.12.0",
+          "shape": [
+            "DynamicDimension.0",
+            64,
+            5,
+            80
+          ]
+        },
+        {
+          "name": "p2o.pd_op.hardswish.13.0",
+          "shape": [
+            "DynamicDimension.0",
+            64,
+            5,
+            80
+          ]
+        },
+        {
+          "name": "p2o.pd_op.hardswish.14.0",
+          "shape": [
+            "DynamicDimension.0",
+            64,
+            5,
+            80
+          ]
+        },
+        {
+          "name": "p2o.pd_op.hardswish.15.0",
+          "shape": [
+            "DynamicDimension.0",
+            64,
+            5,
+            80
+          ]
+        },
+        {
+          "name": "p2o.pd_op.hardswish.16.0",
+          "shape": [
+            "DynamicDimension.0",
+            64,
+            5,
+            80
+          ]
+        },
+        {
+          "name": "p2o.pd_op.hardswish.17.0",
+          "shape": [
+            "DynamicDimension.0",
+            64,
+            5,
+            80
+          ]
+        },
+        {
+          "name": "p2o.pd_op.hardswish.18.0",
+          "shape": [
+            "DynamicDimension.0",
+            64,
+            5,
+            80
+          ]
+        },
+        {
+          "name": "p2o.pd_op.hardswish.19.0",
+          "shape": [
+            "DynamicDimension.0",
+            64,
+            5,
+            80
+          ]
+        },
+        {
+          "name": "p2o.pd_op.hardswish.2.0",
+          "shape": [
+            "DynamicDimension.0",
+            8,
+            40,
+            80
+          ]
+        },
+        {
+          "name": "p2o.pd_op.hardswish.20.0",
+          "shape": [
+            "DynamicDimension.0",
+            64,
+            5,
+            80
+          ]
+        },
+        {
+          "name": "p2o.pd_op.hardswish.21.0",
+          "shape": [
+            "DynamicDimension.0",
+            64,
+            5,
+            80
+          ]
+        },
+        {
+          "name": "p2o.pd_op.hardswish.22.0",
+          "shape": [
+            "DynamicDimension.0",
+            64,
+            5,
+            80
+          ]
+        },
+        {
+          "name": "p2o.pd_op.hardswish.23.0",
+          "shape": [
+            "DynamicDimension.0",
+            64,
+            3,
+            80
+          ]
+        },
+        {
+          "name": "p2o.pd_op.hardswish.24.0",
+          "shape": [
+            "DynamicDimension.0",
+            128,
+            3,
+            80
+          ]
+        },
+        {
+          "name": "p2o.pd_op.hardswish.25.0",
+          "shape": [
+            "DynamicDimension.0",
+            128,
+            3,
+            80
+          ]
+        },
+        {
+          "name": "p2o.pd_op.hardswish.26.0",
+          "shape": [
+            "DynamicDimension.0",
+            128,
+            3,
+            80
+          ]
+        },
+        {
+          "name": "p2o.pd_op.hardswish.27.0",
+          "shape": [
+            "DynamicDimension.0",
+            1280,
+            1,
+            1
+          ]
+        },
+        {
+          "name": "p2o.pd_op.hardswish.3.0",
+          "shape": [
+            "DynamicDimension.0",
+            8,
+            20,
+            80
+          ]
+        },
+        {
+          "name": "p2o.pd_op.hardswish.4.0",
+          "shape": [
+            "DynamicDimension.0",
+            16,
+            20,
+            80
+          ]
+        },
+        {
+          "name": "p2o.pd_op.hardswish.5.0",
+          "shape": [
+            "DynamicDimension.0",
+            16,
+            20,
+            80
+          ]
+        },
+        {
+          "name": "p2o.pd_op.hardswish.6.0",
+          "shape": [
+            "DynamicDimension.0",
+            16,
+            20,
+            80
+          ]
+        },
+        {
+          "name": "p2o.pd_op.hardswish.7.0",
+          "shape": [
+            "DynamicDimension.0",
+            16,
+            10,
+            80
+          ]
+        },
+        {
+          "name": "p2o.pd_op.hardswish.8.0",
+          "shape": [
+            "DynamicDimension.0",
+            32,
+            10,
+            80
+          ]
+        },
+        {
+          "name": "p2o.pd_op.hardswish.9.0",
+          "shape": [
+            "DynamicDimension.0",
+            32,
+            10,
+            80
+          ]
+        },
+        {
+          "name": "p2o.pd_op.matmul.0.0",
+          "shape": [
+            "DynamicDimension.0",
+            2
+          ]
+        },
+        {
+          "name": "p2o.pd_op.multiply.0.0",
+          "shape": [
+            "DynamicDimension.0",
+            64,
+            3,
+            80
+          ]
+        },
+        {
+          "name": "p2o.pd_op.multiply.1.0",
+          "shape": [
+            "DynamicDimension.0",
+            128,
+            3,
+            80
+          ]
+        },
+        {
+          "name": "p2o.pd_op.pool2d.0.0",
+          "shape": [
+            "DynamicDimension.0",
+            64,
+            1,
+            1
+          ]
+        },
+        {
+          "name": "p2o.pd_op.pool2d.1.0",
+          "shape": [
+            "DynamicDimension.0",
+            128,
+            1,
+            1
+          ]
+        },
+        {
+          "name": "p2o.pd_op.pool2d.2.0",
+          "shape": [
+            "DynamicDimension.0",
+            128,
+            1,
+            1
+          ]
+        },
+        {
+          "name": "p2o.pd_op.relu.0.0",
+          "shape": [
+            "DynamicDimension.0",
+            16,
+            1,
+            1
+          ]
+        },
+        {
+          "name": "p2o.pd_op.relu.1.0",
+          "shape": [
+            "DynamicDimension.0",
+            32,
+            1,
+            1
+          ]
+        },
+        {
+          "name": "x",
+          "shape": [
+            "DynamicDimension.0",
+            3,
+            80,
+            160
+          ]
+        }
+      ],
+      "file_bytes": 1018940,
+      "flops": {
+        "by_operator": {
+          "Conv": 46423040,
+          "MatMul": 5120
+        },
+        "note": "Approximate multiply-add count as two FLOPs; preprocessing and elementwise ops are excluded.",
+        "top_nodes": [
+          {
+            "flops": 7864320,
+            "index": 126,
+            "name": "Conv.30",
+            "op": "Conv"
+          },
+          {
+            "flops": 3932160,
+            "index": 107,
+            "name": "Conv.26",
+            "op": "Conv"
+          },
+          {
+            "flops": 3276800,
+            "index": 56,
+            "name": "Conv.14",
+            "op": "Conv"
+          },
+          {
+            "flops": 3276800,
+            "index": 64,
+            "name": "Conv.16",
+            "op": "Conv"
+          },
+          {
+            "flops": 3276800,
+            "index": 72,
+            "name": "Conv.18",
+            "op": "Conv"
+          },
+          {
+            "flops": 3276800,
+            "index": 80,
+            "name": "Conv.20",
+            "op": "Conv"
+          },
+          {
+            "flops": 3276800,
+            "index": 88,
+            "name": "Conv.22",
+            "op": "Conv"
+          },
+          {
+            "flops": 1638400,
+            "index": 40,
+            "name": "Conv.10",
+            "op": "Conv"
+          },
+          {
+            "flops": 1638400,
+            "index": 48,
+            "name": "Conv.12",
+            "op": "Conv"
+          },
+          {
+            "flops": 1536000,
+            "index": 111,
+            "name": "Conv.27",
+            "op": "Conv"
+          },
+          {
+            "flops": 1382400,
+            "index": 0,
+            "name": "Conv.0",
+            "op": "Conv"
+          },
+          {
+            "flops": 1280000,
+            "index": 52,
+            "name": "Conv.13",
+            "op": "Conv"
+          }
+        ],
+        "total": 46428160,
+        "unestimated_heavy_nodes": {}
+      },
+      "fusion_candidates": {
+        "conv_batch_normalization": 27
+      },
+      "identity_nodes": 7,
+      "initializer_bytes": 982004,
+      "initializer_count": 148,
+      "initializer_dtype_counts": {
+        "float": 147,
+        "int64": 1
+      },
+      "inputs": [
+        {
+          "dtype": "float",
+          "name": "x",
+          "shape": [
+            "DynamicDimension.0",
+            3,
+            80,
+            160
+          ]
+        }
+      ],
+      "ir_version": 10,
+      "label": "cls",
+      "largest_initializers": [
+        {
+          "bytes": 655360,
+          "dtype": "float",
+          "name": "conv2d_31.w_0_deepcopy_143",
+          "shape": [
+            1280,
+            128,
+            1,
+            1
+          ]
+        },
+        {
+          "bytes": 65536,
+          "dtype": "float",
+          "name": "conv2d_30.w_0_deepcopy_138",
+          "shape": [
+            128,
+            128,
+            1,
+            1
+          ]
+        },
+        {
+          "bytes": 32768,
+          "dtype": "float",
+          "name": "conv2d_26.w_0_deepcopy_124",
+          "shape": [
+            128,
+            64,
+            1,
+            1
+          ]
+        },
+        {
+          "bytes": 16384,
+          "dtype": "float",
+          "name": "conv2d_14.w_0_deepcopy_70",
+          "shape": [
+            64,
+            64,
+            1,
+            1
+          ]
+        },
+        {
+          "bytes": 16384,
+          "dtype": "float",
+          "name": "conv2d_16.w_0_deepcopy_80",
+          "shape": [
+            64,
+            64,
+            1,
+            1
+          ]
+        },
+        {
+          "bytes": 16384,
+          "dtype": "float",
+          "name": "conv2d_18.w_0_deepcopy_90",
+          "shape": [
+            64,
+            64,
+            1,
+            1
+          ]
+        },
+        {
+          "bytes": 16384,
+          "dtype": "float",
+          "name": "conv2d_20.w_0_deepcopy_100",
+          "shape": [
+            64,
+            64,
+            1,
+            1
+          ]
+        },
+        {
+          "bytes": 16384,
+          "dtype": "float",
+          "name": "conv2d_22.w_0_deepcopy_110",
+          "shape": [
+            64,
+            64,
+            1,
+            1
+          ]
+        },
+        {
+          "bytes": 16384,
+          "dtype": "float",
+          "name": "conv2d_28.w_0_deepcopy_134",
+          "shape": [
+            32,
+            128,
+            1,
+            1
+          ]
+        },
+        {
+          "bytes": 16384,
+          "dtype": "float",
+          "name": "conv2d_29.w_0_deepcopy_136",
+          "shape": [
+            128,
+            32,
+            1,
+            1
+          ]
+        },
+        {
+          "bytes": 12800,
+          "dtype": "float",
+          "name": "conv2d_27.w_0_deepcopy_129",
+          "shape": [
+            128,
+            1,
+            5,
+            5
+          ]
+        },
+        {
+          "bytes": 10240,
+          "dtype": "float",
+          "name": "linear_0.w_0_deepcopy_144",
+          "shape": [
+            1280,
+            2
+          ]
+        }
+      ],
+      "node_count": 143,
+      "operator_attributes": {
+        "Add": {},
+        "BatchNormalization": {
+          "epsilon": [
+            9.999999747378752e-06
+          ],
+          "momentum": [
+            0.8999999761581421
+          ],
+          "spatial": [
+            1
+          ]
+        },
+        "Concat": {
+          "axis": [
+            0
+          ]
+        },
+        "Conv": {
+          "dilations": [
+            [
+              1,
+              1
+            ]
+          ],
+          "group": [
+            1,
+            128,
+            16,
+            32,
+            64,
+            8
+          ],
+          "kernel_shape": [
+            [
+              1,
+              1
+            ],
+            [
+              3,
+              3
+            ],
+            [
+              5,
+              5
+            ]
+          ],
+          "pads": [
+            [
+              0,
+              0,
+              0,
+              0
+            ],
+            [
+              1,
+              1,
+              1,
+              1
+            ],
+            [
+              2,
+              2,
+              2,
+              2
+            ]
+          ],
+          "strides": [
+            [
+              1,
+              1
+            ],
+            [
+              2,
+              1
+            ],
+            [
+              2,
+              2
+            ]
+          ]
+        },
+        "GlobalAveragePool": {},
+        "HardSigmoid": {
+          "alpha": [
+            0.1666666716337204,
+            0.16666670143604279
+          ],
+          "beta": [
+            0.5
+          ]
+        },
+        "Identity": {},
+        "MatMul": {},
+        "Mul": {},
+        "Relu": {},
+        "Reshape": {},
+        "Shape": {},
+        "Slice": {
+          "axes": [
+            [
+              0
+            ]
+          ],
+          "ends": [
+            [
+              1
+            ]
+          ],
+          "starts": [
+            [
+              0
+            ]
+          ]
+        },
+        "Softmax": {
+          "axis": [
+            1
+          ]
+        }
+      },
+      "operator_counts": {
+        "Add": 5,
+        "BatchNormalization": 27,
+        "Concat": 1,
+        "Conv": 32,
+        "GlobalAveragePool": 3,
+        "HardSigmoid": 30,
+        "Identity": 7,
+        "MatMul": 1,
+        "Mul": 31,
+        "Relu": 2,
+        "Reshape": 1,
+        "Shape": 1,
+        "Slice": 1,
+        "Softmax": 1
+      },
+      "opsets": [
+        {
+          "domain": "ai.onnx",
+          "version": 7
+        }
+      ],
+      "outputs": [
+        {
+          "dtype": "float",
+          "name": "fetch_name_0",
+          "shape": [
+            "DynamicDimension.0",
+            2
+          ]
+        }
+      ],
+      "path": "models/ppocrv6-tiny/cls.onnx",
+      "producer": {
+        "name": "",
+        "version": ""
+      },
+      "representative_input_shape": [
+        1,
+        3,
+        80,
+        160
+      ],
+      "representative_outputs": [
+        {
+          "dtype": "float",
+          "name": "fetch_name_0",
+          "shape": [
+            1,
+            2
+          ]
+        }
+      ],
+      "sha256": "dd8b2b61983d76ab230a58da9e0e0e84956b71c3877f2ce6e438fe22d74d2cf2",
+      "shape_inference_error": null,
+      "shape_only_nodes": [
+        {
+          "index": 135,
+          "name": "Shape.0",
+          "op": "Shape"
+        },
+        {
+          "index": 136,
+          "name": "Slice.0",
+          "op": "Slice"
+        },
+        {
+          "index": 137,
+          "name": "Concat.0",
+          "op": "Concat"
+        }
+      ]
+    },
+    {
+      "constant_fold_candidates": [],
+      "constant_nodes": [],
+      "dynamic_node_counts": {
+        "Add": 52,
+        "AveragePool": 1,
+        "BatchNormalization": 4,
+        "Conv": 37,
+        "Div": 10,
+        "Erf": 10,
+        "HardSigmoid": 5,
+        "Identity": 58,
+        "MatMul": 2,
+        "Mul": 25,
+        "ReduceMean": 3,
+        "Relu": 3,
+        "Softmax": 1,
+        "Squeeze": 3,
+        "Transpose": 3,
+        "Unsqueeze": 2
+      },
+      "dynamic_values": [
+        {
+          "name": "Add.1",
+          "shape": [
+            "DynamicDimension.0",
+            24,
+            24,
+            "floor(DynamicDimension.1/2 - 1/2) + 1"
+          ]
+        },
+        {
+          "name": "Add.105",
+          "shape": [
+            "DynamicDimension.0",
+            "floor(floor(floor(DynamicDimension.1/2 - 1/2)/2)/2 - 1/2) + 1",
+            80
+          ]
+        },
+        {
+          "name": "Add.107",
+          "shape": [
+            "DynamicDimension.0",
+            "floor(floor(floor(DynamicDimension.1/2 - 1/2)/2)/2 - 1/2) + 1",
+            6906
+          ]
+        },
+        {
+          "name": "Add.11",
+          "shape": [
+            "DynamicDimension.0",
+            96,
+            12,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Add.13",
+          "shape": [
+            "DynamicDimension.0",
+            48,
+            12,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Add.15",
+          "shape": [
+            "DynamicDimension.0",
+            48,
+            12,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Add.17",
+          "shape": [
+            "DynamicDimension.0",
+            48,
+            12,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Add.19",
+          "shape": [
+            "DynamicDimension.0",
+            96,
+            12,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Add.21",
+          "shape": [
+            "DynamicDimension.0",
+            96,
+            12,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Add.23",
+          "shape": [
+            "DynamicDimension.0",
+            48,
+            12,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Add.25",
+          "shape": [
+            "DynamicDimension.0",
+            48,
+            12,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Add.27",
+          "shape": [
+            "DynamicDimension.0",
+            48,
+            6,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Add.29",
+          "shape": [
+            "DynamicDimension.0",
+            96,
+            6,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Add.3",
+          "shape": [
+            "DynamicDimension.0",
+            48,
+            12,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Add.31",
+          "shape": [
+            "DynamicDimension.0",
+            96,
+            6,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Add.33",
+          "shape": [
+            "DynamicDimension.0",
+            96,
+            6,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Add.35",
+          "shape": [
+            "DynamicDimension.0",
+            96,
+            6,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Add.37",
+          "shape": [
+            "DynamicDimension.0",
+            24,
+            1,
+            1
+          ]
+        },
+        {
+          "name": "Add.39",
+          "shape": [
+            "DynamicDimension.0",
+            96,
+            1,
+            1
+          ]
+        },
+        {
+          "name": "Add.41",
+          "shape": [
+            "DynamicDimension.0",
+            192,
+            6,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Add.43",
+          "shape": [
+            "DynamicDimension.0",
+            192,
+            6,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Add.45",
+          "shape": [
+            "DynamicDimension.0",
+            96,
+            6,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Add.47",
+          "shape": [
+            "DynamicDimension.0",
+            96,
+            6,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Add.49",
+          "shape": [
+            "DynamicDimension.0",
+            96,
+            6,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Add.5",
+          "shape": [
+            "DynamicDimension.0",
+            12,
+            1,
+            1
+          ]
+        },
+        {
+          "name": "Add.51",
+          "shape": [
+            "DynamicDimension.0",
+            192,
+            6,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Add.53",
+          "shape": [
+            "DynamicDimension.0",
+            192,
+            6,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Add.55",
+          "shape": [
+            "DynamicDimension.0",
+            96,
+            6,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Add.57",
+          "shape": [
+            "DynamicDimension.0",
+            96,
+            6,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Add.59",
+          "shape": [
+            "DynamicDimension.0",
+            96,
+            3,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Add.61",
+          "shape": [
+            "DynamicDimension.0",
+            192,
+            3,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Add.63",
+          "shape": [
+            "DynamicDimension.0",
+            192,
+            3,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Add.65",
+          "shape": [
+            "DynamicDimension.0",
+            160,
+            3,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Add.67",
+          "shape": [
+            "DynamicDimension.0",
+            160,
+            3,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Add.69",
+          "shape": [
+            "DynamicDimension.0",
+            40,
+            1,
+            1
+          ]
+        },
+        {
+          "name": "Add.7",
+          "shape": [
+            "DynamicDimension.0",
+            48,
+            1,
+            1
+          ]
+        },
+        {
+          "name": "Add.71",
+          "shape": [
+            "DynamicDimension.0",
+            160,
+            1,
+            1
+          ]
+        },
+        {
+          "name": "Add.73",
+          "shape": [
+            "DynamicDimension.0",
+            320,
+            3,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Add.75",
+          "shape": [
+            "DynamicDimension.0",
+            320,
+            3,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Add.77",
+          "shape": [
+            "DynamicDimension.0",
+            160,
+            3,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Add.79",
+          "shape": [
+            "DynamicDimension.0",
+            160,
+            3,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Add.81",
+          "shape": [
+            "DynamicDimension.0",
+            160,
+            3,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Add.83",
+          "shape": [
+            "DynamicDimension.0",
+            320,
+            3,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Add.85",
+          "shape": [
+            "DynamicDimension.0",
+            320,
+            3,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Add.87",
+          "shape": [
+            "DynamicDimension.0",
+            160,
+            3,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Add.89",
+          "shape": [
+            "DynamicDimension.0",
+            160,
+            3,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Add.9",
+          "shape": [
+            "DynamicDimension.0",
+            96,
+            12,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Add.91",
+          "shape": [
+            "DynamicDimension.0",
+            160,
+            3,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Add.93",
+          "shape": [
+            "DynamicDimension.0",
+            320,
+            3,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Add.95",
+          "shape": [
+            "DynamicDimension.0",
+            320,
+            3,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Add.97",
+          "shape": [
+            "DynamicDimension.0",
+            160,
+            3,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Add.99",
+          "shape": [
+            "DynamicDimension.0",
+            160,
+            3,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Div.1",
+          "shape": [
+            "DynamicDimension.0",
+            24,
+            24,
+            "floor(DynamicDimension.1/2 - 1/2) + 1"
+          ]
+        },
+        {
+          "name": "Div.11",
+          "shape": [
+            "DynamicDimension.0",
+            192,
+            6,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Div.13",
+          "shape": [
+            "DynamicDimension.0",
+            192,
+            3,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Div.15",
+          "shape": [
+            "DynamicDimension.0",
+            320,
+            3,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Div.17",
+          "shape": [
+            "DynamicDimension.0",
+            320,
+            3,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Div.19",
+          "shape": [
+            "DynamicDimension.0",
+            320,
+            3,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Div.3",
+          "shape": [
+            "DynamicDimension.0",
+            96,
+            12,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Div.5",
+          "shape": [
+            "DynamicDimension.0",
+            96,
+            12,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Div.7",
+          "shape": [
+            "DynamicDimension.0",
+            96,
+            6,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Div.9",
+          "shape": [
+            "DynamicDimension.0",
+            192,
+            6,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Erf.1",
+          "shape": [
+            "DynamicDimension.0",
+            24,
+            24,
+            "floor(DynamicDimension.1/2 - 1/2) + 1"
+          ]
+        },
+        {
+          "name": "Erf.11",
+          "shape": [
+            "DynamicDimension.0",
+            192,
+            6,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Erf.13",
+          "shape": [
+            "DynamicDimension.0",
+            192,
+            3,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Erf.15",
+          "shape": [
+            "DynamicDimension.0",
+            320,
+            3,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Erf.17",
+          "shape": [
+            "DynamicDimension.0",
+            320,
+            3,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Erf.19",
+          "shape": [
+            "DynamicDimension.0",
+            320,
+            3,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Erf.3",
+          "shape": [
+            "DynamicDimension.0",
+            96,
+            12,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Erf.5",
+          "shape": [
+            "DynamicDimension.0",
+            96,
+            12,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Erf.7",
+          "shape": [
+            "DynamicDimension.0",
+            96,
+            6,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Erf.9",
+          "shape": [
+            "DynamicDimension.0",
+            192,
+            6,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "HardSigmoid.4",
+          "shape": [
+            "DynamicDimension.0",
+            160,
+            "floor(floor(floor(DynamicDimension.1/2 - 1/2)/2)/2 - 1/2) + 1"
+          ]
+        },
+        {
+          "name": "HardSigmoid.6",
+          "shape": [
+            "DynamicDimension.0",
+            160,
+            "floor(floor(floor(DynamicDimension.1/2 - 1/2)/2)/2 - 1/2) + 1"
+          ]
+        },
+        {
+          "name": "Mul.1",
+          "shape": [
+            "DynamicDimension.0",
+            24,
+            24,
+            "floor(DynamicDimension.1/2 - 1/2) + 1"
+          ]
+        },
+        {
+          "name": "Mul.12",
+          "shape": [
+            "DynamicDimension.0",
+            96,
+            6,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Mul.15",
+          "shape": [
+            "DynamicDimension.0",
+            96,
+            6,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Mul.17",
+          "shape": [
+            "DynamicDimension.0",
+            192,
+            6,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Mul.20",
+          "shape": [
+            "DynamicDimension.0",
+            192,
+            6,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Mul.23",
+          "shape": [
+            "DynamicDimension.0",
+            192,
+            3,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Mul.26",
+          "shape": [
+            "DynamicDimension.0",
+            160,
+            3,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Mul.28",
+          "shape": [
+            "DynamicDimension.0",
+            320,
+            3,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Mul.31",
+          "shape": [
+            "DynamicDimension.0",
+            320,
+            3,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Mul.34",
+          "shape": [
+            "DynamicDimension.0",
+            320,
+            3,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Mul.4",
+          "shape": [
+            "DynamicDimension.0",
+            48,
+            12,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Mul.6",
+          "shape": [
+            "DynamicDimension.0",
+            96,
+            12,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "Mul.9",
+          "shape": [
+            "DynamicDimension.0",
+            96,
+            12,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "ReduceMean.1",
+          "shape": [
+            "DynamicDimension.0",
+            48,
+            1,
+            1
+          ]
+        },
+        {
+          "name": "ReduceMean.3",
+          "shape": [
+            "DynamicDimension.0",
+            96,
+            1,
+            1
+          ]
+        },
+        {
+          "name": "ReduceMean.5",
+          "shape": [
+            "DynamicDimension.0",
+            160,
+            1,
+            1
+          ]
+        },
+        {
+          "name": "auto.cast.0",
+          "shape": [
+            "DynamicDimension.0",
+            24,
+            24,
+            "floor(DynamicDimension.1/2 - 1/2) + 1"
+          ]
+        },
+        {
+          "name": "auto.cast.13",
+          "shape": [
+            "DynamicDimension.0",
+            96,
+            6,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "auto.cast.19",
+          "shape": [
+            "DynamicDimension.0",
+            192,
+            6,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "auto.cast.23",
+          "shape": [
+            "DynamicDimension.0",
+            192,
+            6,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "auto.cast.27",
+          "shape": [
+            "DynamicDimension.0",
+            192,
+            3,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "auto.cast.33",
+          "shape": [
+            "DynamicDimension.0",
+            320,
+            3,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "auto.cast.37",
+          "shape": [
+            "DynamicDimension.0",
+            320,
+            3,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "auto.cast.41",
+          "shape": [
+            "DynamicDimension.0",
+            320,
+            3,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "auto.cast.5",
+          "shape": [
+            "DynamicDimension.0",
+            96,
+            12,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "auto.cast.9",
+          "shape": [
+            "DynamicDimension.0",
+            96,
+            12,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "fetch_name_0",
+          "shape": [
+            "DynamicDimension.0",
+            "floor(floor(floor(DynamicDimension.1/2 - 1/2)/2)/2 - 1/2) + 1",
+            6906
+          ]
+        },
+        {
+          "name": "p2o.pd_op.add.0.0",
+          "shape": [
+            "DynamicDimension.0",
+            48,
+            12,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.add.1.0",
+          "shape": [
+            "DynamicDimension.0",
+            12,
+            1,
+            1
+          ]
+        },
+        {
+          "name": "p2o.pd_op.add.10.0",
+          "shape": [
+            "DynamicDimension.0",
+            48,
+            6,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.add.11.0",
+          "shape": [
+            "DynamicDimension.0",
+            96,
+            6,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.add.12.0",
+          "shape": [
+            "DynamicDimension.0",
+            96,
+            6,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.add.13.0",
+          "shape": [
+            "DynamicDimension.0",
+            96,
+            6,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.add.14.0",
+          "shape": [
+            "DynamicDimension.0",
+            24,
+            1,
+            1
+          ]
+        },
+        {
+          "name": "p2o.pd_op.add.15.0",
+          "shape": [
+            "DynamicDimension.0",
+            96,
+            1,
+            1
+          ]
+        },
+        {
+          "name": "p2o.pd_op.add.16.0",
+          "shape": [
+            "DynamicDimension.0",
+            192,
+            6,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.add.17.0",
+          "shape": [
+            "DynamicDimension.0",
+            96,
+            6,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.add.18.0",
+          "shape": [
+            "DynamicDimension.0",
+            96,
+            6,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.add.19.0",
+          "shape": [
+            "DynamicDimension.0",
+            96,
+            6,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.add.2.0",
+          "shape": [
+            "DynamicDimension.0",
+            48,
+            1,
+            1
+          ]
+        },
+        {
+          "name": "p2o.pd_op.add.20.0",
+          "shape": [
+            "DynamicDimension.0",
+            192,
+            6,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.add.21.0",
+          "shape": [
+            "DynamicDimension.0",
+            96,
+            6,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.add.22.0",
+          "shape": [
+            "DynamicDimension.0",
+            96,
+            6,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.add.23.0",
+          "shape": [
+            "DynamicDimension.0",
+            96,
+            3,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.add.24.0",
+          "shape": [
+            "DynamicDimension.0",
+            192,
+            3,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.add.25.0",
+          "shape": [
+            "DynamicDimension.0",
+            160,
+            3,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.add.26.0",
+          "shape": [
+            "DynamicDimension.0",
+            160,
+            3,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.add.27.0",
+          "shape": [
+            "DynamicDimension.0",
+            40,
+            1,
+            1
+          ]
+        },
+        {
+          "name": "p2o.pd_op.add.28.0",
+          "shape": [
+            "DynamicDimension.0",
+            160,
+            1,
+            1
+          ]
+        },
+        {
+          "name": "p2o.pd_op.add.29.0",
+          "shape": [
+            "DynamicDimension.0",
+            320,
+            3,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.add.3.0",
+          "shape": [
+            "DynamicDimension.0",
+            96,
+            12,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.add.30.0",
+          "shape": [
+            "DynamicDimension.0",
+            160,
+            3,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.add.31.0",
+          "shape": [
+            "DynamicDimension.0",
+            160,
+            3,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.add.32.0",
+          "shape": [
+            "DynamicDimension.0",
+            160,
+            3,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.add.33.0",
+          "shape": [
+            "DynamicDimension.0",
+            320,
+            3,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.add.34.0",
+          "shape": [
+            "DynamicDimension.0",
+            160,
+            3,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.add.35.0",
+          "shape": [
+            "DynamicDimension.0",
+            160,
+            3,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.add.36.0",
+          "shape": [
+            "DynamicDimension.0",
+            160,
+            3,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.add.37.0",
+          "shape": [
+            "DynamicDimension.0",
+            320,
+            3,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.add.38.0",
+          "shape": [
+            "DynamicDimension.0",
+            160,
+            3,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.add.39.0",
+          "shape": [
+            "DynamicDimension.0",
+            160,
+            3,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.add.4.0",
+          "shape": [
+            "DynamicDimension.0",
+            48,
+            12,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.add.40.0",
+          "shape": [
+            "DynamicDimension.0",
+            "floor(floor(floor(DynamicDimension.1/2 - 1/2)/2)/2 - 1/2) + 1",
+            80
+          ]
+        },
+        {
+          "name": "p2o.pd_op.add.41.0",
+          "shape": [
+            "DynamicDimension.0",
+            "floor(floor(floor(DynamicDimension.1/2 - 1/2)/2)/2 - 1/2) + 1",
+            6906
+          ]
+        },
+        {
+          "name": "p2o.pd_op.add.5.0",
+          "shape": [
+            "DynamicDimension.0",
+            48,
+            12,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.add.6.0",
+          "shape": [
+            "DynamicDimension.0",
+            48,
+            12,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.add.7.0",
+          "shape": [
+            "DynamicDimension.0",
+            96,
+            12,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.add.8.0",
+          "shape": [
+            "DynamicDimension.0",
+            48,
+            12,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.add.9.0",
+          "shape": [
+            "DynamicDimension.0",
+            48,
+            12,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.batch_norm_.0.0",
+          "shape": [
+            "DynamicDimension.0",
+            24,
+            24,
+            "floor(DynamicDimension.1/2 - 1/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.batch_norm_.1.0",
+          "shape": [
+            "DynamicDimension.0",
+            48,
+            12,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.batch_norm_.2.0",
+          "shape": [
+            "DynamicDimension.0",
+            160,
+            "floor(floor(floor(DynamicDimension.1/2 - 1/2)/2)/2 - 1/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.batch_norm_.3.0",
+          "shape": [
+            "DynamicDimension.0",
+            160,
+            "floor(floor(floor(DynamicDimension.1/2 - 1/2)/2)/2 - 1/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.conv2d.0.0",
+          "shape": [
+            "DynamicDimension.0",
+            24,
+            24,
+            "floor(DynamicDimension.1/2 - 1/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.conv2d.1.0",
+          "shape": [
+            "DynamicDimension.0",
+            48,
+            12,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.conv2d.10.0",
+          "shape": [
+            "DynamicDimension.0",
+            24,
+            1,
+            1
+          ]
+        },
+        {
+          "name": "p2o.pd_op.conv2d.11.0",
+          "shape": [
+            "DynamicDimension.0",
+            96,
+            1,
+            1
+          ]
+        },
+        {
+          "name": "p2o.pd_op.conv2d.12.0",
+          "shape": [
+            "DynamicDimension.0",
+            192,
+            6,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.conv2d.13.0",
+          "shape": [
+            "DynamicDimension.0",
+            96,
+            6,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.conv2d.14.0",
+          "shape": [
+            "DynamicDimension.0",
+            192,
+            6,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.conv2d.15.0",
+          "shape": [
+            "DynamicDimension.0",
+            96,
+            6,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.conv2d.16.0",
+          "shape": [
+            "DynamicDimension.0",
+            192,
+            3,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.conv2d.17.0",
+          "shape": [
+            "DynamicDimension.0",
+            160,
+            3,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.conv2d.18.0",
+          "shape": [
+            "DynamicDimension.0",
+            40,
+            1,
+            1
+          ]
+        },
+        {
+          "name": "p2o.pd_op.conv2d.19.0",
+          "shape": [
+            "DynamicDimension.0",
+            160,
+            1,
+            1
+          ]
+        },
+        {
+          "name": "p2o.pd_op.conv2d.2.0",
+          "shape": [
+            "DynamicDimension.0",
+            12,
+            1,
+            1
+          ]
+        },
+        {
+          "name": "p2o.pd_op.conv2d.20.0",
+          "shape": [
+            "DynamicDimension.0",
+            320,
+            3,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.conv2d.21.0",
+          "shape": [
+            "DynamicDimension.0",
+            160,
+            3,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.conv2d.22.0",
+          "shape": [
+            "DynamicDimension.0",
+            320,
+            3,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.conv2d.23.0",
+          "shape": [
+            "DynamicDimension.0",
+            160,
+            3,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.conv2d.24.0",
+          "shape": [
+            "DynamicDimension.0",
+            320,
+            3,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.conv2d.25.0",
+          "shape": [
+            "DynamicDimension.0",
+            160,
+            3,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.conv2d.26.0",
+          "shape": [
+            "DynamicDimension.0",
+            160,
+            1,
+            "floor(floor(floor(DynamicDimension.1/2 - 1/2)/2)/2 - 1/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.conv2d.3.0",
+          "shape": [
+            "DynamicDimension.0",
+            48,
+            1,
+            1
+          ]
+        },
+        {
+          "name": "p2o.pd_op.conv2d.4.0",
+          "shape": [
+            "DynamicDimension.0",
+            96,
+            12,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.conv2d.5.0",
+          "shape": [
+            "DynamicDimension.0",
+            48,
+            12,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.conv2d.6.0",
+          "shape": [
+            "DynamicDimension.0",
+            96,
+            12,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.conv2d.7.0",
+          "shape": [
+            "DynamicDimension.0",
+            48,
+            12,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.conv2d.8.0",
+          "shape": [
+            "DynamicDimension.0",
+            96,
+            6,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.conv2d.9.0",
+          "shape": [
+            "DynamicDimension.0",
+            96,
+            6,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.depthwise_conv2d.0.0",
+          "shape": [
+            "DynamicDimension.0",
+            48,
+            12,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.depthwise_conv2d.1.0",
+          "shape": [
+            "DynamicDimension.0",
+            48,
+            12,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.depthwise_conv2d.2.0",
+          "shape": [
+            "DynamicDimension.0",
+            48,
+            6,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.depthwise_conv2d.3.0",
+          "shape": [
+            "DynamicDimension.0",
+            96,
+            6,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.depthwise_conv2d.4.0",
+          "shape": [
+            "DynamicDimension.0",
+            96,
+            6,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.depthwise_conv2d.5.0",
+          "shape": [
+            "DynamicDimension.0",
+            96,
+            3,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.depthwise_conv2d.6.0",
+          "shape": [
+            "DynamicDimension.0",
+            160,
+            3,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.depthwise_conv2d.7.0",
+          "shape": [
+            "DynamicDimension.0",
+            160,
+            3,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.depthwise_conv2d.8.0",
+          "shape": [
+            "DynamicDimension.0",
+            160,
+            3,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.depthwise_conv2d.9.0",
+          "shape": [
+            "DynamicDimension.0",
+            160,
+            1,
+            "floor(floor(floor(DynamicDimension.1/2 - 1/2)/2)/2 - 1/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.gelu.0.0",
+          "shape": [
+            "DynamicDimension.0",
+            24,
+            24,
+            "floor(DynamicDimension.1/2 - 1/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.gelu.1.0",
+          "shape": [
+            "DynamicDimension.0",
+            96,
+            12,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.gelu.2.0",
+          "shape": [
+            "DynamicDimension.0",
+            96,
+            12,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.gelu.3.0",
+          "shape": [
+            "DynamicDimension.0",
+            96,
+            6,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.gelu.4.0",
+          "shape": [
+            "DynamicDimension.0",
+            192,
+            6,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.gelu.5.0",
+          "shape": [
+            "DynamicDimension.0",
+            192,
+            6,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.gelu.6.0",
+          "shape": [
+            "DynamicDimension.0",
+            192,
+            3,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.gelu.7.0",
+          "shape": [
+            "DynamicDimension.0",
+            320,
+            3,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.gelu.8.0",
+          "shape": [
+            "DynamicDimension.0",
+            320,
+            3,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.gelu.9.0",
+          "shape": [
+            "DynamicDimension.0",
+            320,
+            3,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.hardsigmoid.0.0",
+          "shape": [
+            "DynamicDimension.0",
+            48,
+            1,
+            1
+          ]
+        },
+        {
+          "name": "p2o.pd_op.hardsigmoid.1.0",
+          "shape": [
+            "DynamicDimension.0",
+            96,
+            1,
+            1
+          ]
+        },
+        {
+          "name": "p2o.pd_op.hardsigmoid.2.0",
+          "shape": [
+            "DynamicDimension.0",
+            160,
+            1,
+            1
+          ]
+        },
+        {
+          "name": "p2o.pd_op.hardswish.0.0",
+          "shape": [
+            "DynamicDimension.0",
+            160,
+            "floor(floor(floor(DynamicDimension.1/2 - 1/2)/2)/2 - 1/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.hardswish.1.0",
+          "shape": [
+            "DynamicDimension.0",
+            160,
+            "floor(floor(floor(DynamicDimension.1/2 - 1/2)/2)/2 - 1/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.matmul.0.0",
+          "shape": [
+            "DynamicDimension.0",
+            "floor(floor(floor(DynamicDimension.1/2 - 1/2)/2)/2 - 1/2) + 1",
+            80
+          ]
+        },
+        {
+          "name": "p2o.pd_op.matmul.1.0",
+          "shape": [
+            "DynamicDimension.0",
+            "floor(floor(floor(DynamicDimension.1/2 - 1/2)/2)/2 - 1/2) + 1",
+            6906
+          ]
+        },
+        {
+          "name": "p2o.pd_op.mean.0.0",
+          "shape": [
+            "DynamicDimension.0",
+            48,
+            1,
+            1
+          ]
+        },
+        {
+          "name": "p2o.pd_op.mean.1.0",
+          "shape": [
+            "DynamicDimension.0",
+            96,
+            1,
+            1
+          ]
+        },
+        {
+          "name": "p2o.pd_op.mean.2.0",
+          "shape": [
+            "DynamicDimension.0",
+            160,
+            1,
+            1
+          ]
+        },
+        {
+          "name": "p2o.pd_op.multiply.0.0",
+          "shape": [
+            "DynamicDimension.0",
+            48,
+            12,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.multiply.1.0",
+          "shape": [
+            "DynamicDimension.0",
+            96,
+            6,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.multiply.2.0",
+          "shape": [
+            "DynamicDimension.0",
+            160,
+            3,
+            "floor(floor(DynamicDimension.1/2 - 1/2)/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.pool2d.0.0",
+          "shape": [
+            "DynamicDimension.0",
+            160,
+            1,
+            "floor(floor(floor(DynamicDimension.1/2 - 1/2)/2)/2 - 1/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.relu.0.0",
+          "shape": [
+            "DynamicDimension.0",
+            12,
+            1,
+            1
+          ]
+        },
+        {
+          "name": "p2o.pd_op.relu.1.0",
+          "shape": [
+            "DynamicDimension.0",
+            24,
+            1,
+            1
+          ]
+        },
+        {
+          "name": "p2o.pd_op.relu.2.0",
+          "shape": [
+            "DynamicDimension.0",
+            40,
+            1,
+            1
+          ]
+        },
+        {
+          "name": "p2o.pd_op.squeeze.0.0",
+          "shape": [
+            "DynamicDimension.0",
+            160,
+            "floor(floor(floor(DynamicDimension.1/2 - 1/2)/2)/2 - 1/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.squeeze.1.0",
+          "shape": [
+            "DynamicDimension.0",
+            160,
+            "floor(floor(floor(DynamicDimension.1/2 - 1/2)/2)/2 - 1/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.squeeze.2.0",
+          "shape": [
+            "DynamicDimension.0",
+            160,
+            "floor(floor(floor(DynamicDimension.1/2 - 1/2)/2)/2 - 1/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.transpose.0.0",
+          "shape": [
+            "DynamicDimension.0",
+            "floor(floor(floor(DynamicDimension.1/2 - 1/2)/2)/2 - 1/2) + 1",
+            160
+          ]
+        },
+        {
+          "name": "p2o.pd_op.transpose.1.0",
+          "shape": [
+            "DynamicDimension.0",
+            160,
+            "floor(floor(floor(DynamicDimension.1/2 - 1/2)/2)/2 - 1/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.transpose.2.0",
+          "shape": [
+            "DynamicDimension.0",
+            "floor(floor(floor(DynamicDimension.1/2 - 1/2)/2)/2 - 1/2) + 1",
+            160
+          ]
+        },
+        {
+          "name": "p2o.pd_op.unsqueeze.1.0",
+          "shape": [
+            "DynamicDimension.0",
+            160,
+            1,
+            "floor(floor(floor(DynamicDimension.1/2 - 1/2)/2)/2 - 1/2) + 1"
+          ]
+        },
+        {
+          "name": "p2o.pd_op.unsqueeze.3.0",
+          "shape": [
+            "DynamicDimension.0",
+            160,
+            1,
+            "floor(floor(floor(DynamicDimension.1/2 - 1/2)/2)/2 - 1/2) + 1"
+          ]
+        },
+        {
+          "name": "x",
+          "shape": [
+            "DynamicDimension.0",
+            3,
+            48,
+            "DynamicDimension.1"
+          ]
+        }
+      ],
+      "file_bytes": 4462639,
+      "flops": {
+        "by_operator": {
+          "Conv": 323741440,
+          "MatMul": 45222400
+        },
+        "note": "Approximate multiply-add count as two FLOPs; preprocessing and elementwise ops are excluded.",
+        "top_nodes": [
+          {
+            "flops": 44198400,
+            "index": 215,
+            "name": "MatMul.1",
+            "op": "MatMul"
+          },
+          {
+            "flops": 24576000,
+            "index": 147,
+            "name": "Conv.27",
+            "op": "Conv"
+          },
+          {
+            "flops": 24576000,
+            "index": 156,
+            "name": "Conv.28",
+            "op": "Conv"
+          },
+          {
+            "flops": 24576000,
+            "index": 164,
+            "name": "Conv.30",
+            "op": "Conv"
+          },
+          {
+            "flops": 24576000,
+            "index": 173,
+            "name": "Conv.31",
+            "op": "Conv"
+          },
+          {
+            "flops": 24576000,
+            "index": 181,
+            "name": "Conv.33",
+            "op": "Conv"
+          },
+          {
+            "flops": 24576000,
+            "index": 190,
+            "name": "Conv.34",
+            "op": "Conv"
+          },
+          {
+            "flops": 19906560,
+            "index": 8,
+            "name": "Conv.1",
+            "op": "Conv"
+          },
+          {
+            "flops": 17694720,
+            "index": 86,
+            "name": "Conv.16",
+            "op": "Conv"
+          },
+          {
+            "flops": 17694720,
+            "index": 95,
+            "name": "Conv.17",
+            "op": "Conv"
+          },
+          {
+            "flops": 17694720,
+            "index": 103,
+            "name": "Conv.19",
+            "op": "Conv"
+          },
+          {
+            "flops": 17694720,
+            "index": 112,
+            "name": "Conv.20",
+            "op": "Conv"
+          }
+        ],
+        "total": 368963840,
+        "unestimated_heavy_nodes": {}
+      },
+      "fusion_candidates": {
+        "conv_batch_normalization": 2
+      },
+      "identity_nodes": 58,
+      "initializer_bytes": 4418096,
+      "initializer_count": 120,
+      "initializer_dtype_counts": {
+        "float": 120
+      },
+      "inputs": [
+        {
+          "dtype": "float",
+          "name": "x",
+          "shape": [
+            "DynamicDimension.0",
+            3,
+            48,
+            "DynamicDimension.1"
+          ]
+        }
+      ],
+      "ir_version": 6,
+      "label": "rec",
+      "largest_initializers": [
+        {
+          "bytes": 2209920,
+          "dtype": "float",
+          "name": "linear_1.w_0",
+          "shape": [
+            80,
+            6906
+          ]
+        },
+        {
+          "bytes": 204800,
+          "dtype": "float",
+          "name": "conv2d_66.w_0",
+          "shape": [
+            320,
+            160,
+            1,
+            1
+          ]
+        },
+        {
+          "bytes": 204800,
+          "dtype": "float",
+          "name": "conv2d_67.w_0",
+          "shape": [
+            160,
+            320,
+            1,
+            1
+          ]
+        },
+        {
+          "bytes": 204800,
+          "dtype": "float",
+          "name": "conv2d_70.w_0",
+          "shape": [
+            320,
+            160,
+            1,
+            1
+          ]
+        },
+        {
+          "bytes": 204800,
+          "dtype": "float",
+          "name": "conv2d_71.w_0",
+          "shape": [
+            160,
+            320,
+            1,
+            1
+          ]
+        },
+        {
+          "bytes": 204800,
+          "dtype": "float",
+          "name": "conv2d_74.w_0",
+          "shape": [
+            320,
+            160,
+            1,
+            1
+          ]
+        },
+        {
+          "bytes": 204800,
+          "dtype": "float",
+          "name": "conv2d_75.w_0",
+          "shape": [
+            160,
+            320,
+            1,
+            1
+          ]
+        },
+        {
+          "bytes": 122880,
+          "dtype": "float",
+          "name": "conv2d_63.w_0",
+          "shape": [
+            160,
+            192,
+            1,
+            1
+          ]
+        },
+        {
+          "bytes": 102400,
+          "dtype": "float",
+          "name": "p2o.pd_op.unsqueeze.2.0",
+          "shape": [
+            160,
+            160,
+            1,
+            1
+          ]
+        },
+        {
+          "bytes": 73728,
+          "dtype": "float",
+          "name": "conv2d_55.w_0",
+          "shape": [
+            192,
+            96,
+            1,
+            1
+          ]
+        },
+        {
+          "bytes": 73728,
+          "dtype": "float",
+          "name": "conv2d_56.w_0",
+          "shape": [
+            96,
+            192,
+            1,
+            1
+          ]
+        },
+        {
+          "bytes": 73728,
+          "dtype": "float",
+          "name": "conv2d_59.w_0",
+          "shape": [
+            192,
+            96,
+            1,
+            1
+          ]
+        }
+      ],
+      "node_count": 219,
+      "operator_attributes": {
+        "Add": {},
+        "AveragePool": {
+          "ceil_mode": [
+            0
+          ],
+          "count_include_pad": [
+            0
+          ],
+          "kernel_shape": [
+            [
+              3,
+              2
+            ]
+          ],
+          "pads": [
+            [
+              0,
+              0,
+              0,
+              0
+            ]
+          ],
+          "strides": [
+            [
+              3,
+              2
+            ]
+          ]
+        },
+        "BatchNormalization": {
+          "epsilon": [
+            9.999999747378752e-06
+          ],
+          "momentum": [
+            0.8999999761581421
+          ]
+        },
+        "Conv": {
+          "dilations": [
+            [
+              1,
+              1
+            ]
+          ],
+          "group": [
+            1,
+            160,
+            48,
+            96
+          ],
+          "kernel_shape": [
+            [
+              1,
+              1
+            ],
+            [
+              1,
+              5
+            ],
+            [
+              3,
+              3
+            ]
+          ],
+          "pads": [
+            [
+              0,
+              0,
+              0,
+              0
+            ],
+            [
+              0,
+              2,
+              0,
+              2
+            ],
+            [
+              1,
+              1,
+              1,
+              1
+            ]
+          ],
+          "strides": [
+            [
+              1,
+              1
+            ],
+            [
+              2,
+              1
+            ],
+            [
+              2,
+              2
+            ]
+          ]
+        },
+        "Div": {},
+        "Erf": {},
+        "HardSigmoid": {
+          "alpha": [
+            0.1666666716337204,
+            0.16666670143604279
+          ],
+          "beta": [
+            0.5
+          ]
+        },
+        "Identity": {},
+        "MatMul": {},
+        "Mul": {},
+        "ReduceMean": {
+          "axes": [
+            [
+              2,
+              3
+            ]
+          ],
+          "keepdims": [
+            1
+          ]
+        },
+        "Relu": {},
+        "Softmax": {
+          "axis": [
+            2
+          ]
+        },
+        "Squeeze": {
+          "axes": [
+            [
+              2
+            ]
+          ]
+        },
+        "Transpose": {
+          "perm": [
+            [
+              0,
+              2,
+              1
+            ]
+          ]
+        },
+        "Unsqueeze": {
+          "axes": [
+            [
+              2
+            ]
+          ]
+        }
+      },
+      "operator_counts": {
+        "Add": 52,
+        "AveragePool": 1,
+        "BatchNormalization": 4,
+        "Conv": 37,
+        "Div": 10,
+        "Erf": 10,
+        "HardSigmoid": 5,
+        "Identity": 58,
+        "MatMul": 2,
+        "Mul": 25,
+        "ReduceMean": 3,
+        "Relu": 3,
+        "Softmax": 1,
+        "Squeeze": 3,
+        "Transpose": 3,
+        "Unsqueeze": 2
+      },
+      "opsets": [
+        {
+          "domain": "ai.onnx",
+          "version": 11
+        }
+      ],
+      "outputs": [
+        {
+          "dtype": "float",
+          "name": "fetch_name_0",
+          "shape": [
+            "DynamicDimension.0",
+            "floor(floor(floor(DynamicDimension.1/2 - 1/2)/2)/2 - 1/2) + 1",
+            6906
+          ]
+        }
+      ],
+      "path": "models/ppocrv6-tiny/rec.onnx",
+      "producer": {
+        "name": "",
+        "version": ""
+      },
+      "representative_input_shape": [
+        1,
+        3,
+        48,
+        320
+      ],
+      "representative_outputs": [
+        {
+          "dtype": "float",
+          "name": "fetch_name_0",
+          "shape": [
+            1,
+            40,
+            6906
+          ]
+        }
+      ],
+      "sha256": "9ef676d6ed3c88256a2d92c640c44f25b0c40947e111b14b8be8f594091563e6",
+      "shape_inference_error": null,
+      "shape_only_nodes": []
+    }
+  ],
+  "onnx_version": "1.22.0",
+  "operator_union": {
+    "Add": [
+      "cls",
+      "det",
+      "rec"
+    ],
+    "AveragePool": [
+      "rec"
+    ],
+    "BatchNormalization": [
+      "cls",
+      "rec"
+    ],
+    "Concat": [
+      "cls",
+      "det"
+    ],
+    "Conv": [
+      "cls",
+      "det",
+      "rec"
+    ],
+    "ConvTranspose": [
+      "det"
+    ],
+    "Div": [
+      "det",
+      "rec"
+    ],
+    "Erf": [
+      "det",
+      "rec"
+    ],
+    "GlobalAveragePool": [
+      "cls",
+      "det"
+    ],
+    "HardSigmoid": [
+      "cls",
+      "det",
+      "rec"
+    ],
+    "Identity": [
+      "cls",
+      "rec"
+    ],
+    "MatMul": [
+      "cls",
+      "rec"
+    ],
+    "MaxPool": [
+      "det"
+    ],
+    "Mul": [
+      "cls",
+      "det",
+      "rec"
+    ],
+    "ReduceMean": [
+      "det",
+      "rec"
+    ],
+    "Relu": [
+      "cls",
+      "det",
+      "rec"
+    ],
+    "Reshape": [
+      "cls"
+    ],
+    "Resize": [
+      "det"
+    ],
+    "Shape": [
+      "cls"
+    ],
+    "Sigmoid": [
+      "det"
+    ],
+    "Slice": [
+      "cls"
+    ],
+    "Softmax": [
+      "cls",
+      "rec"
+    ],
+    "Squeeze": [
+      "rec"
+    ],
+    "Transpose": [
+      "rec"
+    ],
+    "Unsqueeze": [
+      "rec"
+    ]
+  },
+  "operator_union_count": 25,
+  "tool": "converter/analyze_onnx.py"
+}
