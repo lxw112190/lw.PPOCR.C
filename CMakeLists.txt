@@ -23,6 +23,12 @@ set(LW_PPOCR_C_CLS_LWM
     "${CMAKE_CURRENT_BINARY_DIR}/models/cls.lwm")
 set(LW_PPOCR_C_CLS_LWM_METADATA
     "${CMAKE_CURRENT_BINARY_DIR}/models/cls-lwm.json")
+set(LW_PPOCR_C_DET_ONNX
+    "${CMAKE_CURRENT_SOURCE_DIR}/models/ppocrv6-tiny/det.onnx")
+set(LW_PPOCR_C_DET_LWM
+    "${CMAKE_CURRENT_BINARY_DIR}/models/det.lwm")
+set(LW_PPOCR_C_DET_LWM_METADATA
+    "${CMAKE_CURRENT_BINARY_DIR}/models/det-lwm.json")
 
 add_custom_target(analyze_models
     COMMAND "${Python3_EXECUTABLE}"
@@ -64,6 +70,22 @@ add_custom_command(
     VERBATIM)
 add_custom_target(convert_cls_model ALL
     DEPENDS "${LW_PPOCR_C_CLS_LWM}" "${LW_PPOCR_C_CLS_LWM_METADATA}")
+
+add_custom_command(
+    OUTPUT "${LW_PPOCR_C_DET_LWM}" "${LW_PPOCR_C_DET_LWM_METADATA}"
+    COMMAND "${Python3_EXECUTABLE}" -m converter.convert_det
+            --input "${LW_PPOCR_C_DET_ONNX}"
+            --output "${LW_PPOCR_C_DET_LWM}"
+            --metadata-output "${LW_PPOCR_C_DET_LWM_METADATA}"
+    DEPENDS
+        "${LW_PPOCR_C_DET_ONNX}"
+        "${CMAKE_CURRENT_SOURCE_DIR}/converter/convert_det.py"
+        "${CMAKE_CURRENT_SOURCE_DIR}/converter/lwm_v0.py"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+    COMMENT "Converting PP-OCRv6 tiny DET to LWM v0.1"
+    VERBATIM)
+add_custom_target(convert_det_model ALL
+    DEPENDS "${LW_PPOCR_C_DET_LWM}" "${LW_PPOCR_C_DET_LWM_METADATA}")
 
 set(LW_PPOCR_C_SOURCES
     src/kernels/scalar_activation.c
@@ -249,6 +271,13 @@ if(BUILD_TESTING)
         COMMAND "${Python3_EXECUTABLE}" -m unittest -v
                 tests.test_convert_cls)
     set_tests_properties(cls_converter PROPERTIES
+        WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
+
+    add_test(
+        NAME det_converter
+        COMMAND "${Python3_EXECUTABLE}" -m unittest -v
+                tests.test_convert_det)
+    set_tests_properties(det_converter PROPERTIES
         WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
 
     add_executable(test-lwm-loader tests/test_model.c)
@@ -464,6 +493,29 @@ if(BUILD_TESTING)
         WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
         TIMEOUT 360)
 
+    add_executable(det-graph-driver tests/det_graph_driver.c)
+    target_link_libraries(det-graph-driver PRIVATE lw_ppocr_c)
+    target_include_directories(det-graph-driver PRIVATE
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/runtime")
+    target_compile_features(det-graph-driver PRIVATE c_std_11)
+    add_dependencies(det-graph-driver convert_det_model)
+    if(MSVC)
+        target_compile_options(det-graph-driver PRIVATE /W4 /WX /utf-8)
+    else()
+        target_compile_options(det-graph-driver PRIVATE
+            -Wall -Wextra -Wpedantic -Werror)
+    endif()
+    add_test(
+        NAME det_graph_reference
+        COMMAND "${Python3_EXECUTABLE}"
+                "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_det_graph_reference.py"
+                --driver "$<TARGET_FILE:det-graph-driver>"
+                --lwm-model "${LW_PPOCR_C_DET_LWM}"
+                --onnx-model "${LW_PPOCR_C_DET_ONNX}")
+    set_tests_properties(det_graph_reference PROPERTIES
+        WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+        TIMEOUT 600)
+
     add_executable(cls-pipeline-driver tests/cls_pipeline_driver.c)
     target_link_libraries(cls-pipeline-driver PRIVATE lw_ppocr_c)
     if(WIN32)
@@ -590,6 +642,7 @@ install(FILES
 install(FILES
     "${LW_PPOCR_C_REC_LWM}"
     "${LW_PPOCR_C_CLS_LWM}"
+    "${LW_PPOCR_C_DET_LWM}"
     "${CMAKE_CURRENT_SOURCE_DIR}/models/ppocrv6-tiny/ppocr_keys.txt"
     "${LW_PPOCR_C_REC_DEMO_PPM}"
     DESTINATION models)

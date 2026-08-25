@@ -23,7 +23,12 @@ enum {
     LW_OP_UNSQUEEZE = 13,
     LW_OP_MATMUL = 14,
     LW_OP_SOFTMAX = 15,
-    LW_OP_RESHAPE = 16
+    LW_OP_RESHAPE = 16,
+    LW_OP_CONCAT = 17,
+    LW_OP_CONV_TRANSPOSE = 18,
+    LW_OP_MAX_POOL = 19,
+    LW_OP_RESIZE = 20,
+    LW_OP_SIGMOID = 21
 };
 
 static float read_f32(const uint8_t* bytes) {
@@ -236,6 +241,66 @@ static lw_status dispatch_node(
                     inputs[0], output,
                     input_tensors[0]->rank, input_tensors[0]->dimensions,
                     output_tensor->rank, output_tensor->dimensions) :
+                LW_STATUS_INVALID_SHAPE;
+        case LW_OP_CONCAT: {
+            uint32_t ranks[LWM_V0_MAX_NODE_INPUTS];
+            const int32_t* dimensions[LWM_V0_MAX_NODE_INPUTS];
+            for (index = 0u; index < input_count; ++index) {
+                ranks[index] = input_tensors[index]->rank;
+                dimensions[index] = input_tensors[index]->dimensions;
+            }
+            return lw_scalar_concat_f32(
+                inputs, input_count, ranks, dimensions, output,
+                output_tensor->rank, output_tensor->dimensions,
+                lwm_read_i32(params + 4));
+        }
+        case LW_OP_CONV_TRANSPOSE: {
+            int32_t kernel[2] = {lwm_read_i32(params + 8), lwm_read_i32(params + 12)};
+            int32_t strides[2] = {lwm_read_i32(params + 16), lwm_read_i32(params + 20)};
+            int32_t dilations[2] = {lwm_read_i32(params + 24), lwm_read_i32(params + 28)};
+            int32_t pads[4] = {
+                lwm_read_i32(params + 32), lwm_read_i32(params + 36),
+                lwm_read_i32(params + 40), lwm_read_i32(params + 44)};
+            if (input_count != 2u && input_count != 3u) {
+                return LW_STATUS_INVALID_SHAPE;
+            }
+            return lw_scalar_conv_transpose2d_f32(
+                inputs[0], inputs[1], input_count == 3u ? inputs[2] : NULL,
+                input_count == 3u ? (uint32_t)tensor_element_count(input_tensors[2]) : 0u,
+                output, input_tensors[0]->dimensions, input_tensors[1]->dimensions,
+                output_tensor->dimensions, kernel, strides, dilations, pads,
+                lwm_read_u32(params + 4));
+        }
+        case LW_OP_MAX_POOL: {
+            int32_t kernel[2] = {lwm_read_i32(params + 8), lwm_read_i32(params + 12)};
+            int32_t strides[2] = {lwm_read_i32(params + 16), lwm_read_i32(params + 20)};
+            int32_t pads[4] = {
+                lwm_read_i32(params + 24), lwm_read_i32(params + 28),
+                lwm_read_i32(params + 32), lwm_read_i32(params + 36)};
+            return input_count == 1u ?
+                lw_scalar_max_pool2d_f32(
+                    inputs[0], output, input_tensors[0]->dimensions,
+                    output_tensor->dimensions, kernel, strides, pads,
+                    lwm_read_u32(params + 40)) :
+                LW_STATUS_INVALID_SHAPE;
+        }
+        case LW_OP_RESIZE: {
+            float scales[LW_MAX_DIMS];
+            uint32_t scale_count = lwm_read_u16(params + 2);
+            if (input_count != 1u || scale_count != input_tensors[0]->rank) {
+                return LW_STATUS_INVALID_SHAPE;
+            }
+            for (index = 0u; index < scale_count; ++index) {
+                scales[index] = read_f32(params + 4u + index * 4u);
+            }
+            return lw_scalar_resize_nearest_f32(
+                inputs[0], output, input_tensors[0]->rank,
+                input_tensors[0]->dimensions, output_tensor->dimensions, scales);
+        }
+        case LW_OP_SIGMOID:
+            return input_count == 1u ?
+                lw_scalar_sigmoid_f32(
+                    inputs[0], output, tensor_element_count(input_tensors[0])) :
                 LW_STATUS_INVALID_SHAPE;
         default:
             return LW_STATUS_UNSUPPORTED;

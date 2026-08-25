@@ -1,5 +1,7 @@
 #include "model_internal.h"
 
+#include <limits.h>
+#include <math.h>
 #include <stddef.h>
 #include <string.h>
 
@@ -34,6 +36,13 @@ static uint32_t read_u32(const uint8_t* p) {
 
 static int32_t read_i32(const uint8_t* p) {
     return (int32_t)read_u32(p);
+}
+
+static float read_f32(const uint8_t* p) {
+    uint32_t bits = read_u32(p);
+    float value;
+    memcpy(&value, &bits, sizeof(value));
+    return value;
 }
 
 static uint64_t read_u64(const uint8_t* p) {
@@ -83,6 +92,10 @@ static uint32_t expected_param_size(uint16_t op) {
         case 12u: return 40u;
         case 13u: return 40u;
         case 15u: return 16u;
+        case 17u: return 16u;
+        case 18u: return 64u;
+        case 19u: return 64u;
+        case 20u: return 32u;
         default: return 0u;
     }
 }
@@ -99,18 +112,19 @@ static lw_status validate_params(const uint8_t* p, uint16_t op, uint32_t size, l
     if (read_u16(p) != 1u) {
         return fail(error, LW_STATUS_UNSUPPORTED_VERSION, "unsupported operator parameter version");
     }
-    if (op == 1u) {
-        if (read_u16(p + 2) != 2u || read_u32(p + 4) == 0u) {
-            return fail(error, LW_STATUS_INVALID_FORMAT, "invalid Conv parameter record");
+    if (op == 1u || op == 18u) {
+        if (read_u16(p + 2) != 2u || read_u32(p + 4) == 0u ||
+            read_u32(p + 4) > INT32_MAX) {
+            return fail(error, LW_STATUS_INVALID_FORMAT, "invalid convolution parameter record");
         }
         for (i = 0u; i < 6u; ++i) {
             if (read_i32(p + 8u + i * 4u) <= 0) {
-                return fail(error, LW_STATUS_INVALID_FORMAT, "Conv kernel, stride, or dilation is invalid");
+                return fail(error, LW_STATUS_INVALID_FORMAT, "convolution kernel, stride, or dilation is invalid");
             }
         }
         for (i = 0u; i < 4u; ++i) {
             if (read_i32(p + 32u + i * 4u) < 0 || read_u32(p + 48u + i * 4u) != 0u) {
-                return fail(error, LW_STATUS_INVALID_FORMAT, "Conv padding or reserved field is invalid");
+                return fail(error, LW_STATUS_INVALID_FORMAT, "convolution padding or reserved field is invalid");
             }
         }
     } else if (op == 6u) {
@@ -125,13 +139,24 @@ static lw_status validate_params(const uint8_t* p, uint16_t op, uint32_t size, l
         if (read_u16(p + 2) > LWM_V0_MAX_DIMS || read_u32(p + 4) > 1u || read_u32(p + 8) > 1u || read_u32(p + 44) != 0u) {
             return fail(error, LW_STATUS_INVALID_FORMAT, "invalid ReduceMean parameter record");
         }
-    } else if (op == 10u) {
-        if (read_u16(p + 2) != 0u || read_u32(p + 4) != 2u || read_u32(p + 40) > 1u || read_u32(p + 44) > 1u) {
-            return fail(error, LW_STATUS_INVALID_FORMAT, "invalid AveragePool parameter record");
+    } else if (op == 10u || op == 19u) {
+        if (read_u16(p + 2) != 0u || read_u32(p + 4) != 2u ||
+            read_u32(p + 40) > 1u || read_u32(p + 44) > (op == 10u ? 1u : 0u)) {
+            return fail(error, LW_STATUS_INVALID_FORMAT, "invalid pool parameter record");
+        }
+        for (i = 0u; i < 4u; ++i) {
+            if (read_i32(p + 8u + i * 4u) <= 0) {
+                return fail(error, LW_STATUS_INVALID_FORMAT, "pool kernel or stride is invalid");
+            }
+        }
+        for (i = 0u; i < 4u; ++i) {
+            if (read_i32(p + 24u + i * 4u) < 0) {
+                return fail(error, LW_STATUS_INVALID_FORMAT, "pool padding is invalid");
+            }
         }
         for (i = 0u; i < 4u; ++i) {
             if (read_u32(p + 48u + i * 4u) != 0u) {
-                return fail(error, LW_STATUS_INVALID_FORMAT, "AveragePool reserved field is non-zero");
+                return fail(error, LW_STATUS_INVALID_FORMAT, "pool reserved field is non-zero");
             }
         }
     } else if (op == 11u || op == 12u || op == 13u) {
@@ -141,6 +166,22 @@ static lw_status validate_params(const uint8_t* p, uint16_t op, uint32_t size, l
     } else if (op == 15u) {
         if (read_u16(p + 2) != 0u || read_u32(p + 8) != 0u || read_u32(p + 12) != 0u) {
             return fail(error, LW_STATUS_INVALID_FORMAT, "invalid Softmax parameter record");
+        }
+    } else if (op == 17u) {
+        if (read_u16(p + 2) != 0u || read_u32(p + 8) != 0u ||
+            read_u32(p + 12) != 0u) {
+            return fail(error, LW_STATUS_INVALID_FORMAT, "invalid Concat parameter record");
+        }
+    } else if (op == 20u) {
+        if (read_u16(p + 2) != 4u || read_u32(p + 20) != 0u ||
+            read_u32(p + 24) != 0u || read_u32(p + 28) != 0u) {
+            return fail(error, LW_STATUS_INVALID_FORMAT, "invalid Resize parameter record");
+        }
+        for (i = 0u; i < 4u; ++i) {
+            float scale = read_f32(p + 4u + i * 4u);
+            if (!isfinite(scale) || scale <= 0.0f) {
+                return fail(error, LW_STATUS_INVALID_FORMAT, "Resize scale is invalid");
+            }
         }
     }
     return LW_STATUS_OK;
@@ -280,7 +321,7 @@ lw_status lw_validate_lwm_v0(lw_model* model, lw_error* error) {
         uint32_t expected_size;
         uint32_t j;
         lw_status param_status;
-        if (op == 0u || op > 16u || input_count > LWM_V0_MAX_NODE_INPUTS ||
+        if (op == 0u || op > 21u || input_count > LWM_V0_MAX_NODE_INPUTS ||
             output_count == 0u || output_count > LWM_V0_MAX_NODE_OUTPUTS ||
             read_u16(n + 6) != 0u || read_u32(n + 68) != 0u) {
             return fail(error, LW_STATUS_INVALID_FORMAT, "invalid node operator, arity, flags, or reserved field");

@@ -67,3 +67,24 @@ lw_status lw_scalar_hard_sigmoid_f32(
     }
     return LW_STATUS_OK;
 }
+
+lw_status lw_scalar_sigmoid_f32(
+    const float* input,
+    float* output,
+    uint64_t element_count) {
+    uint64_t index;
+    lw_status status = validate_elementwise(input, output, element_count);
+    if (status != LW_STATUS_OK) {
+        return status;
+    }
+    for (index = 0u; index < element_count; ++index) {
+        float value = input[(size_t)index];
+        if (value >= 0.0f) {
+            output[(size_t)index] = 1.0f / (1.0f + expf(-value));
+        } else {
+            float exponential = expf(value);
+            output[(size_t)index] = exponential / (1.0f + exponential);
+        }
+    }
+    return LW_STATUS_OK;
+}

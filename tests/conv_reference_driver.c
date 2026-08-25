@@ -77,6 +77,11 @@ int main(void) {
     const int32_t point_kernel[2] = {1, 1};
     const int32_t no_pads[4] = {0, 0, 0, 0};
     const int32_t batch_norm_dimensions[4] = {2, 3, 2, 2};
+    const int32_t transpose_conv_input_dimensions[4] = {1, 2, 2, 2};
+    const int32_t transpose_conv_weight_dimensions[4] = {2, 1, 2, 2};
+    const int32_t transpose_conv_output_dimensions[4] = {1, 1, 4, 4};
+    const int32_t transpose_conv_kernel[2] = {2, 2};
+    const int32_t transpose_conv_strides[2] = {2, 2};
     const float normal_bias[3] = {0.25f, -0.5f, 1.0f};
     const float stride2_bias[3] = {-0.125f, 0.625f, -0.875f};
     const float unit_depthwise_bias[2] = {0.375f, -0.625f};
@@ -86,6 +91,7 @@ int main(void) {
     const float batch_norm_mean[3] = {-0.25f, 1.0f, 0.5f};
     const float batch_norm_variance[3] = {0.5f, 2.0f, 0.25f};
     const float invalid_variance[3] = {0.5f, -1.0f, 0.25f};
+    const float transpose_conv_bias[1] = {0.125f};
     float normal_input[80];
     float normal_weights[54];
     float normal_output[36];
@@ -116,6 +122,9 @@ int main(void) {
     float batch_norm_input[24];
     float batch_norm_output[24];
     float batch_norm_in_place[24];
+    float transpose_conv_input[8];
+    float transpose_conv_weights[8];
+    float transpose_conv_output[16];
     lw_simd_level simd_level;
     lw_status status;
 
@@ -286,6 +295,38 @@ int main(void) {
         return 1;
     }
     print_values("grouped_pointwise_conv", pointwise_output, 120u);
+
+    fill_values(transpose_conv_input, 8u, 3u, 13u, 6, 4.0f);
+    fill_values(transpose_conv_weights, 8u, 5u, 17u, 8, 6.0f);
+    status = lw_scalar_conv_transpose2d_f32(
+        transpose_conv_input, transpose_conv_weights, transpose_conv_bias, 1u,
+        transpose_conv_output, transpose_conv_input_dimensions,
+        transpose_conv_weight_dimensions, transpose_conv_output_dimensions,
+        transpose_conv_kernel, transpose_conv_strides, unit_dilations,
+        no_pads, 1u);
+    if (!expect_status("transpose conv", status, LW_STATUS_OK)) {
+        return 1;
+    }
+    print_values("conv_transpose", transpose_conv_output, 16u);
+
+    status = lw_scalar_conv_transpose2d_f32(
+        transpose_conv_input, transpose_conv_weights, transpose_conv_bias, 1u,
+        transpose_conv_input, transpose_conv_input_dimensions,
+        transpose_conv_weight_dimensions, transpose_conv_output_dimensions,
+        transpose_conv_kernel, transpose_conv_strides, unit_dilations,
+        no_pads, 1u);
+    if (!expect_status("transpose conv alias", status, LW_STATUS_INVALID_ARGUMENT)) {
+        return 1;
+    }
+    status = lw_scalar_conv_transpose2d_f32(
+        transpose_conv_input, transpose_conv_weights, transpose_conv_bias, 1u,
+        transpose_conv_output, transpose_conv_input_dimensions,
+        transpose_conv_weight_dimensions, transpose_conv_output_dimensions,
+        transpose_conv_kernel, transpose_conv_strides, unit_dilations,
+        no_pads, 3u);
+    if (!expect_status("transpose conv groups", status, LW_STATUS_INVALID_SHAPE)) {
+        return 1;
+    }
 
     fill_values(batch_norm_input, 24u, 7u, 21u, 10, 4.0f);
     status = lw_scalar_batch_normalization_f32(

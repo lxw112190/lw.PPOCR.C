@@ -25,6 +25,11 @@ interfaces; they are not part of the public C ABI yet.
 | BatchNormalization | 4 | Inference-mode channel normalization |
 | **Total** | **161 / 161** | Kernel available and reference-tested |
 
+DET adds independently reference-tested `Concat`, `ConvTranspose`, `MaxPool`,
+nearest/asymmetric/floor `Resize`, and `Sigmoid` kernels. These are deliberately
+limited to the exact converted DET graph contract rather than general ONNX
+operator coverage.
+
 The binary kernels validate the expected output shape against NumPy/ONNX-style
 broadcast rules and reject an output buffer that aliases either input. The
 activation kernels and Softmax support in-place operation. Tensor rank is
@@ -60,9 +65,8 @@ implementation.
 three-dimensional broadcasts, activations, and a Softmax input containing
 values near `+1000` and `-1000`. `tensor-reference-driver` covers layout
 changes, multi-axis reduction, padded AveragePool, and batched MatMul.
-`conv-reference-driver` covers normal, grouped, Depthwise, and asymmetric
-dilated Conv, including padding-only output regions, plus in-place
-BatchNormalization. The Conv/BN expectations come from ONNX's
+`conv-reference-driver` covers normal, grouped, Depthwise, asymmetric dilated
+Conv, ConvTranspose, and in-place BatchNormalization. The Conv/BN expectations come from ONNX's
 opset-11 ReferenceEvaluator; the other Python tests use NumPy. Every output is
 checked with an FP32 tolerance. The native drivers also check invalid shapes,
 duplicate or invalid axes, forbidden aliases, null inputs, non-finite

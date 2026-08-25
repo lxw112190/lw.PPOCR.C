@@ -1,6 +1,7 @@
 #include "scalar_kernels.h"
 
 #include <limits.h>
+#include <math.h>
 #include <stddef.h>
 #include <stdint.h>
 
@@ -261,6 +262,92 @@ lw_status lw_scalar_average_pool2d_f32(
                         return LW_STATUS_INVALID_SHAPE;
                     }
                     output[(size_t)output_offset] = sum / (float)valid_count;
+                }
+            }
+        }
+    }
+    return LW_STATUS_OK;
+}
+
+lw_status lw_scalar_max_pool2d_f32(
+    const float* input,
+    float* output,
+    const int32_t input_dimensions[4],
+    const int32_t output_dimensions[4],
+    const int32_t kernel[2],
+    const int32_t strides[2],
+    const int32_t pads[4],
+    uint32_t ceil_mode) {
+    uint64_t element_count;
+    int32_t expected_height;
+    int32_t expected_width;
+    uint32_t batch;
+    uint32_t channel;
+    uint32_t output_y;
+    uint32_t output_x;
+    lw_status status;
+    if (input == NULL || output == NULL || input == output ||
+        input_dimensions == NULL || output_dimensions == NULL ||
+        kernel == NULL || strides == NULL || pads == NULL) {
+        return LW_STATUS_INVALID_ARGUMENT;
+    }
+    if (ceil_mode > 1u) {
+        return LW_STATUS_INVALID_SHAPE;
+    }
+    status = tensor_element_count(4u, input_dimensions, &element_count);
+    if (status != LW_STATUS_OK) {
+        return status;
+    }
+    status = tensor_element_count(4u, output_dimensions, &element_count);
+    if (status != LW_STATUS_OK) {
+        return status;
+    }
+    if (!spatial_output(input_dimensions[2], kernel[0], strides[0],
+                        pads[0], pads[2], ceil_mode, &expected_height) ||
+        !spatial_output(input_dimensions[3], kernel[1], strides[1],
+                        pads[1], pads[3], ceil_mode, &expected_width) ||
+        output_dimensions[0] != input_dimensions[0] ||
+        output_dimensions[1] != input_dimensions[1] ||
+        output_dimensions[2] != expected_height ||
+        output_dimensions[3] != expected_width) {
+        return LW_STATUS_INVALID_SHAPE;
+    }
+    for (batch = 0u; batch < (uint32_t)input_dimensions[0]; ++batch) {
+        for (channel = 0u; channel < (uint32_t)input_dimensions[1]; ++channel) {
+            for (output_y = 0u; output_y < (uint32_t)expected_height; ++output_y) {
+                int64_t input_y_start = (int64_t)output_y * strides[0] - pads[0];
+                for (output_x = 0u; output_x < (uint32_t)expected_width; ++output_x) {
+                    int64_t input_x_start = (int64_t)output_x * strides[1] - pads[1];
+                    float maximum = -INFINITY;
+                    int found = 0;
+                    int32_t kernel_y;
+                    int32_t kernel_x;
+                    uint64_t output_offset =
+                        (((uint64_t)batch * (uint32_t)input_dimensions[1] + channel) *
+                         (uint32_t)expected_height + output_y) *
+                         (uint32_t)expected_width + output_x;
+                    for (kernel_y = 0; kernel_y < kernel[0]; ++kernel_y) {
+                        int64_t input_y = input_y_start + kernel_y;
+                        for (kernel_x = 0; kernel_x < kernel[1]; ++kernel_x) {
+                            int64_t input_x = input_x_start + kernel_x;
+                            if (input_y >= 0 && input_y < input_dimensions[2] &&
+                                input_x >= 0 && input_x < input_dimensions[3]) {
+                                uint64_t input_offset =
+                                    (((uint64_t)batch * (uint32_t)input_dimensions[1] + channel) *
+                                     (uint32_t)input_dimensions[2] + (uint32_t)input_y) *
+                                     (uint32_t)input_dimensions[3] + (uint32_t)input_x;
+                                float value = input[(size_t)input_offset];
+                                if (!found || value > maximum) {
+                                    maximum = value;
+                                }
+                                found = 1;
+                            }
+                        }
+                    }
+                    if (!found) {
+                        return LW_STATUS_INVALID_SHAPE;
+                    }
+                    output[(size_t)output_offset] = maximum;
                 }
             }
         }

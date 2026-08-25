@@ -50,6 +50,22 @@ def average_pool_reference(input_values: np.ndarray, include_pad: bool) -> np.nd
     return output
 
 
+def max_pool_reference(input_values: np.ndarray) -> np.ndarray:
+    output = np.empty((1, 2, 3, 3), dtype=np.float32)
+    for channel in range(2):
+        for output_y in range(3):
+            for output_x in range(3):
+                values = []
+                for kernel_y in range(2):
+                    input_y = output_y + kernel_y - 1
+                    for kernel_x in range(3):
+                        input_x = output_x * 2 + kernel_x - 1
+                        if 0 <= input_y < 3 and 0 <= input_x < 5:
+                            values.append(input_values[0, channel, input_y, input_x])
+                output[0, channel, output_y, output_x] = np.max(values)
+    return output
+
+
 def expected_results() -> dict[str, np.ndarray]:
     tensor_input = np.asarray(
         [(((index * 5) % 17) - 8) / 3.0 for index in range(30)],
@@ -80,6 +96,23 @@ def expected_results() -> dict[str, np.ndarray]:
         "reduce_noop": reduce_input.ravel(),
         "average_pool": average_pool_reference(pool_input, False).ravel(),
         "average_pool_include_pad": average_pool_reference(pool_input, True).ravel(),
+        "max_pool": max_pool_reference(pool_input).ravel(),
+        "concat": np.concatenate(
+            (
+                np.asarray([-3, -2, -1, 1, 2, 3], dtype=np.float32).reshape(1, 2, 3),
+                np.asarray([4, 5, 6], dtype=np.float32).reshape(1, 1, 3),
+            ),
+            axis=1,
+        ).ravel(),
+        "resize_nearest": np.repeat(
+            np.repeat(
+                np.asarray([-3, -2, -1, 1, 2, 3], dtype=np.float32).reshape(1, 1, 2, 3),
+                2,
+                axis=2,
+            ),
+            2,
+            axis=3,
+        ).ravel(),
         "matmul": np.matmul(matmul_input, matmul_weights).ravel(),
         "matmul_dispatched": np.matmul(matmul_input, matmul_weights).ravel(),
     }

@@ -58,6 +58,28 @@ static int spatial_output(
     return 1;
 }
 
+static int transposed_spatial_output(
+    int32_t input,
+    int32_t kernel,
+    int32_t stride,
+    int32_t dilation,
+    int32_t pad_before,
+    int32_t pad_after,
+    int32_t* output) {
+    int64_t value;
+    if (input <= 0 || kernel <= 0 || stride <= 0 || dilation <= 0 ||
+        pad_before < 0 || pad_after < 0) {
+        return 0;
+    }
+    value = (int64_t)(input - 1) * stride - pad_before - pad_after +
+        (int64_t)(kernel - 1) * dilation + 1;
+    if (value <= 0 || value > INT32_MAX) {
+        return 0;
+    }
+    *output = (int32_t)value;
+    return 1;
+}
+
 void lw_scalar_conv1x1_unit_f32(
     const float* input,
     const float* weights,
@@ -512,6 +534,146 @@ lw_status lw_scalar_conv2d_f32(
             }
         }
     }
+    return LW_STATUS_OK;
+}
+
+lw_status lw_scalar_conv_transpose2d_f32(
+    const float* input,
+    const float* weights,
+    const float* bias,
+    uint32_t bias_count,
+    float* output,
+    const int32_t input_dimensions[4],
+    const int32_t weight_dimensions[4],
+    const int32_t output_dimensions[4],
+    const int32_t kernel[2],
+    const int32_t strides[2],
+    const int32_t dilations[2],
+    const int32_t pads[4],
+    uint32_t groups) {
+    uint64_t input_count;
+    uint64_t weight_count;
+    uint64_t output_count;
+    int32_t expected_height;
+    int32_t expected_width;
+    uint32_t input_channels_per_group;
+    uint32_t output_channels_per_group;
+    uint32_t batch;
+    lw_status status;
+    if (input == NULL || weights == NULL || output == NULL ||
+        input == output || weights == output || (bias != NULL && bias == output) ||
+        input_dimensions == NULL ||
+        weight_dimensions == NULL || output_dimensions == NULL ||
+        kernel == NULL || strides == NULL || dilations == NULL || pads == NULL ||
+        groups == 0u) {
+        return LW_STATUS_INVALID_ARGUMENT;
+    }
+    status = tensor_element_count(4u, input_dimensions, &input_count);
+    if (status != LW_STATUS_OK) {
+        return status;
+    }
+    status = tensor_element_count(4u, weight_dimensions, &weight_count);
+    if (status != LW_STATUS_OK) {
+        return status;
+    }
+    status = tensor_element_count(4u, output_dimensions, &output_count);
+    if (status != LW_STATUS_OK) {
+        return status;
+    }
+    (void)input_count;
+    (void)weight_count;
+    if (groups > (uint32_t)input_dimensions[1] ||
+        (uint32_t)input_dimensions[1] % groups != 0u ||
+        weight_dimensions[0] != input_dimensions[1] ||
+        weight_dimensions[2] != kernel[0] || weight_dimensions[3] != kernel[1] ||
+        output_dimensions[0] != input_dimensions[0] ||
+        (uint64_t)(uint32_t)weight_dimensions[1] * groups !=
+            (uint32_t)output_dimensions[1] ||
+        (bias == NULL ? bias_count != 0u : bias_count != (uint32_t)output_dimensions[1]) ||
+        !transposed_spatial_output(input_dimensions[2], kernel[0], strides[0],
+                                   dilations[0], pads[0], pads[2], &expected_height) ||
+        !transposed_spatial_output(input_dimensions[3], kernel[1], strides[1],
+                                   dilations[1], pads[1], pads[3], &expected_width) ||
+        output_dimensions[2] != expected_height || output_dimensions[3] != expected_width) {
+        return LW_STATUS_INVALID_SHAPE;
+    }
+    input_channels_per_group = (uint32_t)input_dimensions[1] / groups;
+    output_channels_per_group = (uint32_t)weight_dimensions[1];
+    for (batch = 0u; batch < (uint32_t)output_dimensions[0]; ++batch) {
+        uint32_t output_channel;
+        for (output_channel = 0u;
+             output_channel < (uint32_t)output_dimensions[1]; ++output_channel) {
+            float initial = bias == NULL ? 0.0f : bias[output_channel];
+            uint64_t plane = (uint64_t)(uint32_t)expected_height *
+                (uint32_t)expected_width;
+            uint64_t base = ((uint64_t)batch * (uint32_t)output_dimensions[1] +
+                             output_channel) * plane;
+            uint64_t index;
+            for (index = 0u; index < plane; ++index) {
+                output[(size_t)(base + index)] = initial;
+            }
+        }
+    }
+    for (batch = 0u; batch < (uint32_t)input_dimensions[0]; ++batch) {
+        uint32_t group;
+        for (group = 0u; group < groups; ++group) {
+            uint32_t input_channel_in_group;
+            for (input_channel_in_group = 0u;
+                 input_channel_in_group < input_channels_per_group;
+                 ++input_channel_in_group) {
+                uint32_t input_channel = group * input_channels_per_group +
+                    input_channel_in_group;
+                uint32_t input_y;
+                for (input_y = 0u; input_y < (uint32_t)input_dimensions[2]; ++input_y) {
+                    uint32_t input_x;
+                    for (input_x = 0u; input_x < (uint32_t)input_dimensions[3]; ++input_x) {
+                        uint64_t input_offset =
+                            (((uint64_t)batch * (uint32_t)input_dimensions[1] + input_channel) *
+                             (uint32_t)input_dimensions[2] + input_y) *
+                             (uint32_t)input_dimensions[3] + input_x;
+                        float input_value = input[(size_t)input_offset];
+                        uint32_t output_channel_in_group;
+                        for (output_channel_in_group = 0u;
+                             output_channel_in_group < output_channels_per_group;
+                             ++output_channel_in_group) {
+                            uint32_t output_channel = group * output_channels_per_group +
+                                output_channel_in_group;
+                            uint32_t kernel_y;
+                            for (kernel_y = 0u; kernel_y < (uint32_t)kernel[0]; ++kernel_y) {
+                                int64_t output_y = (int64_t)input_y * strides[0] - pads[0] +
+                                    (int64_t)kernel_y * dilations[0];
+                                uint32_t kernel_x;
+                                if (output_y < 0 || output_y >= expected_height) {
+                                    continue;
+                                }
+                                for (kernel_x = 0u; kernel_x < (uint32_t)kernel[1]; ++kernel_x) {
+                                    int64_t output_x = (int64_t)input_x * strides[1] - pads[1] +
+                                        (int64_t)kernel_x * dilations[1];
+                                    uint64_t weight_offset;
+                                    uint64_t output_offset;
+                                    if (output_x < 0 || output_x >= expected_width) {
+                                        continue;
+                                    }
+                                    weight_offset =
+                                        (((uint64_t)input_channel * output_channels_per_group +
+                                          output_channel_in_group) * (uint32_t)kernel[0] +
+                                         kernel_y) * (uint32_t)kernel[1] + kernel_x;
+                                    output_offset =
+                                        (((uint64_t)batch * (uint32_t)output_dimensions[1] +
+                                          output_channel) * (uint32_t)expected_height +
+                                         (uint32_t)output_y) * (uint32_t)expected_width +
+                                        (uint32_t)output_x;
+                                    output[(size_t)output_offset] +=
+                                        input_value * weights[(size_t)weight_offset];
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    (void)output_count;
     return LW_STATUS_OK;
 }
 

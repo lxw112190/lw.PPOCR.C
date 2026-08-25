@@ -84,6 +84,10 @@ def expected_results() -> dict[str, np.ndarray]:
         "hard_sigmoid": np.clip(
             np.float32(0.2) * activation_input + np.float32(0.5), 0.0, 1.0
         ),
+        "sigmoid": np.asarray(
+            [1.0 / (1.0 + math.exp(-float(value))) for value in activation_input],
+            dtype=np.float32,
+        ),
         "softmax": softmax.ravel(),
         "softmax_in_place": softmax.ravel(),
     }

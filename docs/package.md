@@ -13,6 +13,7 @@ lib/cmake/lw.PPOCR.C/        CMake package configuration
 examples/                    standalone CMake consumer example
 models/rec.lwm               converted PP-OCRv6 tiny REC model
 models/cls.lwm               converted PP-OCRv6 tiny CLS model
+models/det.lwm               converted DET probability graph (private boundary)
 models/ppocr_keys.txt        UTF-8 recognition dictionary
 models/sample-crop.ppm       dependency-free demo input
 docs/                        API and implementation documentation
@@ -55,6 +56,11 @@ Run the direction-classification demo against the same decoded crop:
 
 It reports label `0`/`1`, orientation `0`/`180`, Softmax score, and resized
 content width. It reports orientation but does not rotate the image.
+
+`det.lwm` is installed so package validation covers the exact converted asset,
+but this milestone intentionally ships no public detector demo or box API. It
+is an internal probability-graph artifact until preprocessing and DB
+postprocessing contracts are complete.
 
 ## Run the scalar benchmark
 

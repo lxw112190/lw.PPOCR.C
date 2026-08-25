@@ -44,6 +44,10 @@ lw_status lw_scalar_hard_sigmoid_f32(
     uint64_t element_count,
     float alpha,
     float beta);
+lw_status lw_scalar_sigmoid_f32(
+    const float* input,
+    float* output,
+    uint64_t element_count);
 lw_status lw_scalar_softmax_f32(
     const float* input,
     float* output,
@@ -83,6 +87,22 @@ lw_status lw_scalar_reshape_f32(
     const int32_t* input_dimensions,
     uint32_t output_rank,
     const int32_t* output_dimensions);
+lw_status lw_scalar_concat_f32(
+    const float* const* inputs,
+    uint32_t input_count,
+    const uint32_t* input_ranks,
+    const int32_t* const* input_dimensions,
+    float* output,
+    uint32_t output_rank,
+    const int32_t* output_dimensions,
+    int32_t axis);
+lw_status lw_scalar_resize_nearest_f32(
+    const float* input,
+    float* output,
+    uint32_t rank,
+    const int32_t* input_dimensions,
+    const int32_t* output_dimensions,
+    const float* scales);
 lw_status lw_scalar_reduce_mean_f32(
     const float* input,
     float* output,
@@ -104,6 +124,15 @@ lw_status lw_scalar_average_pool2d_f32(
     const int32_t pads[4],
     uint32_t ceil_mode,
     uint32_t count_include_pad);
+lw_status lw_scalar_max_pool2d_f32(
+    const float* input,
+    float* output,
+    const int32_t input_dimensions[4],
+    const int32_t output_dimensions[4],
+    const int32_t kernel[2],
+    const int32_t strides[2],
+    const int32_t pads[4],
+    uint32_t ceil_mode);
 lw_status lw_scalar_matmul_shared_f32(
     const float* input,
     const float* weights,
@@ -121,6 +150,20 @@ lw_status lw_matmul_shared_f32(
     uint32_t inner_dimension,
     uint32_t columns);
 lw_status lw_scalar_conv2d_f32(
+    const float* input,
+    const float* weights,
+    const float* bias,
+    uint32_t bias_count,
+    float* output,
+    const int32_t input_dimensions[4],
+    const int32_t weight_dimensions[4],
+    const int32_t output_dimensions[4],
+    const int32_t kernel[2],
+    const int32_t strides[2],
+    const int32_t dilations[2],
+    const int32_t pads[4],
+    uint32_t groups);
+lw_status lw_scalar_conv_transpose2d_f32(
     const float* input,
     const float* weights,
     const float* bias,

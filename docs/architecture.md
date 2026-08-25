@@ -5,11 +5,11 @@
 ```text
 Development machine                    Deployment target
 
-PP-OCR ONNX                            rec.lwm / cls.lwm + BGR8 pixels
+PP-OCR ONNX                            rec.lwm / cls.lwm / det.lwm + BGR8 pixels
     |                                     |
 Python + ONNX analyzer/converter          pure-C loader + session planner
     |                                     |
-validated REC / fixed CLS graphs          public recognizer / classifier C APIs
+validated REC / CLS / DET graphs          public recognizer / classifier C APIs
     |                                     |
 platform-independent LWM v0                preprocess + executor + CTC/class result
                                           |
@@ -25,7 +25,7 @@ contracts:
 - ONNX names and graph metadata are not required at runtime unless retained for
   diagnostics in a non-executable debug section;
 - the executable scope covers the exact bundled PP-OCRv6 tiny REC graph and
-  fixed-batch CLS graph; DET remains pending.
+  fixed-batch CLS graph, and the DET probability graph.
 
 ## Dependency direction
 
@@ -51,8 +51,8 @@ and architecture-specific kernels are isolated under `src/simd`.
 2. Non-frozen LWM v0 definition and deterministic REC converter — complete.
 3. Bounds-checked loader for untrusted LWM input — complete.
 4. Tensor and dynamic session memory planning — complete.
-5. One scalar operator at a time with reference tests — complete; all 15
-   operator types and 161 converted REC nodes have scalar Kernels.
+5. One scalar operator at a time with reference tests — complete for all 21
+   LWM operator IDs used by REC, CLS, and DET.
 6. Exact REC graph executor and complete-output comparison — complete as a
    private interface for widths 7 and 17; applications use its public
    recognize-only wrapper rather than the executor directly.
@@ -109,8 +109,11 @@ and architecture-specific kernels are isolated under `src/simd`.
 23. Public CLS direction-classification API — complete; BGR preprocessing,
     0/180-degree labels, scores, UTF-8 paths, resource limits, shared exports,
     dependency-free PPM demo, and installed packages are contract-tested.
-24. Next: implement the exact DET graph, DB postprocessing, crop extraction,
-    and then a separately exposed full-OCR API.
+24. Exact DET probability graph — complete; its converter, five new data-path
+    operators, dynamic shape planning, deterministic repeat, x64/x86 builds,
+    and ONNX Runtime complete-output comparison are required gates.
+25. Next: implement DET preprocessing and DB postprocessing, then expose
+    detection boxes through a separately reviewed public C API.
 
 ## Compatibility claims
 

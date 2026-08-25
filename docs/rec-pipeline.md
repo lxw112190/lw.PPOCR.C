@@ -64,7 +64,7 @@ tests additionally cover BOM/CRLF, Chinese, ASCII, multi-byte UTF-8, implicit
 space, blank-separated repeats, output-buffer sizing, invalid UTF-8, all-empty
 dictionaries, and non-finite probabilities.
 
-The same eighteen-test suite passes locally on Windows x64 and Windows x86,
+The complete 25-test suite passes locally on Windows x64 and Windows x86,
 including shared-library exports, the public C Demo, and staged-package smoke.
 Linux CI and physical Windows 7 validation remain separate platform claims.
 

@@ -59,6 +59,24 @@ def conv2d_reference(
     return ReferenceEvaluator(node, opsets={"": 11}).run(None, feeds)[0]
 
 
+def conv_transpose_reference(
+    input_values: np.ndarray, weights: np.ndarray, bias: np.ndarray
+) -> np.ndarray:
+    node = helper.make_node(
+        "ConvTranspose",
+        ["input", "weights", "bias"],
+        ["output"],
+        kernel_shape=[2, 2],
+        strides=[2, 2],
+        dilations=[1, 1],
+        pads=[0, 0, 0, 0],
+        group=1,
+    )
+    return ReferenceEvaluator(node, opsets={"": 11}).run(
+        None, {"input": input_values, "weights": weights, "bias": bias}
+    )[0]
+
+
 def expected_results() -> dict[str, np.ndarray]:
     normal_input = fill_values(80, 5, 19, 9, 4.0).reshape(2, 2, 4, 5)
     normal_weights = fill_values(54, 7, 17, 8, 6.0).reshape(3, 2, 3, 3)
@@ -104,6 +122,9 @@ def expected_results() -> dict[str, np.ndarray]:
             "variance": variance.ravel(),
         },
     )[0]
+    transpose_conv_input = fill_values(8, 3, 13, 6, 4.0).reshape(1, 2, 2, 2)
+    transpose_conv_weights = fill_values(8, 5, 17, 8, 6.0).reshape(2, 1, 2, 2)
+    transpose_conv_bias = np.asarray([0.125], dtype=np.float32)
     return {
         "conv": conv2d_reference(
             normal_input, normal_weights, normal_bias,
@@ -132,6 +153,9 @@ def expected_results() -> dict[str, np.ndarray]:
         "grouped_pointwise_conv": conv2d_reference(
             pointwise_input, pointwise_weights, pointwise_bias,
             (1, 1), (1, 1), (0, 0, 0, 0), 2,
+        ).ravel(),
+        "conv_transpose": conv_transpose_reference(
+            transpose_conv_input, transpose_conv_weights, transpose_conv_bias
         ).ravel(),
         "batch_norm": batch_norm.ravel(),
         "batch_norm_in_place": batch_norm.ravel(),

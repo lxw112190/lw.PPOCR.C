@@ -123,6 +123,11 @@ fixed-width fields and have an exact size checked by the loader.
 | 14 | MatMul | 0 |
 | 15 | Softmax | 16 |
 | 16 | Reshape | 0 |
+| 17 | Concat | 16 |
+| 18 | ConvTranspose | 64 |
+| 19 | MaxPool | 64 |
+| 20 | Resize | 32 |
+| 21 | Sigmoid | 0 |
 
 The writer normalizes omitted ONNX attributes to opset-11 defaults before
 encoding them. Conv and pooling records contain rank, kernel, stride, dilation,
@@ -169,6 +174,23 @@ reference tests exist.
 The complete converted graph and public BGR-to-orientation path are compared
 with the original ONNX model. These rewrites remain exact-model transformations,
 not a promise of general ONNX conversion.
+
+## Current DET conversion policy
+
+- requires the bundled DET SHA-256 identity, one input, one output, and default
+  ONNX opset 14;
+- rewrites eight GlobalAveragePool nodes to equivalent ReduceMean records;
+- resolves the exact constant-scale Resize pattern offline and retains only
+  nearest/asymmetric/floor data-path Resize nodes;
+- normalizes the exact unit-stride `SAME_UPPER` Conv/MaxPool nodes to explicit
+  asymmetric padding;
+- emits 242 executable nodes and 408 tensors with dynamic N/H/W dimensions;
+- retains canonical FP32 weights and rejects every unrecognized attribute or
+  model hash.
+
+The converted DET graph is reference-tested as a probability-map producer.
+This policy does not yet define image preprocessing, DB postprocessing, boxes,
+or a public detector C ABI.
 
 ## Required loader validation
 

@@ -209,6 +209,12 @@ int main(void) {
     }
     print_values("hard_sigmoid", activation_output, 9u);
 
+    status = lw_scalar_sigmoid_f32(activation_input, activation_output, 9u);
+    if (!expect_status("sigmoid", status, LW_STATUS_OK)) {
+        return 1;
+    }
+    print_values("sigmoid", activation_output, 9u);
+
     status = lw_scalar_softmax_f32(
         softmax_input, softmax_output, 3u, softmax_dimensions, 1);
     if (!expect_status("softmax", status, LW_STATUS_OK)) {

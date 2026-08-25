@@ -1,8 +1,8 @@
-# Private REC graph executor milestone
+# Private graph executor milestone
 
-The runtime now executes every one of the 161 non-Identity nodes in the exact
-converted PP-OCRv6 tiny REC graph. This is a correctness gate, not a public API
-or performance claim.
+The runtime executes the exact converted PP-OCRv6 tiny REC, fixed-batch CLS,
+and dynamic-shape DET graphs. This remains a private correctness boundary, not
+a public generic graph API.
 
 ## Execution contract
 
@@ -12,7 +12,7 @@ or performance claim.
 - intermediate and graph-output tensors use the session's 64-byte-aligned,
   lifetime-planned workspace;
 - no heap allocation occurs during graph execution;
-- one dispatcher covers all 15 converted operator types;
+- one dispatcher covers all 21 converted operator IDs;
 - a failed Kernel reports the node index, LWM operator id, and stable status;
 - repeated calls reuse the workspace and must produce bit-identical output.
 
@@ -37,7 +37,12 @@ measured:
 | 7 | `[1, 1, 6906]` | `6.377697e-6` | `1.0609754e-9` |
 | 17 | `[1, 2, 6906]` | `3.8087368e-5` | `3.8027901e-9` |
 
-Both Windows x64 and x86 builds pass the complete eighteen-test suite locally,
+Both Windows x64 and x86 builds pass the complete 25-test suite locally,
 including the downstream real cropped-text recognition golden test described
 in [`rec-pipeline.md`](rec-pipeline.md).
 Physical Windows 7 and remote Linux CI remain separate platform claims.
+
+`det_graph_reference` executes `[1,3,32,32]` and `[1,3,32,64]`, verifies the
+resolved `[1,1,H,W]` output descriptor and deterministic repeat execution, and
+compares every probability with ONNX Runtime. On the Windows x64 development
+host, maximum absolute differences were `1.0274834e-7` and `1.2930892e-7`.

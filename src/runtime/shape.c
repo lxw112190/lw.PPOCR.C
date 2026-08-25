@@ -2,7 +2,15 @@
 #include "lwm_read.h"
 
 #include <limits.h>
+#include <math.h>
 #include <string.h>
+
+static float read_f32(const uint8_t* bytes) {
+    uint32_t bits = lwm_read_u32(bytes);
+    float value;
+    memcpy(&value, &bits, sizeof(value));
+    return value;
+}
 
 static lw_status shape_fail(lw_error* error, const char* message) {
     lw_set_error(error, LW_STATUS_INVALID_SHAPE, message);
@@ -142,6 +150,28 @@ static int spatial_output(
     return 1;
 }
 
+static int transposed_spatial_output(
+    int32_t input,
+    int32_t kernel,
+    int32_t stride,
+    int32_t dilation,
+    int32_t pad_before,
+    int32_t pad_after,
+    int32_t* output) {
+    int64_t value;
+    if (input <= 0 || kernel <= 0 || stride <= 0 || dilation <= 0 ||
+        pad_before < 0 || pad_after < 0) {
+        return 0;
+    }
+    value = (int64_t)(input - 1) * stride - pad_before - pad_after +
+        (int64_t)(kernel - 1) * dilation + 1;
+    if (value <= 0 || value > INT32_MAX) {
+        return 0;
+    }
+    *output = (int32_t)value;
+    return 1;
+}
+
 static lw_status resolve_node(
     lw_session* session,
     const uint8_t* node,
@@ -176,7 +206,7 @@ static lw_status resolve_node(
         if (status != LW_STATUS_OK) {
             return status;
         }
-    } else if (op == 5u || op == 6u || op == 9u || op == 15u) {
+    } else if (op == 5u || op == 6u || op == 9u || op == 15u || op == 21u) {
         if (input_count != 1u) {
             return shape_fail(error, "unary node has invalid arity");
         }
@@ -263,9 +293,9 @@ static lw_status resolve_node(
             }
         }
         rank = output_index;
-    } else if (op == 10u) {
+    } else if (op == 10u || op == 19u) {
         if (input_count != 1u || inputs[0]->rank != 4u) {
-            return shape_fail(error, "AveragePool requires one NCHW input");
+            return shape_fail(error, "pool operator requires one NCHW input");
         }
         rank = 4u;
         dimensions[0] = inputs[0]->dimensions[0];
@@ -276,7 +306,7 @@ static lw_status resolve_node(
             !spatial_output(inputs[0]->dimensions[3], lwm_read_i32(params + 12), lwm_read_i32(params + 20), 1,
                             lwm_read_i32(params + 28), lwm_read_i32(params + 36), lwm_read_u32(params + 40),
                             &dimensions[3])) {
-            return shape_fail(error, "AveragePool output shape is invalid");
+            return shape_fail(error, "pool output shape is invalid");
         }
     } else if (op == 11u) {
         uint32_t axes_count;
@@ -397,6 +427,78 @@ static lw_status resolve_node(
         }
         if (input_elements != output_elements) {
             return shape_fail(error, "Reshape changes the tensor element count");
+        }
+    } else if (op == 17u) {
+        uint32_t axis;
+        int64_t axis_total = 0;
+        if (input_count == 0u || !normalize_axis(lwm_read_i32(params + 4),
+                                                  inputs[0]->rank, &axis)) {
+            return shape_fail(error, "Concat has invalid arity or axis");
+        }
+        rank = inputs[0]->rank;
+        memcpy(dimensions, inputs[0]->dimensions, sizeof(dimensions));
+        for (i = 0u; i < input_count; ++i) {
+            uint32_t dimension;
+            if (inputs[i]->dtype != inputs[0]->dtype || inputs[i]->rank != rank) {
+                return shape_fail(error, "Concat input types or ranks do not match");
+            }
+            for (dimension = 0u; dimension < rank; ++dimension) {
+                if (dimension != axis &&
+                    inputs[i]->dimensions[dimension] != dimensions[dimension]) {
+                    return shape_fail(error, "Concat non-axis dimensions do not match");
+                }
+            }
+            axis_total += inputs[i]->dimensions[axis];
+        }
+        if (axis_total <= 0 || axis_total > INT32_MAX) {
+            return shape_fail(error, "Concat axis dimension overflows");
+        }
+        dimensions[axis] = (int32_t)axis_total;
+    } else if (op == 18u) {
+        uint32_t group;
+        uint64_t output_channels;
+        if ((input_count != 2u && input_count != 3u) ||
+            inputs[0]->rank != 4u || inputs[1]->rank != 4u ||
+            inputs[0]->dtype != inputs[1]->dtype) {
+            return shape_fail(error, "ConvTranspose requires NCHW input and IOHW weight");
+        }
+        group = lwm_read_u32(params + 4);
+        output_channels = (uint64_t)(uint32_t)inputs[1]->dimensions[1] * group;
+        rank = 4u;
+        dimensions[0] = inputs[0]->dimensions[0];
+        if (group == 0u || group > (uint32_t)inputs[0]->dimensions[1] ||
+            output_channels > INT32_MAX ||
+            (uint32_t)inputs[0]->dimensions[1] % group != 0u ||
+            inputs[1]->dimensions[0] != inputs[0]->dimensions[1] ||
+            inputs[1]->dimensions[2] != lwm_read_i32(params + 8) ||
+            inputs[1]->dimensions[3] != lwm_read_i32(params + 12) ||
+            (input_count == 3u &&
+             (inputs[2]->dtype != inputs[0]->dtype || inputs[2]->rank != 1u ||
+              inputs[2]->dimensions[0] != (int32_t)output_channels)) ||
+            !transposed_spatial_output(inputs[0]->dimensions[2], lwm_read_i32(params + 8),
+                                       lwm_read_i32(params + 16), lwm_read_i32(params + 24),
+                                       lwm_read_i32(params + 32), lwm_read_i32(params + 40),
+                                       &dimensions[2]) ||
+            !transposed_spatial_output(inputs[0]->dimensions[3], lwm_read_i32(params + 12),
+                                       lwm_read_i32(params + 20), lwm_read_i32(params + 28),
+                                       lwm_read_i32(params + 36), lwm_read_i32(params + 44),
+                                       &dimensions[3])) {
+            return shape_fail(error, "ConvTranspose channel, kernel, or output shape is invalid");
+        }
+        dimensions[1] = (int32_t)output_channels;
+    } else if (op == 20u) {
+        uint32_t scale_count = lwm_read_u16(params + 2);
+        if (input_count != 1u || scale_count != inputs[0]->rank) {
+            return shape_fail(error, "Resize scale count does not match the input rank");
+        }
+        rank = inputs[0]->rank;
+        for (i = 0u; i < rank; ++i) {
+            float scale = read_f32(params + 4u + i * 4u);
+            double value = floor((double)inputs[0]->dimensions[i] * scale);
+            if (!isfinite(scale) || scale <= 0.0f || value <= 0.0 || value > INT32_MAX) {
+                return shape_fail(error, "Resize scale produces an invalid output dimension");
+            }
+            dimensions[i] = (int32_t)value;
         }
     } else {
         lw_set_error(error, LW_STATUS_UNSUPPORTED, "shape resolver encountered an unsupported operator");

@@ -26,6 +26,7 @@ MAX_NODE_OUTPUTS = 4
 UINT64_MAX = (1 << 64) - 1
 SUPPORTED_REC_SHA256 = "9ef676d6ed3c88256a2d92c640c44f25b0c40947e111b14b8be8f594091563e6"
 SUPPORTED_CLS_SHA256 = "dd8b2b61983d76ab230a58da9e0e0e84956b71c3877f2ce6e438fe22d74d2cf2"
+SUPPORTED_DET_SHA256 = "193bab7a04fca699a6c82e6abb5b81bdb28177f0abd4062552b04908dafb19f8"
 
 HEADER_FLAG_NO_MEMORY_PLAN = 1 << 0
 TENSOR_FLAG_CONSTANT = 1 << 0
@@ -54,6 +55,11 @@ OP_IDS = {
     "MatMul": 14,
     "Softmax": 15,
     "Reshape": 16,
+    "Concat": 17,
+    "ConvTranspose": 18,
+    "MaxPool": 19,
+    "Resize": 20,
+    "Sigmoid": 21,
 }
 
 PARAM_SIZES = {
@@ -66,6 +72,10 @@ PARAM_SIZES = {
     OP_IDS["Transpose"]: 40,
     OP_IDS["Unsqueeze"]: 40,
     OP_IDS["Softmax"]: 16,
+    OP_IDS["Concat"]: 16,
+    OP_IDS["ConvTranspose"]: 64,
+    OP_IDS["MaxPool"]: 64,
+    OP_IDS["Resize"]: 32,
 }
 
 
@@ -98,7 +108,7 @@ def _require_count(values: list[int], count: int, description: str) -> list[int]
 
 def encode_params(node: onnx.NodeProto) -> bytes:
     attrs = _attribute_map(node)
-    if node.op_type == "Conv":
+    if node.op_type in ("Conv", "ConvTranspose"):
         kernel = _require_count(_int_list(attrs, "kernel_shape", []), 2, "Conv kernel_shape")
         strides = _require_count(_int_list(attrs, "strides", [1, 1]), 2, "Conv strides")
         dilations = _require_count(_int_list(attrs, "dilations", [1, 1]), 2, "Conv dilations")
@@ -164,6 +174,30 @@ def encode_params(node: onnx.NodeProto) -> bytes:
             0,
             0,
         )
+    if node.op_type == "MaxPool":
+        kernel = _require_count(_int_list(attrs, "kernel_shape", []), 2, "MaxPool kernel_shape")
+        strides = _require_count(_int_list(attrs, "strides", [1, 1]), 2, "MaxPool strides")
+        pads = _require_count(_int_list(attrs, "pads", [0, 0, 0, 0]), 4, "MaxPool pads")
+        dilations = _require_count(_int_list(attrs, "dilations", [1, 1]), 2, "MaxPool dilations")
+        if dilations != [1, 1]:
+            raise ValueError("MaxPool dilation other than one is unsupported")
+        if attrs.get("auto_pad", b"NOTSET") not in (b"NOTSET", "NOTSET"):
+            raise ValueError("MaxPool auto_pad other than NOTSET is unsupported")
+        return struct.pack(
+            "<HHI2i2i4iII4I",
+            1,
+            0,
+            2,
+            *kernel,
+            *strides,
+            *pads,
+            int(attrs.get("ceil_mode", 0)),
+            0,
+            0,
+            0,
+            0,
+            0,
+        )
     if node.op_type == "HardSigmoid":
         return struct.pack(
             "<HHffI",
@@ -187,6 +221,13 @@ def encode_params(node: onnx.NodeProto) -> bytes:
         )
     if node.op_type == "Softmax":
         return struct.pack("<HHiII", 1, 0, int(attrs.get("axis", 1)), 0, 0)
+    if node.op_type == "Concat":
+        return struct.pack("<HHiII", 1, 0, int(attrs["axis"]), 0, 0)
+    if node.op_type == "Resize":
+        scales = [float(value) for value in attrs.get("scales", [])]  # type: ignore[arg-type]
+        if len(scales) != 4:
+            raise ValueError("Resize scales must contain four values")
+        return struct.pack("<HH4f3I", 1, 4, *scales, 0, 0, 0)
     if attrs:
         raise ValueError(f"unexpected attributes on {node.op_type}: {sorted(attrs)}")
     return b""
@@ -454,6 +495,123 @@ def convert_cls_model(input_path: Path, output_path: Path) -> ConversionInfo:
     if len(model.graph.input) != 1 or len(model.graph.output) != 1:
         raise ValueError("CLS converter requires exactly one graph input and one graph output")
     converted, inferred = _prepare_cls_model(model)
+    return _write_model(converted, output_path, inferred)
+
+
+def _normalize_same_upper(node: onnx.NodeProto) -> onnx.NodeProto:
+    attrs = _attribute_map(node)
+    auto_pad = attrs.get("auto_pad", b"NOTSET")
+    if auto_pad in (b"NOTSET", "NOTSET"):
+        return copy.deepcopy(node)
+    if auto_pad not in (b"SAME_UPPER", "SAME_UPPER"):
+        raise ValueError(f"{node.op_type} auto_pad mode is unsupported")
+    kernel = _require_count(_int_list(attrs, "kernel_shape", []), 2, "kernel_shape")
+    strides = _require_count(_int_list(attrs, "strides", [1, 1]), 2, "strides")
+    dilations = _require_count(_int_list(attrs, "dilations", [1, 1]), 2, "dilations")
+    if strides != [1, 1]:
+        raise ValueError("dynamic SAME_UPPER with non-unit stride is unsupported")
+    total_height = (kernel[0] - 1) * dilations[0]
+    total_width = (kernel[1] - 1) * dilations[1]
+    normalized = copy.deepcopy(node)
+    del normalized.attribute[:]
+    normalized_attrs = {
+        name: value for name, value in attrs.items() if name != "auto_pad"
+    }
+    normalized_attrs["pads"] = [
+        total_height // 2,
+        total_width // 2,
+        total_height - total_height // 2,
+        total_width - total_width // 2,
+    ]
+    for name in sorted(normalized_attrs):
+        normalized.attribute.append(
+            onnx.helper.make_attribute(name, normalized_attrs[name])
+        )
+    return normalized
+
+
+def _prepare_det_model(
+    model: onnx.ModelProto,
+) -> tuple[onnx.ModelProto, onnx.ModelProto]:
+    inferred = onnx.shape_inference.infer_shapes(
+        model, strict_mode=True, data_prop=False
+    )
+    converted = copy.deepcopy(model)
+    initializers = {
+        item.name: numpy_helper.to_array(item) for item in model.graph.initializer
+    }
+    rewritten_nodes: list[onnx.NodeProto] = []
+    for node in converted.graph.node:
+        if node.op_type == "GlobalAveragePool":
+            rewritten_nodes.append(
+                onnx.helper.make_node(
+                    "ReduceMean",
+                    list(node.input),
+                    list(node.output),
+                    name=node.name,
+                    axes=[2, 3],
+                    keepdims=1,
+                )
+            )
+            continue
+        if node.op_type == "Resize":
+            attrs = _attribute_map(node)
+            if (
+                len(node.input) != 3
+                or node.input[1] not in initializers
+                or node.input[2] not in initializers
+                or initializers[node.input[1]].size != 0
+                or attrs.get("mode") != b"nearest"
+                or attrs.get("coordinate_transformation_mode") != b"asymmetric"
+                or attrs.get("nearest_mode") != b"floor"
+            ):
+                raise ValueError("DET Resize is outside the supported nearest-neighbor pattern")
+            scales = np.asarray(initializers[node.input[2]], dtype=np.float32).reshape(-1)
+            if scales.size != 4 or not np.all(np.isfinite(scales)) or np.any(scales <= 0):
+                raise ValueError("DET Resize scales are invalid")
+            rewritten_nodes.append(
+                onnx.helper.make_node(
+                    "Resize",
+                    [node.input[0]],
+                    list(node.output),
+                    name=node.name,
+                    scales=[float(value) for value in scales],
+                )
+            )
+            continue
+        if node.op_type in ("Conv", "MaxPool"):
+            rewritten_nodes.append(_normalize_same_upper(node))
+            continue
+        rewritten_nodes.append(copy.deepcopy(node))
+    del converted.graph.node[:]
+    converted.graph.node.extend(rewritten_nodes)
+    used_initializers = {name for node in converted.graph.node for name in node.input}
+    retained_initializers = [
+        item for item in converted.graph.initializer if item.name in used_initializers
+    ]
+    del converted.graph.initializer[:]
+    converted.graph.initializer.extend(retained_initializers)
+    return converted, inferred
+
+
+def convert_det_model(input_path: Path, output_path: Path) -> ConversionInfo:
+    digest = hashlib.sha256(input_path.read_bytes()).hexdigest()
+    if digest != SUPPORTED_DET_SHA256:
+        raise ValueError(
+            "DET converter only supports the bundled PP-OCRv6 tiny DET model; "
+            f"expected SHA-256 {SUPPORTED_DET_SHA256}, got {digest}"
+        )
+    model = onnx.load(str(input_path), load_external_data=True)
+    onnx.checker.check_model(model, full_check=True)
+    default_opset = next(
+        (item.version for item in model.opset_import if item.domain in ("", "ai.onnx")),
+        None,
+    )
+    if default_opset != 14:
+        raise ValueError(f"DET converter requires ONNX opset 14, got {default_opset}")
+    if len(model.graph.input) != 1 or len(model.graph.output) != 1:
+        raise ValueError("DET converter requires exactly one graph input and one graph output")
+    converted, inferred = _prepare_det_model(model)
     return _write_model(converted, output_path, inferred)
 
 

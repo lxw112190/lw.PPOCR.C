@@ -57,11 +57,25 @@ int main(void) {
     const int32_t pool_kernel[2] = {2, 3};
     const int32_t pool_strides[2] = {1, 2};
     const int32_t pool_pads[4] = {1, 1, 0, 1};
+    const int32_t concat_left_dimensions[3] = {1, 2, 3};
+    const int32_t concat_right_dimensions[3] = {1, 1, 3};
+    const int32_t concat_output_dimensions[3] = {1, 3, 3};
+    const uint32_t concat_ranks[2] = {3u, 3u};
+    const int32_t resize_input_dimensions[4] = {1, 1, 2, 3};
+    const int32_t resize_output_dimensions[4] = {1, 1, 4, 6};
+    const float resize_scales[4] = {1.0f, 1.0f, 2.0f, 2.0f};
     float tensor_input[30];
     float transpose_output[24];
     float reshape_output[6];
     float reduce_output[24];
     float pool_output[18];
+    float concat_left[6] = {-3.0f, -2.0f, -1.0f, 1.0f, 2.0f, 3.0f};
+    float concat_right[3] = {4.0f, 5.0f, 6.0f};
+    const float* concat_inputs[2] = {concat_left, concat_right};
+    const int32_t* concat_dimensions[2] = {
+        concat_left_dimensions, concat_right_dimensions};
+    float concat_output[9];
+    float resize_output[24];
     float matmul_input[24];
     float matmul_weights[20];
     float matmul_output[30];
@@ -145,6 +159,30 @@ int main(void) {
         return 1;
     }
     print_values("average_pool_include_pad", pool_output, 18u);
+
+    status = lw_scalar_max_pool2d_f32(
+        tensor_input, pool_output, pool_input_dimensions, pool_output_dimensions,
+        pool_kernel, pool_strides, pool_pads, 0u);
+    if (!expect_status("max_pool", status, LW_STATUS_OK)) {
+        return 1;
+    }
+    print_values("max_pool", pool_output, 18u);
+
+    status = lw_scalar_concat_f32(
+        concat_inputs, 2u, concat_ranks, concat_dimensions, concat_output,
+        3u, concat_output_dimensions, 1);
+    if (!expect_status("concat", status, LW_STATUS_OK)) {
+        return 1;
+    }
+    print_values("concat", concat_output, 9u);
+
+    status = lw_scalar_resize_nearest_f32(
+        concat_left, resize_output, 4u, resize_input_dimensions,
+        resize_output_dimensions, resize_scales);
+    if (!expect_status("resize", status, LW_STATUS_OK)) {
+        return 1;
+    }
+    print_values("resize_nearest", resize_output, 24u);
 
     for (index = 0u; index < 24u; ++index) {
         matmul_input[index] = (float)((int32_t)((index * 3u) % 13u) - 6) / 4.0f;

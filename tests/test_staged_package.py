@@ -28,6 +28,8 @@ class StagedPackageTest(unittest.TestCase):
             root / ("bin" if sys.platform == "win32" else "lib") / shared,
             root / "include" / "lw_infer.h",
             root / "models" / "rec.lwm",
+            root / "models" / "cls.lwm",
+            root / "models" / "det.lwm",
             root / "models" / "ppocr_keys.txt",
             root / "models" / "sample-crop.ppm",
             root / "lib" / "cmake" / "lw.PPOCR.C" / "lw.PPOCR.CConfig.cmake",
