@@ -343,6 +343,20 @@ if(BUILD_TESTING)
         TIMEOUT 360)
 
     add_test(
+        NAME rec_golden_corpus
+        COMMAND "${Python3_EXECUTABLE}"
+                "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_rec_golden_corpus.py"
+                --driver "$<TARGET_FILE:rec-pipeline-driver>"
+                --lwm-model "${LW_PPOCR_C_REC_LWM}"
+                --onnx-model "${LW_PPOCR_C_REC_ONNX}"
+                --dictionary "${CMAKE_CURRENT_SOURCE_DIR}/models/ppocrv6-tiny/ppocr_keys.txt"
+                --sample "${CMAKE_CURRENT_SOURCE_DIR}/models/ppocrv6-tiny/sample.jpg"
+                --corpus "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/rec-golden-corpus.json")
+    set_tests_properties(rec_golden_corpus PROPERTIES
+        WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+        TIMEOUT 600)
+
+    add_test(
         NAME lwm_corruption
         COMMAND "${Python3_EXECUTABLE}"
                 "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_lwm_corruption.py"

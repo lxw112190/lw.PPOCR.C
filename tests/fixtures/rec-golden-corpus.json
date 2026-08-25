@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "source_sha256": "30c417c9f758a3b62718729f5a944f7d2e10cdd2bde0e8ce6785523ddb68ffe9",
+  "target_width": 320,
+  "cases": [
+    {
+      "name": "title",
+      "box": [20, 25, 325, 77],
+      "text": "纯臻营养护发素"
+    },
+    {
+      "name": "product-info",
+      "box": [20, 77, 210, 108],
+      "text": "产品信息/参数"
+    },
+    {
+      "name": "price-per-kilogram",
+      "box": [20, 106, 365, 137],
+      "text": "(45元/每公斤，100公斤起订）"
+    },
+    {
+      "name": "price-per-bottle",
+      "box": [20, 136, 345, 168],
+      "text": "每瓶22元，1000瓶起订）"
+    },
+    {
+      "name": "brand",
+      "box": [20, 170, 375, 202],
+      "text": "【品牌】：代加工方式/OEMODM"
+    },
+    {
+      "name": "product-name",
+      "box": [20, 202, 365, 234],
+      "text": "【品名】纯臻营养护发素"
+    },
+    {
+      "name": "product-code",
+      "box": [20, 233, 310, 265],
+      "text": "【产品编号】：YM-X-3011"
+    },
+    {
+      "name": "net-content",
+      "box": [20, 264, 260, 297],
+      "text": "【净含量】:220ml"
+    },
+    {
+      "name": "audience",
+      "box": [20, 296, 360, 329],
+      "text": "【适用人群】：适合所有肤质"
+    },
+    {
+      "name": "function",
+      "box": [20, 393, 480, 425],
+      "text": "【主要功能】：可紧致头发磷层，从而达到"
+    }
+  ]
+}

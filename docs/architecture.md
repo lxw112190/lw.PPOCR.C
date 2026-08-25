@@ -54,8 +54,8 @@ isolated under `src/simd` after scalar correctness.
    private interface for widths 7 and 17; applications use its public
    recognize-only wrapper rather than the executor directly.
 7. Pure-C preprocess, CTC decoding, and REC golden tests — complete behind
-   private interfaces, including a real sample crop and the production
-   dictionary.
+   private interfaces, including a ten-crop real-image corpus, ONNX reference
+   comparison, and the production dictionary.
 8. Public recognize-only C API with caller-owned UTF-8 output — complete and
    contract-tested on Windows x64/x86; ABI remains experimental before 1.0.
 9. Static/shared development packages and dependency-free C Demo — complete

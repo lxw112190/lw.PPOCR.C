@@ -64,9 +64,12 @@ tests additionally cover BOM/CRLF, Chinese, ASCII, multi-byte UTF-8, implicit
 space, blank-separated repeats, output-buffer sizing, invalid UTF-8, all-empty
 dictionaries, and non-finite probabilities.
 
-The same fifteen-test suite passes locally on Windows x64 and Windows x86,
+The same sixteen-test suite passes locally on Windows x64 and Windows x86,
 including shared-library exports, the public C Demo, and staged-package smoke.
 Linux CI and physical Windows 7 validation remain separate platform claims.
+
+The extended ten-crop correctness gate is documented in
+[`rec-golden-corpus.md`](rec-golden-corpus.md).
 
 ## Public wrapper and deliberate boundary
 

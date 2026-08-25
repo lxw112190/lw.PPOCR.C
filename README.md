@@ -16,6 +16,8 @@ converted REC operator types and all 161 nodes. A private, zero-allocation graph
 executor now binds LWM constants and planned workspace and matches the original
 ONNX REC output at two dynamic widths. Private pure-C BGR preprocessing and
 UTF-8 CTC decoding now complete a real cropped-text recognition golden path.
+That path is regression-tested on ten real text-line crops against the original
+ONNX model before runtime-only optimization begins.
 The public recognizer C API exposes that path with caller-owned UTF-8 output
 buffers and bounded, preallocated inference memory. Image-file decoding remains
 outside the core: applications currently provide decoded BGR8 pixels.
@@ -75,6 +77,8 @@ The private complete-graph execution gate is documented in
 [`docs/graph-executor.md`](docs/graph-executor.md).
 The private end-to-end REC preprocessing and decoding contract is documented in
 [`docs/rec-pipeline.md`](docs/rec-pipeline.md).
+The ten-crop ONNX-versus-pure-C correctness gate is documented in
+[`docs/rec-golden-corpus.md`](docs/rec-golden-corpus.md).
 Development package contents and Demo commands are documented in
 [`docs/package.md`](docs/package.md).
 
