@@ -22,8 +22,8 @@ profile-directed scalar optimizations now cover general Conv address/bounds
 simplification, a cache-contiguous pointwise path, a spatially local 3x3
 downsampling path, and cache-contiguous row-blocked MatMul. Windows x64/x86 A/B
 measurements retain unchanged recognition results. On x86/x64, MatMul,
-pointwise Conv, and flat Add/Mul/Div now use runtime-detected AVX2 or SSE2 with
-automatic scalar fallbacks.
+pointwise Conv, flat Add/Mul/Div, and single-axis binary broadcasts now use
+runtime-detected AVX2 or SSE2 with automatic scalar fallbacks.
 The public recognizer C API exposes that path with caller-owned UTF-8 output
 buffers and bounded, preallocated inference memory. Image-file decoding remains
 outside the core: applications currently provide decoded BGR8 pixels.

@@ -90,9 +90,12 @@ and architecture-specific kernels are isolated under `src/simd`.
     contiguous input plus a right scalar. These modes now bypass per-element
     broadcast coordinate tracking, while all other broadcasts retain the
     general implementation.
-19. Next: compare block-wise channel/trailing-vector broadcasts with the
-    remaining ordinary/depthwise Conv work before considering threads, CLS,
-    DET, or full OCR.
+19. Single-axis binary broadcast blocks — complete locally; the remaining 32
+    REC binary nodes all broadcast one non-unit right dimension. Channel-style
+    blocks reuse right-scalar SIMD and trailing-vector blocks reuse contiguous
+    pair SIMD without per-element coordinate traversal.
+20. Next: reprofile ordinary 3x3 and depthwise Conv after the elementwise work
+    has been removed before considering threads, CLS, DET, or full OCR.
 
 ## Compatibility claims
 

@@ -172,3 +172,20 @@ The x64 Add/Mul/Div operator median total fell from 7.854 ms to 3.066 ms, a
 60.97% reduction (2.562x). The x86 total fell from 15.981 ms to 6.511 ms, a
 59.26% reduction (2.454x). Every run reported `avx2`, retained the exact text
 and score, and had zero measured RSS growth.
+
+## Single-axis binary broadcast result
+
+The remaining 32 binary nodes all use one non-unit right dimension. NCHW
+channel broadcasts now execute one right-scalar SIMD block per channel, and
+trailing-vector broadcasts execute one contiguous-pair SIMD block per outer
+slice. Under a fresh five repeated 3+20 A/B protocol:
+
+| Process | Flat binary stage | Broadcast-block stage | Further reduction | Further speedup | Original baseline speedup | Throughput | RSS growth |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| Windows x64 | 26.221 ms | 23.672 ms | 9.72% | 1.108x | 24.111x | 42.244/s | 0 B |
+| Windows x86 | 51.674 ms | 45.874 ms | 11.22% | 1.126x | 30.878x | 21.799/s | 0 B |
+
+The x64 single-axis broadcast median fell from 2.743 ms to 0.303 ms, an
+88.95% reduction (9.050x). The x86 median fell from 6.277 ms to 0.400 ms, a
+93.63% reduction (15.700x). Every run reported `avx2`, retained the exact text
+and score, and had zero measured RSS growth.

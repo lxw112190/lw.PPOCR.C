@@ -57,10 +57,20 @@ def expected_results() -> dict[str, np.ndarray]:
         dtype=np.float32,
     )
     flat_scalar = np.float32(1.25)
+    trailing_left = np.asarray(
+        [(((index * 11) % 23) - 11) / 4.0 for index in range(20)],
+        dtype=np.float32,
+    ).reshape(2, 10)
+    general_right = np.asarray(
+        [0.5, -1.0, 1.5, -2.0, 2.5, -3.0, 3.5, -4.0],
+        dtype=np.float32,
+    ).reshape(2, 1, 4)
     return {
         "add": (left + add_right).ravel(),
         "mul": (left * mul_right).ravel(),
         "div": (left / div_right).ravel(),
+        "trailing_add": (trailing_left + flat_right).ravel(),
+        "general_add": (left + general_right).ravel(),
         "flat_add": flat_left + flat_right,
         "right_scalar_add": flat_left + flat_scalar,
         "flat_mul": flat_left * flat_right,

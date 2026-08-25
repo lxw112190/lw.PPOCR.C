@@ -320,6 +320,51 @@ These values are medians from five repeated 3+20 runs. Every call retained the
 exact text and score, every benchmark identified the selected backend as
 `avx2`, and every run reported zero RSS growth.
 
+## Ninth profile: single-axis binary broadcast blocks
+
+A fresh shape-class profile compared the 32 binary nodes left on the general
+broadcast path with the remaining convolution classes. Every one of those
+binary nodes has a contiguous left/output tensor and exactly one non-unit right
+dimension: 30 are NCHW channel broadcasts and two repeat a matched trailing
+vector. Their five-run medians were 2.743 ms on x64 and 6.277 ms on x86. The
+x86 broadcast total exceeded either ordinary 3x3 or depthwise Conv, while the
+x64 path offered a smaller but isolated target with no accumulation-order risk.
+
+The ninth change adds no new arithmetic kernel. Instead, after the existing
+shape validation it:
+
+- detects the single non-unit aligned right dimension;
+- splits channel-style layouts into contiguous inner blocks and reuses the
+  existing right-scalar AVX2/SSE2/scalar loop;
+- splits trailing-vector layouts into outer slices and reuses the existing
+  contiguous-pair loop;
+- detects the CPU SIMD level once for the complete broadcast operation;
+- retains the general coordinate traversal for broadcasts with multiple
+  non-unit right dimensions.
+
+There is no public C ABI, allocation, thread, model, workspace, arithmetic, or
+package-layout change. NumPy reference tests cover channel blocks for Add, Mul,
+and Div, a ten-value trailing vector with a scalar SIMD tail, and a two-axis
+broadcast that must remain on the general fallback. Full graph and Golden tests
+retain the exact output.
+
+Across five final profiles, the x64 single-axis broadcast median fell from
+2.743 ms to 0.303 ms, an 88.95% reduction (9.050x). The x86 median fell from
+6.277 ms to 0.400 ms, a 93.63% reduction (15.700x). The corresponding
+end-to-end reductions closely match the removed broadcast cost.
+
+## Ninth end-to-end A/B result
+
+| Process | Prior mean | Broadcast-block mean | Further reduction | Further speedup | Original baseline speedup | Throughput | RSS growth |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| Windows x64 | 26.221 ms | 23.672 ms | 9.72% | 1.108x | 24.111x | 42.244/s | 0 B |
+| Windows x86 | 51.674 ms | 45.874 ms | 11.22% | 1.126x | 30.878x | 21.799/s | 0 B |
+
+These values are medians from five repeated 3+20 runs. Every call retained the
+exact text and score, every benchmark identified the selected backend as
+`avx2`, and every run reported zero RSS growth. Ordinary 3x3 and depthwise Conv
+are now the next measured single-thread targets.
+
 All results in this document describe one machine, compiler, model, and
 fixture. They should be reproduced on target machines before being used for
 capacity planning.

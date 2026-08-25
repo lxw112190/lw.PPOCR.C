@@ -33,6 +33,9 @@ int main(void) {
     const int32_t invalid_output_dimensions[3] = {2, 3, 5};
     const int32_t softmax_dimensions[3] = {2, 3, 4};
     const int32_t flat_dimensions[1] = {10};
+    const int32_t trailing_left_dimensions[2] = {2, 10};
+    const int32_t trailing_right_dimensions[1] = {10};
+    const int32_t general_right_dimensions[3] = {2, 1, 4};
     const float add_right[3] = {0.25f, -1.0f, 2.0f};
     const float mul_right[3] = {-2.0f, 0.5f, 3.0f};
     const float div_right[3] = {0.5f, -2.0f, 4.0f};
@@ -52,6 +55,9 @@ int main(void) {
         0.5f, -2.0f, 4.0f, 0.25f, -0.75f,
         2.5f, -1.25f, 8.0f, 1.75f, -4.0f};
     const float flat_scalar[1] = {1.25f};
+    const float general_right[8] = {
+        0.5f, -1.0f, 1.5f, -2.0f,
+        2.5f, -3.0f, 3.5f, -4.0f};
     const char* flat_names[3] = {"flat_add", "flat_mul", "flat_div"};
     const char* scalar_names[3] = {
         "right_scalar_add", "right_scalar_mul", "right_scalar_div"};
@@ -60,6 +66,8 @@ int main(void) {
     float flat_output[10];
     float flat_dispatched_output[10];
     float flat_simd_output[10];
+    float trailing_left[20];
+    float trailing_output[20];
     float activation_output[9];
     float softmax_output[24];
     float softmax_in_place[24];
@@ -69,6 +77,10 @@ int main(void) {
 
     for (index = 0u; index < 24u; ++index) {
         left[index] = (float)((int32_t)((index * 7u) % 19u) - 9) / 5.0f;
+    }
+    for (index = 0u; index < 20u; ++index) {
+        trailing_left[index] =
+            (float)((int32_t)((index * 11u) % 23u) - 11) / 4.0f;
     }
 
     status = lw_scalar_binary_f32(
@@ -94,6 +106,25 @@ int main(void) {
         return 1;
     }
     print_values("div", binary_output, 24u);
+
+    status = lw_scalar_binary_f32(
+        LW_SCALAR_BINARY_ADD,
+        trailing_left, 2u, trailing_left_dimensions,
+        flat_right, 1u, trailing_right_dimensions,
+        trailing_output, 2u, trailing_left_dimensions);
+    if (!expect_status("trailing add", status, LW_STATUS_OK)) {
+        return 1;
+    }
+    print_values("trailing_add", trailing_output, 20u);
+
+    status = lw_scalar_binary_f32(
+        LW_SCALAR_BINARY_ADD, left, 3u, left_dimensions,
+        general_right, 3u, general_right_dimensions,
+        binary_output, 3u, output_dimensions);
+    if (!expect_status("general add", status, LW_STATUS_OK)) {
+        return 1;
+    }
+    print_values("general_add", binary_output, 24u);
 
     simd_level = lw_detect_simd_level();
     for (index = 0u; index < 3u; ++index) {

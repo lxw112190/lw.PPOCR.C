@@ -35,10 +35,15 @@ After shape validation, same-shaped contiguous binary inputs and a contiguous
 left input with a scalar right input dispatch to isolated AVX2 or SSE2 loops,
 with the portable scalar loop as fallback. These paths cover Add, Mul, and Div,
 process eight or four values per instruction, and retain scalar tails. Other
-broadcast patterns continue through the general rank-aligned coordinate
-implementation. A ten-value direct test exercises every operation, vector body,
-and tail and requires scalar, SSE2, AVX2, and automatic-dispatch output to be
-byte-identical before NumPy comparison.
+broadcasts with exactly one non-unit right dimension are split into contiguous
+blocks: channel-style layouts reuse the right-scalar SIMD loop, while a matched
+trailing dimension reuses the contiguous-pair SIMD loop. CPU capability is
+detected once before all blocks. Broadcasts with multiple non-unit right
+dimensions continue through the general rank-aligned coordinate implementation.
+A ten-value direct test exercises every operation, vector body, and tail and
+requires scalar, SSE2, AVX2, and automatic-dispatch output to be byte-identical
+before NumPy comparison. Additional NumPy cases cover both single-axis block
+modes and the retained general-broadcast fallback.
 
 ## Correctness tests
 
