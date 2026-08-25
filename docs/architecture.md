@@ -9,7 +9,7 @@ PP-OCR ONNX                            rec.lwm / cls.lwm / det.lwm + BGR8 pixels
     |                                     |
 Python + ONNX analyzer/converter          pure-C loader + session planner
     |                                     |
-validated REC / CLS / DET graphs          public recognizer / classifier C APIs
+validated REC / CLS / DET graphs          public recognizer / classifier / detector C APIs
     |                                     |
 platform-independent LWM v0                preprocess + executor + CTC/class result
                                           |
@@ -112,8 +112,11 @@ and architecture-specific kernels are isolated under `src/simd`.
 24. Exact DET probability graph — complete; its converter, five new data-path
     operators, dynamic shape planning, deterministic repeat, x64/x86 builds,
     and ONNX Runtime complete-output comparison are required gates.
-25. Next: implement DET preprocessing and DB postprocessing, then expose
-    detection boxes through a separately reviewed public C API.
+25. Public DET pipeline — complete; decoded BGR preprocessing, dynamic session
+    reuse, bounded DB-style postprocessing, original-coordinate quadrilaterals,
+    capacity semantics, shared exports, real-image tests, and packaged Demo.
+26. Next: implement crop extraction and compose DET/optional CLS/REC into a
+    separately reviewed full-OCR API.
 
 ## Compatibility claims
 

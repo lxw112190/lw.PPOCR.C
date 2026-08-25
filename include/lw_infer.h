@@ -150,10 +150,62 @@ typedef struct lw_classification_result {
     uint32_t reserved;
 } lw_classification_result;
 
+typedef struct lw_detector_options {
+    uint32_t struct_size;
+    uint32_t limit_side_length;
+    uint32_t max_candidates;
+    uint32_t use_dilation;
+    float bitmap_threshold;
+    float box_threshold;
+    float unclip_ratio;
+    uint32_t reserved;
+    uint64_t max_model_file_size;
+    uint64_t max_workspace_size;
+    uint64_t max_tensor_size;
+    uint64_t max_image_pixels;
+} lw_detector_options;
+
+typedef struct lw_detector_info {
+    uint32_t struct_size;
+    uint32_t limit_side_length;
+    uint32_t max_candidates;
+    uint32_t use_dilation;
+    float bitmap_threshold;
+    float box_threshold;
+    float unclip_ratio;
+    uint32_t reserved;
+    uint64_t max_image_pixels;
+} lw_detector_info;
+
+typedef struct lw_detection_box {
+    float x1;
+    float y1;
+    float x2;
+    float y2;
+    float x3;
+    float y3;
+    float x4;
+    float y4;
+    float score;
+    uint32_t reserved;
+} lw_detection_box;
+
+typedef struct lw_detection_result {
+    uint32_t struct_size;
+    uint32_t box_count;
+    uint32_t required_box_capacity;
+    uint32_t resized_width;
+    uint32_t resized_height;
+    uint32_t reserved;
+    float width_ratio;
+    float height_ratio;
+} lw_detection_result;
+
 typedef struct lw_model lw_model;
 typedef struct lw_session lw_session;
 typedef struct lw_recognizer lw_recognizer;
 typedef struct lw_classifier lw_classifier;
+typedef struct lw_detector lw_detector;
 
 LW_API void lw_model_options_init(lw_model_options* options);
 LW_API void lw_model_info_init(lw_model_info* info);
@@ -225,6 +277,29 @@ LW_API lw_status lw_classifier_classify_bgr_u8(
     uint32_t source_height,
     uint32_t source_stride,
     lw_classification_result* result,
+    lw_error* error);
+LW_API void lw_detector_options_init(lw_detector_options* options);
+LW_API void lw_detector_info_init(lw_detector_info* info);
+LW_API void lw_detection_result_init(lw_detection_result* result);
+LW_API lw_status lw_detector_create(
+    const char* model_path_utf8,
+    const lw_detector_options* options,
+    lw_detector** out_detector,
+    lw_error* error);
+LW_API void lw_detector_free(lw_detector* detector);
+LW_API lw_status lw_detector_get_info(
+    const lw_detector* detector,
+    lw_detector_info* info);
+LW_API lw_status lw_detector_detect_bgr_u8(
+    lw_detector* detector,
+    const uint8_t* source,
+    uint64_t source_byte_count,
+    uint32_t source_width,
+    uint32_t source_height,
+    uint32_t source_stride,
+    lw_detection_box* boxes,
+    uint32_t box_capacity,
+    lw_detection_result* result,
     lw_error* error);
 LW_API const char* lw_status_string(lw_status status);
 

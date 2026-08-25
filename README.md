@@ -25,17 +25,17 @@ measurements retain unchanged recognition results. On x86/x64, MatMul,
 pointwise Conv, ordinary stride-2 3x3 Conv, stride-1 3x3 Depthwise Conv, flat
 Add/Mul/Div, and single-axis binary broadcasts now use runtime-detected AVX2 or
 SSE2 with automatic scalar fallbacks.
-The DET graph now produces its full dynamic-shape probability map and matches
-the original ONNX model at multiple input sizes. The public recognizer and
-classifier C APIs expose their paths with bounded,
-preallocated inference memory. Image-file decoding remains outside the core:
-applications provide decoded BGR8 pixels. DET preprocessing, DB postprocessing,
-detection boxes, and the combined full-OCR API remain future milestones.
+The DET graph produces its full dynamic-shape probability map and matches the
+original ONNX model at multiple input sizes. A public detector C API now owns
+DET resize/normalize, graph execution, bounded DB-style postprocessing,
+coordinate restoration, and reading-order quadrilateral output. Image-file
+decoding remains outside the core: applications provide decoded BGR8 pixels.
+Crop extraction and the combined full-OCR API remain future milestones.
 
 Current scope:
 
 - PP-OCRv6 tiny;
-- REC and fixed-batch CLS public paths; DET probability graph internally verified;
+- public REC, fixed-batch CLS, and DET paths;
 - FP32, CPU, scalar/SSE2/AVX2 runtime dispatch, single-threaded;
 - custom, non-frozen LWM v0.1 format;
 - Windows x64 and Linux x64 first;
@@ -66,7 +66,7 @@ ctest --test-dir build -C Release --output-on-failure
 
 The normal build creates `build/models/rec.lwm`, `build/models/cls.lwm`,
 `build/models/det.lwm`, static and shared pure-C
-libraries, the `lw-recognize-ppm` public-API Demo, the machine-readable
+libraries, the `lw-recognize-ppm` and `lw-detect-ppm` public-API Demos, the machine-readable
 `lw-rec-benchmark`, and `lwm-inspect`. Inspect the converted model with:
 
 ```powershell
@@ -90,8 +90,9 @@ The private end-to-end REC preprocessing and decoding contract is documented in
 [`docs/rec-pipeline.md`](docs/rec-pipeline.md).
 The public CLS direction-classification contract and reference gates are documented in
 [`docs/cls-pipeline.md`](docs/cls-pipeline.md).
-The private DET probability-graph boundary is documented in
-[`docs/det-graph.md`](docs/det-graph.md).
+The DET graph gate and public detection pipeline are documented in
+[`docs/det-graph.md`](docs/det-graph.md) and
+[`docs/det-pipeline.md`](docs/det-pipeline.md).
 The ten-crop ONNX-versus-pure-C correctness gate is documented in
 [`docs/rec-golden-corpus.md`](docs/rec-golden-corpus.md).
 The optimization baseline and benchmark protocol are documented in

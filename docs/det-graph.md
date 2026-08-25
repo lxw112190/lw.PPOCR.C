@@ -22,10 +22,9 @@ MaxPool, and ConvTranspose. The complete graph is run twice for determinism at
 `32x32` and `32x64`, and every output value is compared with ONNX Runtime. The
 x64 development result has maximum absolute error below `1.3e-7`.
 
-## Deliberate boundary
+## Graph boundary
 
-This milestone ends at the probability map. It does not define decoded-image
-preprocessing, resize/padding restoration, thresholding, dilation, contours,
-DB unclip, polygon/quad selection, scores, coordinate mapping, or a public
-detector ABI. Those contracts must be implemented and reference-tested before
-applications receive text boxes.
+This document remains the isolated probability-map correctness gate. The
+decoded-image preprocessing, DB-style postprocessing, coordinate restoration,
+and public detector ABI are implemented and tested separately in
+`det-pipeline.md`, so graph changes cannot hide pipeline regressions.

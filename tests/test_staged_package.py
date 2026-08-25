@@ -21,10 +21,12 @@ class StagedPackageTest(unittest.TestCase):
             if sys.platform == "win32"
             else "lw-rec-benchmark"
         )
+        detector = "lw-detect-ppm.exe" if sys.platform == "win32" else "lw-detect-ppm"
         shared = "lw_ppocr_c.dll" if sys.platform == "win32" else "liblw_ppocr_c.so"
         required = [
             root / "bin" / executable,
             root / "bin" / benchmark,
+            root / "bin" / detector,
             root / ("bin" if sys.platform == "win32" else "lib") / shared,
             root / "include" / "lw_infer.h",
             root / "models" / "rec.lwm",
@@ -32,6 +34,7 @@ class StagedPackageTest(unittest.TestCase):
             root / "models" / "det.lwm",
             root / "models" / "ppocr_keys.txt",
             root / "models" / "sample-crop.ppm",
+            root / "models" / "sample.ppm",
             root / "lib" / "cmake" / "lw.PPOCR.C" / "lw.PPOCR.CConfig.cmake",
             root / "LICENSE",
             root / "README.md",
@@ -94,6 +97,25 @@ class StagedPackageTest(unittest.TestCase):
         self.assertEqual(report["schema_version"], 1)
         self.assertEqual(report["text"], "纯臻营养护发素")
         self.assertEqual(report["iterations"], 2)
+        detected = subprocess.run(
+            [
+                str(root / "bin" / detector),
+                str(root / "models" / "det.lwm"),
+                str(root / "models" / "sample.ppm"),
+            ],
+            cwd=root,
+            check=False,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=300,
+        )
+        self.assertEqual(detected.returncode, 0, detected.stdout + detected.stderr)
+        match = __import__("re").search(r"boxes=(\d+)", detected.stdout)
+        self.assertIsNotNone(match, detected.stdout)
+        assert match is not None
+        self.assertGreater(int(match.group(1)), 0)
 
 
 def parse_args() -> argparse.Namespace:

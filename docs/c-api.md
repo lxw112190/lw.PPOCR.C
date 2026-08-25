@@ -2,10 +2,12 @@
 
 The public API in `include/lw_infer.h` is available for integration experiments
 but is not ABI-frozen before 1.0. It covers low-level model/session planning and
-complete recognize-only and direction-classification APIs for decoded BGR8
+complete recognize-only, direction-classification, and text-detection APIs for decoded BGR8
 pixels. The recognizer hides preprocessing, graph execution, dictionary
 indexing, and UTF-8 CTC decoding. The classifier hides resize/pad/normalize,
 graph execution, and the two-class 0/180-degree decision.
+The detector hides resize/normalize, dynamic graph planning and execution,
+DB-style postprocessing, and original-coordinate quadrilateral restoration.
 
 ## Ownership and thread model
 
@@ -25,6 +27,11 @@ graph execution, and the two-class 0/180-degree decision.
   allocation after successful creation.
 - A single classifier must not be called concurrently. Separate classifiers
   own independent mutable state and may run in parallel.
+- `lw_detector_create` owns its model, current dynamic session, and reusable
+  inference tensors until `lw_detector_free`. Postprocessing uses bounded
+  transient scratch memory.
+- A single detector must not be called concurrently. Separate detectors own
+  independent mutable state and may run in parallel.
 - Every successful create has one matching free; all free functions accept null.
 
 Paths passed to the library are UTF-8. The Windows implementation converts to
@@ -191,6 +198,64 @@ if (lw_classifier_create("cls.lwm", &options, &classifier, &error) == LW_STATUS_
 lw_classifier_free(classifier);
 ```
 
+## Public DET detector
+
+`lw_detector_create` accepts a UTF-8 path to the compatible dynamic-shape DET
+`.lwm` model. Initialized options default to:
+
+| Field | Default | Meaning |
+|---|---:|---|
+| `limit_side_length` | 960 | Maximum source long side before resize |
+| `max_candidates` | 1,000 | Maximum connected components examined |
+| `use_dilation` | 0 | Enable optional 2x2 bitmap dilation |
+| `bitmap_threshold` | 0.3 | Probability-map foreground threshold |
+| `box_threshold` | 0.6 | Minimum region score |
+| `unclip_ratio` | 1.6 | Rectangle expansion factor |
+| `max_image_pixels` | 40,000,000 | Decoded source pixel limit |
+
+The model file, workspace, and tensor limits share the REC/CLS defaults.
+Reserved fields must remain zero. `limit_side_length` is capped at 4,096,
+`max_candidates` at 10,000, and `unclip_ratio` at 10.0.
+
+`lw_detector_detect_bgr_u8` accepts decoded, interleaved BGR bytes with an
+accessible byte count and row stride. Each `lw_detection_box` contains four
+clockwise points beginning near the top-left, a region score, and a reserved
+zero field. Coordinates are floating-point values clamped to the original
+image.
+
+For an efficient single call, obtain `lw_detector_info.max_candidates` and
+allocate that many boxes. For exact allocation, pass null boxes with zero
+capacity, allocate `required_box_capacity`, then call again. An undersized
+buffer returns `LW_STATUS_OUT_OF_BOUNDS` without copying partial boxes.
+
+```c
+lw_detector* detector = NULL;
+lw_detector_info info;
+lw_detection_result result;
+lw_detection_box* boxes;
+lw_error error;
+
+lw_error_init(&error);
+if (lw_detector_create("det.lwm", NULL, &detector, &error) == LW_STATUS_OK) {
+    lw_detector_info_init(&info);
+    lw_detector_get_info(detector, &info);
+    boxes = (lw_detection_box*)calloc(info.max_candidates, sizeof(*boxes));
+    lw_detection_result_init(&result);
+    if (boxes != NULL && lw_detector_detect_bgr_u8(
+            detector, bgr, bgr_byte_count, width, height, stride,
+            boxes, info.max_candidates, &result, &error) == LW_STATUS_OK) {
+        /* boxes[0..result.box_count) are in original-image coordinates. */
+    }
+    free(boxes);
+}
+lw_detector_free(detector);
+```
+
+The postprocessor is a dependency-free, pure-C DB-style implementation. It
+does not promise bit-identical boxes to OpenCV contours or Clipper offsets; its
+precise implementation and correctness boundary are documented in
+`det-pipeline.md`.
+
 ## Errors
 
 Programs should branch on `lw_status`, not parse diagnostic text. Relevant
@@ -202,6 +267,8 @@ planning errors are:
 - `LW_STATUS_OUT_OF_MEMORY`: host allocation failure;
 - model load errors defined by the LWM loader.
 
-Recognition and classification additionally return `LW_STATUS_INVALID_SHAPE` for a truncated BGR
-layout, `LW_STATUS_OUT_OF_BOUNDS` for an insufficient text buffer, and
+Recognition, classification, and detection additionally return
+`LW_STATUS_INVALID_SHAPE` for a truncated BGR layout and
 `LW_STATUS_MEMORY_LIMIT` when decoded dimensions exceed `max_image_pixels`.
+Recognition and detection return `LW_STATUS_OUT_OF_BOUNDS` for insufficient
+caller-owned output capacity.

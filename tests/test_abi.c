@@ -14,6 +14,10 @@ _Static_assert(sizeof(lw_recognition_result) == 32u, "lw_recognition_result ABI 
 _Static_assert(sizeof(lw_classifier_options) == 40u, "lw_classifier_options ABI changed");
 _Static_assert(sizeof(lw_classifier_info) == 24u, "lw_classifier_info ABI changed");
 _Static_assert(sizeof(lw_classification_result) == 24u, "lw_classification_result ABI changed");
+_Static_assert(sizeof(lw_detector_options) == 64u, "lw_detector_options ABI changed");
+_Static_assert(sizeof(lw_detector_info) == 40u, "lw_detector_info ABI changed");
+_Static_assert(sizeof(lw_detection_box) == 40u, "lw_detection_box ABI changed");
+_Static_assert(sizeof(lw_detection_result) == 32u, "lw_detection_result ABI changed");
 _Static_assert(LW_STATUS_OK == 0, "success status must remain zero");
 _Static_assert(LW_STATUS_UNSUPPORTED == 8, "status numbering changed");
 _Static_assert(LW_STATUS_MEMORY_LIMIT == 10, "status numbering changed");
@@ -30,6 +34,9 @@ int main(void) {
     lw_classifier_options classifier_options;
     lw_classifier_info classifier_info;
     lw_classification_result classification_result;
+    lw_detector_options detector_options;
+    lw_detector_info detector_info;
+    lw_detection_result detection_result;
     lw_model_options_init(&options);
     lw_error_init(&error);
     lw_tensor_desc_init(&tensor);
@@ -41,6 +48,9 @@ int main(void) {
     lw_classifier_options_init(&classifier_options);
     lw_classifier_info_init(&classifier_info);
     lw_classification_result_init(&classification_result);
+    lw_detector_options_init(&detector_options);
+    lw_detector_info_init(&detector_info);
+    lw_detection_result_init(&detection_result);
     return options.struct_size == sizeof(options) && error.struct_size == sizeof(error) &&
                    tensor.struct_size == sizeof(tensor) &&
                    session_options.struct_size == sizeof(session_options) &&
@@ -51,7 +61,12 @@ int main(void) {
                    recognition_result.struct_size == sizeof(recognition_result) &&
                    classifier_options.struct_size == sizeof(classifier_options) &&
                    classifier_info.struct_size == sizeof(classifier_info) &&
-                   classification_result.struct_size == sizeof(classification_result)
+                   classification_result.struct_size == sizeof(classification_result) &&
+                   detector_options.struct_size == sizeof(detector_options) &&
+                   detector_options.limit_side_length == 960u &&
+                   detector_options.max_candidates == 1000u &&
+                   detector_info.struct_size == sizeof(detector_info) &&
+                   detection_result.struct_size == sizeof(detection_result)
                ? 0
                : 1;
 }
