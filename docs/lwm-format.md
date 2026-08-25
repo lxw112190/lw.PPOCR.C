@@ -1,141 +1,162 @@
-# LWM v0 format draft
+# LWM v0.1 format
 
 Status: **experimental and not frozen**.
 
-LWM means LightWeight Model. Version 0 is designed only for compiling the exact
-PP-OCRv6 tiny REC graph documented in `SUPPORTED_OPS_V0.md`.
+LWM means LightWeight Model. Version 0.1 currently encodes only the exact
+PP-OCRv6 tiny REC graph documented in `SUPPORTED_OPS_V0.md`. It is not an ONNX
+container and the runtime is not a general ONNX executor.
 
-## Invariants
+## Encoding invariants
 
-- little-endian;
-- fixed-width integers and IEEE-754 FP32;
-- no pointers, `size_t`, `long`, native handles, or compiler-native structs;
-- all references are file offsets or table indexes;
-- every section starts at an 8-byte-aligned offset;
-- a loader treats the entire file as untrusted input;
-- one file is portable across Windows x86/x64, Linux x64, and Linux ARM64;
-- unknown versions, flags, operators, or non-zero reserved fields are rejected.
+- little-endian fixed-width integers and IEEE-754 FP32;
+- no pointer, `size_t`, `long`, native handle, or compiler-native struct;
+- every section starts at an 8-byte-aligned absolute file offset;
+- records are serialized and read field-by-field, never by casting file bytes;
+- unknown versions, flags, operator IDs, parameter versions, and non-zero
+  reserved fields are rejected;
+- the same file is intended for Windows x86/x64 and Linux x64/ARM64;
+- all model bytes are untrusted and must pass validation before a model handle
+  is returned.
 
-## File layout
+## Canonical layout
 
 ```text
-header
-tensor table
-node table
+160-byte header
+graph input tensor-index table (u32[])
+graph output tensor-index table (u32[])
+80-byte tensor records
+72-byte node records
 operator parameter records
-string table
-weight blob
-checksum trailer (decision pending)
+string table (empty in v0.1)
+FP32 weight blob
 ```
 
-The converter writes sections in this exact order. Runtime execution does not
-depend on section adjacency; it uses validated offsets.
+Padding bytes are zero. The writer produces sections in this exact order. A
+loader uses validated offsets and sizes rather than assuming adjacency.
 
-## Header candidate
+## Header: 160 bytes
 
-The on-disk record will be serialized field-by-field. The following C-like
-declaration documents fields; it is not permission to cast mapped bytes to a
-native struct.
+| Offset | Type | Field |
+|---:|---|---|
+| 0 | `u8[4]` | magic, `LWM0` |
+| 4 | `u16` | format major, `0` |
+| 6 | `u16` | format minor, `1` |
+| 8 | `u32` | header size, `160` |
+| 12 | `u32` | flags |
+| 16 | `u32` | tensor count |
+| 20 | `u32` | node count |
+| 24 | `u32` | graph input count |
+| 28 | `u32` | graph output count |
+| 32 | `u64` | graph input table offset |
+| 40 | `u64` | graph output table offset |
+| 48 | `u64` | tensor table offset |
+| 56 | `u64` | node table offset |
+| 64 | `u64` | parameter section offset |
+| 72 | `u64` | parameter section size |
+| 80 | `u64` | string section offset |
+| 88 | `u64` | string section size |
+| 96 | `u64` | weight section offset |
+| 104 | `u64` | weight section size |
+| 112 | `u64` | exact file size |
+| 120 | `u64` | workspace size |
+| 128 | `u64` | content checksum |
+| 136 | `u64[3]` | reserved, all zero |
 
-```c
-struct lwm_v0_header_disk {
-    uint8_t  magic[4];            /* "LWM0" */
-    uint16_t format_major;        /* 0 */
-    uint16_t format_minor;        /* 1 */
-    uint32_t header_size;
-    uint32_t flags;
-    uint32_t tensor_count;
-    uint32_t node_count;
-    uint32_t input_count;
-    uint32_t output_count;
-    uint64_t tensor_offset;
-    uint64_t node_offset;
-    uint64_t param_offset;
-    uint64_t string_offset;
-    uint64_t weight_offset;
-    uint64_t file_size;
-    uint64_t workspace_size;
-    uint64_t content_checksum;
-};
-```
+The only v0.1 header flag is bit 0, `NO_MEMORY_PLAN`. It must be set and
+`workspace_size` must be zero. A later experimental revision will replace this
+with a converter-generated lifetime/workspace plan.
 
-`header_size` allows compatible extension during v0 experiments. The checksum
-algorithm and coverage are intentionally undecided until the writer and corrupt
-model tests are implemented; a value of zero must not silently disable integrity
-checking in a production format.
+## Tensor record: 80 bytes
 
-## Tensor candidate
+| Offset | Type | Field |
+|---:|---|---|
+| 0 | `u32` | dtype (`1=f32`, `2=i32`, `3=i64`, `4=u8`) |
+| 4 | `u32` | rank, at most 8 |
+| 8 | `i32[8]` | dimensions; unused slots are zero |
+| 40 | `u32` | flags: constant/input/output |
+| 44 | `u32` | reserved, zero |
+| 48 | `u64` | absolute constant-data offset, otherwise zero |
+| 56 | `u64` | constant-data byte size, otherwise zero |
+| 64 | `u64` | workspace offset; `UINT64_MAX` in v0.1 |
+| 72 | `u64` | workspace byte size; zero in v0.1 |
 
-```c
-#define LWM_V0_MAX_DIMS 8
+`-1` is the only dynamic-dimension marker. Constant tensors cannot contain
+dynamic dimensions, and their byte size must exactly equal the overflow-checked
+shape product times the dtype size.
 
-struct lwm_v0_tensor_disk {
-    uint32_t dtype;
-    uint32_t rank;
-    int32_t  dimensions[LWM_V0_MAX_DIMS];
-    uint32_t flags;
-    uint32_t reserved;
-    uint64_t data_offset;
-    uint64_t data_size;
-    uint64_t workspace_offset;
-    uint64_t workspace_size;
-};
-```
+## Node record: 72 bytes
 
-Only `f32`, `i32`, `i64`, and `u8` are candidate dtypes. `-1` is the only
-dynamic-dimension marker considered for v0, and only the documented REC batch
-and width positions may use it. Other negative values are invalid.
+| Offset | Type | Field |
+|---:|---|---|
+| 0 | `u16` | operator ID |
+| 2 | `u16` | input count, at most 8 |
+| 4 | `u16` | output count, 1 through 4 |
+| 6 | `u16` | flags, zero |
+| 8 | `u32[8]` | input tensor indexes; unused slots zero |
+| 40 | `u32[4]` | output tensor indexes; unused slots zero |
+| 56 | `u64` | absolute parameter offset, or zero |
+| 64 | `u32` | exact parameter record size, or zero |
+| 68 | `u32` | reserved, zero |
 
-## Node candidate
+## Operator IDs and parameter records
 
-```c
-#define LWM_V0_MAX_NODE_INPUTS  8
-#define LWM_V0_MAX_NODE_OUTPUTS 4
+Every non-empty parameter record begins with `u16 version=1`. Records use only
+fixed-width fields and have an exact size checked by the loader.
 
-struct lwm_v0_node_disk {
-    uint16_t op;
-    uint16_t input_count;
-    uint16_t output_count;
-    uint16_t flags;
-    uint32_t inputs[LWM_V0_MAX_NODE_INPUTS];
-    uint32_t outputs[LWM_V0_MAX_NODE_OUTPUTS];
-    uint64_t param_offset;
-    uint32_t param_size;
-    uint32_t reserved;
-};
-```
+| ID | Operator | Parameter bytes |
+|---:|---|---:|
+| 1 | Conv | 64 |
+| 2 | Add | 0 |
+| 3 | Mul | 0 |
+| 4 | Div | 0 |
+| 5 | Erf | 0 |
+| 6 | HardSigmoid | 16 |
+| 7 | BatchNormalization | 24 |
+| 8 | ReduceMean | 48 |
+| 9 | Relu | 0 |
+| 10 | AveragePool | 64 |
+| 11 | Squeeze | 40 |
+| 12 | Transpose | 40 |
+| 13 | Unsqueeze | 40 |
+| 14 | MatMul | 0 |
+| 15 | Softmax | 16 |
 
-Operator parameters are individually versioned fixed-width records. The node
-record does not contain a giant union.
+The writer normalizes omitted ONNX attributes to opset-11 defaults before
+encoding them. Conv and pooling records contain rank, kernel, stride, dilation,
+padding, group, and applicable boolean attributes. Axis-based records contain a
+count followed by eight signed axis/perm slots. All unused and reserved fields
+are zero.
+
+## Checksum
+
+`content_checksum` is FNV-1a 64 over the complete file while header bytes
+128..135 are treated as zero. The stored checksum must be non-zero. FNV-1a is a
+small deterministic corruption check, not a cryptographic signature; model
+authenticity must be handled by a trusted distribution channel and published
+SHA-256 hashes.
+
+## Current REC conversion policy
+
+- requires the bundled REC SHA-256 identity, one input, one output, and default
+  ONNX opset 11;
+- rejects every operator outside the 15 IDs above;
+- removes 58 one-input/one-output Identity aliases;
+- emits 161 executable nodes and 282 tensors;
+- retains all four BatchNormalization nodes;
+- keeps canonical little-endian FP32 weights;
+- does not fuse operators, pack weights, retain names, or create a workspace
+  plan yet.
+
+These choices deliberately avoid numerical graph rewrites before golden
+reference tests exist.
 
 ## Required loader validation
 
-Before exposing a model handle, the loader must validate:
+Before exposing a model handle, the loader validates magic/version/header,
+exact file size, flags/reserved fields, aligned overflow-safe section ranges,
+section ordering and non-overlap, checksum, tensor dtype/rank/dimensions/data,
+node arity/operator/indexes, exact parameter size/version/constraints, graph
+input/output indexes and flags, and the no-workspace-plan invariant.
 
-1. magic, supported version, header size, flags, and reserved fields;
-2. exact `file_size` agreement;
-3. overflow-safe `count * record_size` for every table;
-4. overflow-safe and aligned section ranges entirely inside the file;
-5. non-overlapping fixed sections and permitted weight ranges;
-6. tensor rank/dtype/dimensions and overflow-safe element/byte counts;
-7. node input/output counts and every tensor index;
-8. operator parameter offset, size, version, and constraints;
-9. constant data range and workspace range;
-10. workspace limit before allocation;
-11. graph input/output indexes and supported dynamic-width propagation;
-12. checksum after structural bounds make checksum reads safe.
-
-Failure returns a stable error code. Library code must never call `abort` or
-`exit` for malformed input.
-
-## REC conversion decisions still open
-
-- checksum algorithm and canonical coverage;
-- string table retention policy for diagnostics;
-- exact operator IDs and parameter record versions;
-- whether all four REC BatchNormalization nodes are fused or two remain;
-- workspace planning alignment and maximum supported tensor bytes;
-- graph-level representation of the REC width expression.
-
-These decisions require converter output and corrupt-model tests. Therefore LWM
-v0 must not yet be described as ABI- or format-stable.
+Any malformed file returns a stable `lw_status`; library code never calls
+`abort` or `exit`.

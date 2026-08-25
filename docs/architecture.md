@@ -43,8 +43,8 @@ isolated under `src/simd` after scalar correctness.
 ## Development gates
 
 1. Exact model analysis and operator report — complete.
-2. Non-frozen LWM v0 definition and deterministic REC converter.
-3. Bounds-checked loader for untrusted LWM input.
+2. Non-frozen LWM v0 definition and deterministic REC converter — complete.
+3. Bounds-checked loader for untrusted LWM input — complete.
 4. Tensor, memory planner consumption, and scalar executor.
 5. One scalar operator at a time with reference tests.
 6. Pure-C preprocess, CTC decoding, and REC golden tests.

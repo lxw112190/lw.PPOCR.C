@@ -9,20 +9,20 @@ Python、OpenCV、ONNX Runtime、OpenVINO、TensorRT 或 protobuf。
 
 ## Current milestone
 
-The project is in its first development gate: exact PP-OCRv6 tiny model
-analysis. Runtime kernels are intentionally not implemented before the real
-DET/CLS/REC operator and dynamic-shape surface is documented.
+Exact PP-OCRv6 tiny model analysis, the deterministic REC-to-LWM v0.1
+converter, and the bounds-checked pure-C model loader are implemented. Runtime
+kernels are the next gate; inference is not implemented yet.
 
 Current scope:
 
 - PP-OCRv6 tiny;
 - REC first;
 - FP32, CPU, scalar, single-threaded;
-- custom, non-frozen LWM v0 format next;
+- custom, non-frozen LWM v0.1 format;
 - Windows x64 and Linux x64 first;
 - Windows 7 x86 compatibility preserved by design.
 
-## Reproduce model analysis
+## Build, convert, and test
 
 Requirements:
 
@@ -41,9 +41,19 @@ Or through CMake:
 
 ```powershell
 cmake -S . -B build -DBUILD_TESTING=ON
-cmake --build build --target analyze_models
-ctest --test-dir build --output-on-failure
+cmake --build build --config Release
+ctest --test-dir build -C Release --output-on-failure
 ```
+
+The normal build creates `build/models/rec.lwm`, the pure-C static loader
+library, and `lwm-inspect`. Inspect the converted model with:
+
+```powershell
+.\build\Release\lwm-inspect.exe .\build\models\rec.lwm
+```
+
+With a single-configuration generator such as Ninja, omit the `Release`
+subdirectory.
 
 The human-readable result is in
 [`docs/SUPPORTED_OPS_V0.md`](docs/SUPPORTED_OPS_V0.md). The JSON report is the
@@ -52,8 +62,8 @@ machine-readable source for future converter tests.
 ## Runtime dependency boundary
 
 The `converter/` tool is allowed to use Python, ONNX, NumPy, and protobuf in a
-development environment. The future deployment runtime under `src/` will be C
-only and must not link or import any of them.
+development environment. The deployment loader under `src/` is C11 only and
+does not link or import any of them.
 
 ## Project direction
 
