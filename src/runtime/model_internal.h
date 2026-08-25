@@ -23,6 +23,14 @@ struct lw_model {
     uint8_t* bytes;
     size_t byte_count;
     lw_model_info info;
+    uint64_t input_offset;
+    uint64_t output_offset;
+    uint64_t tensor_offset;
+    uint64_t node_offset;
+    uint64_t param_offset;
+    uint64_t param_size;
+    uint64_t weight_offset;
+    uint64_t weight_size;
 };
 
 void lw_set_error(lw_error* error, lw_status status, const char* message);

@@ -343,5 +343,13 @@ lw_status lw_validate_lwm_v0(lw_model* model, lw_error* error) {
     model->info.weight_size = h.weight_size;
     model->info.workspace_size = h.workspace_size;
     model->info.content_checksum = h.checksum;
+    model->input_offset = h.input_offset;
+    model->output_offset = h.output_offset;
+    model->tensor_offset = h.tensor_offset;
+    model->node_offset = h.node_offset;
+    model->param_offset = h.param_offset;
+    model->param_size = h.param_size;
+    model->weight_offset = h.weight_offset;
+    model->weight_size = h.weight_size;
     return LW_STATUS_OK;
 }

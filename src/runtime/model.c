@@ -45,6 +45,14 @@ void lw_error_init(lw_error* error) {
     error->struct_size = (uint32_t)sizeof(*error);
 }
 
+void lw_model_info_init(lw_model_info* info) {
+    if (info == NULL) {
+        return;
+    }
+    memset(info, 0, sizeof(*info));
+    info->struct_size = (uint32_t)sizeof(*info);
+}
+
 #if defined(_WIN32)
 static FILE* lw_open_read_utf8(const char* path_utf8) {
     int wide_count;
@@ -179,6 +187,8 @@ const char* lw_status_string(lw_status status) {
         case LW_STATUS_OUT_OF_BOUNDS: return "out_of_bounds";
         case LW_STATUS_CHECKSUM_MISMATCH: return "checksum_mismatch";
         case LW_STATUS_UNSUPPORTED: return "unsupported";
+        case LW_STATUS_INVALID_SHAPE: return "invalid_shape";
+        case LW_STATUS_MEMORY_LIMIT: return "memory_limit";
         default: return "unknown";
     }
 }

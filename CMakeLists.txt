@@ -42,7 +42,10 @@ add_custom_target(convert_rec_model ALL
     DEPENDS "${LW_PPOCR_C_REC_LWM}" "${LW_PPOCR_C_REC_LWM_METADATA}")
 
 add_library(lw_ppocr_c STATIC
+    src/runtime/memory.c
     src/runtime/model.c
+    src/runtime/session.c
+    src/runtime/shape.c
     src/runtime/validate.c)
 target_include_directories(lw_ppocr_c
     PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include")
@@ -90,6 +93,17 @@ if(BUILD_TESTING)
         target_compile_options(test-lwm-loader PRIVATE -Wall -Wextra -Wpedantic -Werror)
     endif()
     add_test(NAME lwm_loader COMMAND test-lwm-loader "${LW_PPOCR_C_REC_LWM}")
+
+    add_executable(test-session-planner tests/test_session.c)
+    target_link_libraries(test-session-planner PRIVATE lw_ppocr_c)
+    target_compile_features(test-session-planner PRIVATE c_std_11)
+    add_dependencies(test-session-planner convert_rec_model)
+    if(MSVC)
+        target_compile_options(test-session-planner PRIVATE /W4 /WX /utf-8)
+    else()
+        target_compile_options(test-session-planner PRIVATE -Wall -Wextra -Wpedantic -Werror)
+    endif()
+    add_test(NAME session_planner COMMAND test-session-planner "${LW_PPOCR_C_REC_LWM}")
 
     add_executable(test-c-abi tests/test_abi.c)
     target_link_libraries(test-c-abi PRIVATE lw_ppocr_c)

@@ -4,7 +4,8 @@ No model is runtime-supported yet because the pure-C executor has not been
 implemented.
 
 The following exact conversion inputs are analysis-verified. REC is also
-converter- and loader-verified; CLS and DET do not yet have LWM converters.
+converter-, loader-, dynamic-shape-, and workspace-planner-verified; CLS and
+DET do not yet have LWM converters.
 
 | Model | Role | Runtime priority | SHA-256 |
 |---|---|---|---|

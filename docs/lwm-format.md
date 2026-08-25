@@ -63,8 +63,10 @@ loader uses validated offsets and sizes rather than assuming adjacency.
 | 136 | `u64[3]` | reserved, all zero |
 
 The only v0.1 header flag is bit 0, `NO_MEMORY_PLAN`. It must be set and
-`workspace_size` must be zero. A later experimental revision will replace this
-with a converter-generated lifetime/workspace plan.
+`workspace_size` must be zero. Because REC width is dynamic, the current pure-C
+session resolves concrete shapes and builds a lifetime-based workspace plan at
+session creation. A later format revision may encode reusable lifetime metadata
+without storing a width-specific byte layout.
 
 ## Tensor record: 80 bytes
 
@@ -144,8 +146,8 @@ SHA-256 hashes.
 - emits 161 executable nodes and 282 tensors;
 - retains all four BatchNormalization nodes;
 - keeps canonical little-endian FP32 weights;
-- does not fuse operators, pack weights, retain names, or create a workspace
-  plan yet.
+- does not fuse operators, pack weights, retain names, or embed a width-specific
+  workspace plan; session creation plans it from the resolved runtime width.
 
 These choices deliberately avoid numerical graph rewrites before golden
 reference tests exist.

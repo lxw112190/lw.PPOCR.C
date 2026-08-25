@@ -10,8 +10,9 @@ Python、OpenCV、ONNX Runtime、OpenVINO、TensorRT 或 protobuf。
 ## Current milestone
 
 Exact PP-OCRv6 tiny model analysis, the deterministic REC-to-LWM v0.1
-converter, and the bounds-checked pure-C model loader are implemented. Runtime
-kernels are the next gate; inference is not implemented yet.
+converter, the bounds-checked pure-C model loader, and runtime REC shape/workspace
+planning are implemented. Runtime kernels are the next gate; inference is not
+implemented yet.
 
 Current scope:
 
@@ -58,6 +59,9 @@ subdirectory.
 The human-readable result is in
 [`docs/SUPPORTED_OPS_V0.md`](docs/SUPPORTED_OPS_V0.md). The JSON report is the
 machine-readable source for future converter tests.
+
+The experimental model/session API and ownership rules are documented in
+[`docs/c-api.md`](docs/c-api.md).
 
 ## Runtime dependency boundary
 
