@@ -9,6 +9,8 @@
 #  else
 #    define LW_API __declspec(dllimport)
 #  endif
+#elif defined(LW_PPOCR_C_SHARED) && defined(__GNUC__) && __GNUC__ >= 4
+#  define LW_API __attribute__((visibility("default")))
 #else
 #  define LW_API
 #endif

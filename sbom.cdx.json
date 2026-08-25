@@ -1,0 +1,95 @@
+{
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.5",
+  "serialNumber": "urn:uuid:4525ed2b-3534-4a6f-b43b-20abafbe8b35",
+  "version": 1,
+  "metadata": {
+    "component": {
+      "type": "library",
+      "bom-ref": "pkg:generic/lw.PPOCR.C@0.1.0",
+      "name": "lw.PPOCR.C",
+      "version": "0.1.0",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "purl": "pkg:generic/lw.PPOCR.C@0.1.0"
+    }
+  },
+  "components": [
+    {
+      "type": "machine-learning-model",
+      "bom-ref": "lw-model:ppocrv6-tiny-rec:lwm-v0.1",
+      "name": "PP-OCRv6 tiny REC LWM",
+      "version": "lwm-v0.1",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "f5d8250797d0de82fc781efa988bf5bcfc1f7598c59a7668a7bd4b5ba84ff289"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "Apache-2.0"
+          }
+        }
+      ]
+    },
+    {
+      "type": "file",
+      "bom-ref": "lw-file:ppocrv6-tiny-dictionary",
+      "name": "PP-OCRv6 tiny recognition dictionary",
+      "version": "workspace-2026-08-25",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "46e1b34ef45684cb46d75ac76d355341fe7f0a2c38d6ee02e63ae6b3878019fc"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "Apache-2.0"
+          }
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:generic/microsoft-vc-runtime@14.40.33807",
+      "name": "Microsoft Visual C++ Runtime",
+      "version": "14.40.33807",
+      "properties": [
+        {
+          "name": "lw.package.scope",
+          "value": "windows-only-app-local-runtime"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:generic/microsoft-ucrt@10.0.22621.0",
+      "name": "Microsoft Universal C Runtime",
+      "version": "10.0.22621.0",
+      "properties": [
+        {
+          "name": "lw.package.scope",
+          "value": "windows-only-app-local-runtime"
+        }
+      ]
+    }
+  ],
+  "dependencies": [
+    {
+      "ref": "pkg:generic/lw.PPOCR.C@0.1.0",
+      "dependsOn": [
+        "lw-model:ppocrv6-tiny-rec:lwm-v0.1",
+        "lw-file:ppocrv6-tiny-dictionary"
+      ]
+    }
+  ]
+}

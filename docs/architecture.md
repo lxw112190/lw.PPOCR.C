@@ -58,7 +58,9 @@ isolated under `src/simd` after scalar correctness.
    dictionary.
 8. Public recognize-only C API with caller-owned UTF-8 output — complete and
    contract-tested on Windows x64/x86; ABI remains experimental before 1.0.
-9. Only after correctness: memory, SIMD, threads, CLS, DET, and full OCR.
+9. Static/shared development packages and dependency-free C Demo — complete
+   locally for Windows x64/x86, including installed-package execution.
+10. Only after correctness: memory, SIMD, threads, CLS, DET, and full OCR.
 
 ## Compatibility claims
 

@@ -52,8 +52,9 @@ cmake --build build --config Release
 ctest --test-dir build -C Release --output-on-failure
 ```
 
-The normal build creates `build/models/rec.lwm`, the pure-C static loader
-library, and `lwm-inspect`. Inspect the converted model with:
+The normal build creates `build/models/rec.lwm`, static and shared pure-C
+libraries, the `lw-recognize-ppm` public-API Demo, and `lwm-inspect`. Inspect the
+converted model with:
 
 ```powershell
 .\build\Release\lwm-inspect.exe .\build\models\rec.lwm
@@ -74,6 +75,8 @@ The private complete-graph execution gate is documented in
 [`docs/graph-executor.md`](docs/graph-executor.md).
 The private end-to-end REC preprocessing and decoding contract is documented in
 [`docs/rec-pipeline.md`](docs/rec-pipeline.md).
+Development package contents and Demo commands are documented in
+[`docs/package.md`](docs/package.md).
 
 ## Runtime dependency boundary
 

@@ -29,6 +29,14 @@ jobs:
         run: cmake --build build --target analyze_models --config Release
       - name: Test
         run: ctest --test-dir build -C Release --output-on-failure
+      - name: Package development archive
+        run: cpack --config build/CPackConfig.cmake -C Release
       - name: Verify generated reports are current
         shell: bash
         run: git diff --exit-code -- docs/SUPPORTED_OPS_V0.md docs/ppocrv6-tiny-analysis.json
+      - name: Upload development archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: lw.PPOCR.C-${{ runner.os }}-${{ runner.arch }}
+          path: build/packages/*
+          if-no-files-found: error

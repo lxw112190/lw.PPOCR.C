@@ -14,10 +14,20 @@ License 2.0. See `licenses/PaddleOCR-models-APACHE-2.0.txt`.
 ## Converter-only Python dependencies
 
 - ONNX — Apache-2.0
+- ONNX Runtime — MIT
 - NumPy — BSD-3-Clause
+- Pillow — HPND
 - protobuf — BSD-3-Clause
 - ml_dtypes — Apache-2.0
 - typing_extensions — PSF-2.0
 
-These packages are development/converter dependencies. They are not permitted
-in the future pure-C deployment runtime.
+These packages are development/converter/test dependencies. They are not linked
+into the pure-C deployment runtime.
+
+## Windows runtime files
+
+Windows binary archives include the Microsoft Visual C++ Runtime and Universal
+C Runtime app-local files selected by CMake from the installed Visual Studio
+toolchain. Their redistribution and use are governed by the applicable
+Microsoft Visual Studio license terms. They are packaging dependencies, not
+source dependencies of the pure-C OCR runtime.
