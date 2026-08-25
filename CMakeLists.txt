@@ -51,6 +51,7 @@ add_library(lw_ppocr_c STATIC
     src/kernels/scalar_softmax.c
     src/ppocr/ctc_decode.c
     src/ppocr/rec_preprocess.c
+    src/ppocr/recognizer.c
     src/runtime/executor.c
     src/runtime/memory.c
     src/runtime/model.c
@@ -129,6 +130,22 @@ if(BUILD_TESTING)
         target_compile_options(test-c-abi PRIVATE -Wall -Wextra -Wpedantic -Werror)
     endif()
     add_test(NAME c_abi_contract COMMAND test-c-abi)
+
+    add_executable(test-recognizer-api tests/test_recognizer.c)
+    target_link_libraries(test-recognizer-api PRIVATE lw_ppocr_c)
+    target_compile_features(test-recognizer-api PRIVATE c_std_11)
+    add_dependencies(test-recognizer-api convert_rec_model)
+    if(MSVC)
+        target_compile_options(test-recognizer-api PRIVATE /W4 /WX /utf-8)
+    else()
+        target_compile_options(test-recognizer-api PRIVATE
+            -Wall -Wextra -Wpedantic -Werror)
+    endif()
+    add_test(
+        NAME recognizer_api_contract
+        COMMAND test-recognizer-api
+                "${LW_PPOCR_C_REC_LWM}"
+                "${CMAKE_CURRENT_SOURCE_DIR}/models/ppocrv6-tiny/ppocr_keys.txt")
 
     add_executable(kernel-reference-driver tests/kernel_reference_driver.c)
     target_link_libraries(kernel-reference-driver PRIVATE lw_ppocr_c)
@@ -212,6 +229,9 @@ if(BUILD_TESTING)
 
     add_executable(rec-pipeline-driver tests/rec_pipeline_driver.c)
     target_link_libraries(rec-pipeline-driver PRIVATE lw_ppocr_c)
+    if(WIN32)
+        target_link_libraries(rec-pipeline-driver PRIVATE shell32)
+    endif()
     target_include_directories(rec-pipeline-driver PRIVATE
         "${CMAKE_CURRENT_SOURCE_DIR}/src/runtime"
         "${CMAKE_CURRENT_SOURCE_DIR}/src/ppocr")

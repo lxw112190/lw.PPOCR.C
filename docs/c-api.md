@@ -1,10 +1,9 @@
 # Experimental C API
 
 The public API in `include/lw_infer.h` is available for integration experiments
-but is not ABI-frozen before 1.0. It currently covers model loading and REC
-session planning. Complete REC graph execution exists behind a private test
-interface but is not exposed in the public header yet. Pure-C BGR preprocessing
-and UTF-8 CTC decoding are also private implementation contracts.
+but is not ABI-frozen before 1.0. It covers low-level model/session planning and
+a complete recognize-only API for decoded BGR8 pixels. The recognizer hides
+preprocessing, graph execution, dictionary indexing, and UTF-8 CTC decoding.
 
 ## Ownership and thread model
 
@@ -13,6 +12,12 @@ and UTF-8 CTC decoding are also private implementation contracts.
 - A model must outlive every session created from it.
 - Separate sessions do not share mutable workspace and may later run in parallel.
 - A single session is not promised to be safe for concurrent calls.
+- `lw_recognizer_create` owns its model, dictionary, session, and reusable
+  input/output buffers until `lw_recognizer_free`.
+- Source BGR pixels and output text remain caller-owned.
+- Recognition performs no heap allocation after successful creation.
+- A single recognizer must not be called concurrently. Separate recognizers
+  own independent mutable state and may run in parallel.
 - Every successful create has one matching free; all free functions accept null.
 
 Paths passed to the library are UTF-8. The Windows implementation converts to
@@ -76,11 +81,72 @@ lw_session_free(session);
 lw_model_free(model);
 ```
 
-No public input data pointer is accepted yet, which prevents callers from
-mistaking a successful plan for completed inference. The internal executor is
-not an integration contract and may change without ABI notice. Applications
-also cannot pass JPEG/PNG bytes yet; the private preprocessing path starts from
-decoded BGR pixels.
+The low-level session planner still accepts no input data pointer. Applications
+should use the recognizer API for completed REC inference; the internal executor
+is not an integration contract and may change without ABI notice.
+
+## Public REC recognizer
+
+`lw_recognizer_create` accepts UTF-8 paths to one compatible REC `.lwm` model
+and dictionary. Its options have these defaults:
+
+| Field | Default | Meaning |
+|---|---:|---|
+| `target_width` | 320 | Model input width; input height is fixed at 48 |
+| `max_model_file_size` | 1 GiB | Model loader limit |
+| `max_workspace_size` | 512 MiB | Planned session workspace limit |
+| `max_tensor_size` | 256 MiB | Per-tensor limit |
+| `max_image_pixels` | 40,000,000 | Decoded source pixel limit |
+
+Zero option values retain their defaults. Reserved fields must remain zero.
+Creation rejects a dictionary whose class count does not match the model.
+
+`lw_recognizer_recognize_bgr_u8` accepts interleaved BGR unsigned-byte pixels,
+the accessible source byte count, width, height, and row stride. It does not
+accept JPEG/PNG file bytes. The source byte count and stride allow the runtime
+to reject truncated or invalid layouts before reading pixels.
+
+Text is NUL-terminated UTF-8 in a caller-owned buffer. Call
+`lw_recognizer_get_info` and allocate `max_text_capacity` once for the usual
+single-pass path. Alternatively, pass a null text pointer and zero capacity;
+recognition still runs and returns the exact `required_text_capacity`, so a
+second call is required to obtain text. An undersized buffer returns
+`LW_STATUS_OUT_OF_BOUNDS`, never partial text.
+
+`lw_recognition_result` reports the emitted CTC entry count, mean score, actual
+resized content width, output time steps, and required text capacity. Initialize
+every public structure with its matching `_init` function before use.
+
+```c
+lw_recognizer* recognizer = NULL;
+lw_recognizer_options options;
+lw_recognizer_info info;
+lw_recognition_result result;
+lw_error error;
+char* text;
+
+lw_recognizer_options_init(&options);
+lw_error_init(&error);
+if (lw_recognizer_create("rec.lwm", "ppocr_keys.txt", &options,
+                         &recognizer, &error) != LW_STATUS_OK) {
+    /* error.code and error.message */
+}
+
+lw_recognizer_info_init(&info);
+lw_recognizer_get_info(recognizer, &info);
+text = (char*)malloc((size_t)info.max_text_capacity);
+
+lw_recognition_result_init(&result);
+lw_error_init(&error);
+if (lw_recognizer_recognize_bgr_u8(
+        recognizer, bgr, bgr_byte_count, width, height, stride,
+        text, info.max_text_capacity, &result, &error) == LW_STATUS_OK) {
+    /* text is UTF-8; result.score and result.emitted_count are valid */
+}
+
+free(text);
+lw_recognizer_free(recognizer);
+```
 
 ## Errors
 
@@ -92,3 +158,7 @@ planning errors are:
 - `LW_STATUS_MEMORY_LIMIT`: tensor/workspace limit or size overflow;
 - `LW_STATUS_OUT_OF_MEMORY`: host allocation failure;
 - model load errors defined by the LWM loader.
+
+Recognition additionally returns `LW_STATUS_INVALID_SHAPE` for a truncated BGR
+layout, `LW_STATUS_OUT_OF_BOUNDS` for an insufficient text buffer, and
+`LW_STATUS_MEMORY_LIMIT` when decoded dimensions exceed `max_image_pixels`.

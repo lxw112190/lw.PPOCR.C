@@ -225,6 +225,20 @@ uint32_t lw_rec_dictionary_class_count(const lw_rec_dictionary* dictionary) {
     return dictionary == NULL ? 0u : dictionary->entry_count + 2u;
 }
 
+uint32_t lw_rec_dictionary_max_label_byte_count(const lw_rec_dictionary* dictionary) {
+    uint32_t maximum = 1u;
+    uint32_t index;
+    if (dictionary == NULL) {
+        return 0u;
+    }
+    for (index = 0u; index < dictionary->entry_count; ++index) {
+        if (dictionary->lengths[index] > maximum) {
+            maximum = dictionary->lengths[index];
+        }
+    }
+    return maximum;
+}
+
 static lw_status decode_pass(
     const lw_rec_dictionary* dictionary,
     const float* probabilities,

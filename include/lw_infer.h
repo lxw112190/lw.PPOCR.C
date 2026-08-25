@@ -90,8 +90,41 @@ typedef struct lw_session_info {
     uint64_t workspace_size;
 } lw_session_info;
 
+typedef struct lw_recognizer_options {
+    uint32_t struct_size;
+    uint32_t target_width;
+    uint32_t reserved0;
+    uint32_t reserved1;
+    uint64_t max_model_file_size;
+    uint64_t max_workspace_size;
+    uint64_t max_tensor_size;
+    uint64_t max_image_pixels;
+} lw_recognizer_options;
+
+typedef struct lw_recognizer_info {
+    uint32_t struct_size;
+    uint32_t target_width;
+    uint32_t input_height;
+    uint32_t time_steps;
+    uint32_t class_count;
+    uint32_t reserved;
+    uint64_t max_text_capacity;
+    uint64_t workspace_size;
+} lw_recognizer_info;
+
+typedef struct lw_recognition_result {
+    uint32_t struct_size;
+    uint32_t emitted_count;
+    float score;
+    uint32_t resized_width;
+    uint32_t time_steps;
+    uint32_t reserved;
+    uint64_t required_text_capacity;
+} lw_recognition_result;
+
 typedef struct lw_model lw_model;
 typedef struct lw_session lw_session;
+typedef struct lw_recognizer lw_recognizer;
 
 LW_API void lw_model_options_init(lw_model_options* options);
 LW_API void lw_model_info_init(lw_model_info* info);
@@ -119,6 +152,30 @@ LW_API lw_status lw_session_get_output_desc(
     const lw_session* session,
     uint32_t output_index,
     lw_tensor_desc* output);
+LW_API void lw_recognizer_options_init(lw_recognizer_options* options);
+LW_API void lw_recognizer_info_init(lw_recognizer_info* info);
+LW_API void lw_recognition_result_init(lw_recognition_result* result);
+LW_API lw_status lw_recognizer_create(
+    const char* model_path_utf8,
+    const char* dictionary_path_utf8,
+    const lw_recognizer_options* options,
+    lw_recognizer** out_recognizer,
+    lw_error* error);
+LW_API void lw_recognizer_free(lw_recognizer* recognizer);
+LW_API lw_status lw_recognizer_get_info(
+    const lw_recognizer* recognizer,
+    lw_recognizer_info* info);
+LW_API lw_status lw_recognizer_recognize_bgr_u8(
+    lw_recognizer* recognizer,
+    const uint8_t* source,
+    uint64_t source_byte_count,
+    uint32_t source_width,
+    uint32_t source_height,
+    uint32_t source_stride,
+    char* text_utf8,
+    uint64_t text_capacity,
+    lw_recognition_result* result,
+    lw_error* error);
 LW_API const char* lw_status_string(lw_status status);
 
 #ifdef __cplusplus

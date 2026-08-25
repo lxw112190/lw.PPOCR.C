@@ -26,6 +26,7 @@ lw_status lw_rec_dictionary_load(
     lw_error* error);
 void lw_rec_dictionary_free(lw_rec_dictionary* dictionary);
 uint32_t lw_rec_dictionary_class_count(const lw_rec_dictionary* dictionary);
+uint32_t lw_rec_dictionary_max_label_byte_count(const lw_rec_dictionary* dictionary);
 
 lw_status lw_rec_ctc_decode_f32(
     const lw_rec_dictionary* dictionary,

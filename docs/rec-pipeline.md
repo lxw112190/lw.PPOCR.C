@@ -64,12 +64,17 @@ tests additionally cover BOM/CRLF, Chinese, ASCII, multi-byte UTF-8, implicit
 space, blank-separated repeats, output-buffer sizing, invalid UTF-8, all-empty
 dictionaries, and non-finite probabilities.
 
-The same eleven-test suite passes locally on Windows x64 and Windows x86.
+The same twelve-test suite passes locally on Windows x64 and Windows x86.
 Linux CI and physical Windows 7 validation remain separate platform claims.
 
-## Deliberate boundary
+## Public wrapper and deliberate boundary
 
-The functions are declared under `src/ppocr/rec_internal.h`, not
-`include/lw_infer.h`. The next integration milestone must define a stable public
-run API, ownership, concurrency, limits, and whether image decoding belongs in
-the core library or a separate convenience layer.
+The low-level functions remain under `src/ppocr/rec_internal.h`. Applications
+use the opaque `lw_recognizer` API in `include/lw_infer.h`, which owns the model,
+dictionary, session, and preallocated input/output tensors. Callers own source
+pixels and the UTF-8 text buffer. A recognizer must not be called concurrently;
+separate recognizers have independent mutable state and may run in parallel.
+
+Encoded image decoding is deliberately not part of this milestone. A future
+convenience layer may decode JPEG/PNG, but the dependency-free core contract
+continues to accept decoded BGR8 pixels.

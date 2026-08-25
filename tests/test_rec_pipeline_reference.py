@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import re
+import shutil
 import subprocess
 import tempfile
 import unittest
@@ -230,14 +231,20 @@ class RecPipelineReferenceTest(unittest.TestCase):
         expected_text, expected_score, expected_count = ctc_reference(probabilities, labels)
         self.assertEqual(expected_text, "纯臻营养护发素")
         with tempfile.TemporaryDirectory() as directory:
+            unicode_assets = Path(directory) / "模型与字典"
+            unicode_assets.mkdir()
+            lwm_model = unicode_assets / "识别模型.lwm"
+            dictionary = unicode_assets / "字典.txt"
+            shutil.copyfile(self.lwm_model, lwm_model)
+            shutil.copyfile(self.dictionary, dictionary)
             source_path = Path(directory) / "source.bgr"
             output_path = Path(directory) / "text.txt"
             source_path.write_bytes(raw)
             completed = self.run_driver(
                 [
                     "pipeline",
-                    str(self.lwm_model),
-                    str(self.dictionary),
+                    str(lwm_model),
+                    str(dictionary),
                     str(source_path),
                     str(width),
                     str(height),

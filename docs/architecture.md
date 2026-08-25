@@ -5,13 +5,13 @@
 ```text
 Development machine                    Deployment target
 
-PP-OCR ONNX                            rec.lwm + FP32 input
+PP-OCR ONNX                            rec.lwm + dictionary + BGR8 pixels
     |                                     |
 Python + ONNX analyzer/converter          pure-C loader + session planner
     |                                     |
-validated, simplified REC graph           resolved shapes + one workspace
+validated, simplified REC graph           public recognizer C API
     |                                     |
-platform-independent LWM v0                private executor + scalar kernels
+platform-independent LWM v0                preprocess + executor + CTC
                                           |
 decoded BGR pixels -> REC preprocess -> probabilities -> UTF-8 CTC text
 ```
@@ -51,11 +51,14 @@ isolated under `src/simd` after scalar correctness.
 5. One scalar operator at a time with reference tests — complete; all 15
    operator types and 161 converted REC nodes have scalar Kernels.
 6. Exact REC graph executor and complete-output comparison — complete as a
-   private interface for widths 7 and 17; public ABI remains gated.
+   private interface for widths 7 and 17; applications use its public
+   recognize-only wrapper rather than the executor directly.
 7. Pure-C preprocess, CTC decoding, and REC golden tests — complete behind
    private interfaces, including a real sample crop and the production
    dictionary.
-8. Only after correctness: memory, SIMD, threads, CLS, DET, and full OCR.
+8. Public recognize-only C API with caller-owned UTF-8 output — complete and
+   contract-tested on Windows x64/x86; ABI remains experimental before 1.0.
+9. Only after correctness: memory, SIMD, threads, CLS, DET, and full OCR.
 
 ## Compatibility claims
 

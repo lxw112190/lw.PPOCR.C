@@ -1,9 +1,9 @@
 # Supported models
 
-No model is exposed through a public inference API yet. The exact REC model is
-now private-runtime verified through preprocessing, its full graph, and UTF-8
-CTC decoding. The gate remains internal while the public input/output ownership
-and image-decoding contracts are designed.
+The exact REC model is exposed through the experimental public recognize-only
+C API and verified through preprocessing, its full graph, and UTF-8 CTC
+decoding. Input/output ownership is defined; encoded image-file decoding stays
+outside the core API.
 
 The following exact conversion inputs are analysis-verified. REC is also
 converter-, loader-, dynamic-shape-, workspace-planner-, and full-graph-output

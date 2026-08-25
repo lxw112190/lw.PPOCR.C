@@ -13,9 +13,9 @@ verification.
 | Windows 10 x86 build | Design check | No | Windows 10 development host | Full graph and the same real cropped-text REC golden path pass |
 
 The current repository contains a development-time converter, a deployable
-pure-C loader/session planner, and complete private REC scalar kernels, but no
-public inference API. Its private full-graph executor, BGR preprocessing, UTF-8
-dictionary loader, and CTC decoder are correctness-tested.
+pure-C loader/session planner, complete REC scalar kernels, and a public
+recognize-only C API for decoded BGR8 pixels. Its graph executor, BGR
+preprocessing, UTF-8 dictionary loader, and CTC decoder are correctness-tested.
 Windows 10 x86 success checks 32-bit build/ABI, memory, and scalar execution
 assumptions; it does not establish Windows 7 compatibility.
 The CI column remains `No` until the updated workflow has run in the remote

@@ -16,8 +16,9 @@ converted REC operator types and all 161 nodes. A private, zero-allocation graph
 executor now binds LWM constants and planned workspace and matches the original
 ONNX REC output at two dynamic widths. Private pure-C BGR preprocessing and
 UTF-8 CTC decoding now complete a real cropped-text recognition golden path.
-A public run API and image-file decoder remain before recognition is available
-to applications.
+The public recognizer C API exposes that path with caller-owned UTF-8 output
+buffers and bounded, preallocated inference memory. Image-file decoding remains
+outside the core: applications currently provide decoded BGR8 pixels.
 
 Current scope:
 

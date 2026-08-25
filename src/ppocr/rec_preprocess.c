@@ -49,7 +49,7 @@ lw_status lw_rec_preprocess_bgr_u8(
     }
     required_source_bytes = (uint64_t)(source_height - 1u) * source_stride + row_bytes;
     required_output_elements = (uint64_t)3u * LW_REC_INPUT_HEIGHT * target_width;
-    if (source_byte_count < required_source_bytes ||
+    if (required_source_bytes > SIZE_MAX || source_byte_count < required_source_bytes ||
         output_element_count != required_output_elements ||
         required_output_elements > SIZE_MAX / sizeof(float)) {
         return LW_STATUS_INVALID_SHAPE;

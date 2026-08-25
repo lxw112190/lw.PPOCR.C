@@ -50,10 +50,10 @@ verified until that workflow runs remotely.
 
 ## Deliberate boundary
 
-There is still no public inference call. A private executor now dispatches all
-161 converted REC nodes, binds constants/workspace, and passes complete-output
-comparison. Private preprocessing and CTC decoding now complete the REC golden
-path; the final public run contract remains. The MatMul contract deliberately
+The public recognizer API now wraps the private executor, preprocessing, and
+CTC decoder without exposing kernel or tensor internals. The executor dispatches
+all 161 converted REC nodes, binds constants/workspace, and passes
+complete-output comparison. The MatMul contract deliberately
 matches the supported REC graph: one
 or more input matrices multiplied by one shared two-dimensional weight matrix.
 
