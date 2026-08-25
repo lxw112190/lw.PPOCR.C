@@ -12,8 +12,10 @@ Python、OpenCV、ONNX Runtime、OpenVINO、TensorRT 或 protobuf。
 Exact PP-OCRv6 tiny model analysis, the deterministic REC-to-LWM v0.1
 converter, the bounds-checked pure-C model loader, and runtime REC shape/workspace
 planning are implemented. Reference-tested scalar kernels now cover all 15
-converted REC operator types and all 161 nodes. Graph execution, complete-logit
-comparison, preprocessing, and CTC decoding remain before recognition works.
+converted REC operator types and all 161 nodes. A private, zero-allocation graph
+executor now binds LWM constants and planned workspace and matches the original
+ONNX REC output at two dynamic widths. A public run API, preprocessing, and CTC
+decoding remain before recognition is available to applications.
 
 Current scope:
 
@@ -65,6 +67,8 @@ The experimental model/session API and ownership rules are documented in
 [`docs/c-api.md`](docs/c-api.md).
 The internal scalar-kernel scope and its test boundary are documented in
 [`docs/scalar-kernels.md`](docs/scalar-kernels.md).
+The private complete-graph execution gate is documented in
+[`docs/graph-executor.md`](docs/graph-executor.md).
 
 ## Runtime dependency boundary
 

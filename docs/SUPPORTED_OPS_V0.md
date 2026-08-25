@@ -133,4 +133,4 @@ it exists in ONNX—the exact model/operator matrix above is the requirement sou
 1. Lock conversion to the exact verified REC model identity and opset.
 2. Remove only structurally verified aliases and retain every required data-path node.
 3. Require an independent NumPy or ONNX reference test for every LWM operator.
-4. Compare complete-graph logits before exposing a public inference call.
+4. Compare complete-graph output before exposing a public inference call; enforce this with the private executor reference test.

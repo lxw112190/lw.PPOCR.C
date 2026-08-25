@@ -633,7 +633,7 @@ def render_markdown(report: dict[str, Any]) -> str:
         "1. Lock conversion to the exact verified REC model identity and opset.",
         "2. Remove only structurally verified aliases and retain every required data-path node.",
         "3. Require an independent NumPy or ONNX reference test for every LWM operator.",
-        "4. Compare complete-graph logits before exposing a public inference call.",
+        "4. Compare complete-graph output before exposing a public inference call; enforce this with the private executor reference test.",
         "",
     ])
     return "\n".join(lines)

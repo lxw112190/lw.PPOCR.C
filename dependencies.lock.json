@@ -19,6 +19,14 @@
       "purl": "pkg:pypi/onnx@1.22.0"
     },
     {
+      "name": "onnxruntime",
+      "version": "1.21.0",
+      "license": "MIT",
+      "scope": "complete-graph-reference-tests",
+      "source": "https://github.com/microsoft/onnxruntime",
+      "purl": "pkg:pypi/onnxruntime@1.21.0"
+    },
+    {
       "name": "protobuf",
       "version": "4.25.3",
       "license": "BSD-3-Clause",
@@ -41,6 +49,54 @@
       "scope": "converter-transitive",
       "source": "https://github.com/python/typing_extensions",
       "purl": "pkg:pypi/typing_extensions@4.15.0"
+    },
+    {
+      "name": "coloredlogs",
+      "version": "15.0.1",
+      "license": "MIT",
+      "scope": "onnxruntime-transitive",
+      "source": "https://github.com/xolox/python-coloredlogs",
+      "purl": "pkg:pypi/coloredlogs@15.0.1"
+    },
+    {
+      "name": "flatbuffers",
+      "version": "25.2.10",
+      "license": "Apache-2.0",
+      "scope": "onnxruntime-transitive",
+      "source": "https://github.com/google/flatbuffers",
+      "purl": "pkg:pypi/flatbuffers@25.2.10"
+    },
+    {
+      "name": "humanfriendly",
+      "version": "10.0",
+      "license": "MIT",
+      "scope": "coloredlogs-transitive",
+      "source": "https://github.com/xolox/python-humanfriendly",
+      "purl": "pkg:pypi/humanfriendly@10.0"
+    },
+    {
+      "name": "packaging",
+      "version": "24.2",
+      "license": "Apache-2.0 OR BSD-2-Clause",
+      "scope": "onnxruntime-transitive",
+      "source": "https://github.com/pypa/packaging",
+      "purl": "pkg:pypi/packaging@24.2"
+    },
+    {
+      "name": "mpmath",
+      "version": "1.3.0",
+      "license": "BSD-3-Clause",
+      "scope": "sympy-transitive",
+      "source": "https://github.com/mpmath/mpmath",
+      "purl": "pkg:pypi/mpmath@1.3.0"
+    },
+    {
+      "name": "sympy",
+      "version": "1.14.0",
+      "license": "BSD-3-Clause",
+      "scope": "onnxruntime-transitive",
+      "source": "https://github.com/sympy/sympy",
+      "purl": "pkg:pypi/sympy@1.14.0"
     }
   ],
   "model_assets": [

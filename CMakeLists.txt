@@ -49,6 +49,7 @@ add_library(lw_ppocr_c STATIC
     src/kernels/scalar_matmul.c
     src/kernels/scalar_reduction.c
     src/kernels/scalar_softmax.c
+    src/runtime/executor.c
     src/runtime/memory.c
     src/runtime/model.c
     src/runtime/session.c
@@ -180,6 +181,29 @@ if(BUILD_TESTING)
                 --driver "$<TARGET_FILE:conv-reference-driver>")
     set_tests_properties(conv_kernel_reference PROPERTIES
         WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
+
+    add_executable(rec-graph-driver tests/rec_graph_driver.c)
+    target_link_libraries(rec-graph-driver PRIVATE lw_ppocr_c)
+    target_include_directories(rec-graph-driver PRIVATE
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/runtime")
+    target_compile_features(rec-graph-driver PRIVATE c_std_11)
+    add_dependencies(rec-graph-driver convert_rec_model)
+    if(MSVC)
+        target_compile_options(rec-graph-driver PRIVATE /W4 /WX /utf-8)
+    else()
+        target_compile_options(rec-graph-driver PRIVATE
+            -Wall -Wextra -Wpedantic -Werror)
+    endif()
+    add_test(
+        NAME rec_graph_reference
+        COMMAND "${Python3_EXECUTABLE}"
+                "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_rec_graph_reference.py"
+                --driver "$<TARGET_FILE:rec-graph-driver>"
+                --lwm-model "${LW_PPOCR_C_REC_LWM}"
+                --onnx-model "${LW_PPOCR_C_REC_ONNX}")
+    set_tests_properties(rec_graph_reference PROPERTIES
+        WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+        TIMEOUT 360)
 
     add_test(
         NAME lwm_corruption

@@ -2,7 +2,8 @@
 
 The public API in `include/lw_infer.h` is available for integration experiments
 but is not ABI-frozen before 1.0. It currently covers model loading and REC
-session planning; inference execution is not implemented yet.
+session planning. Complete REC graph execution exists behind a private test
+interface but is not exposed in the public header yet.
 
 ## Ownership and thread model
 
@@ -74,8 +75,9 @@ lw_session_free(session);
 lw_model_free(model);
 ```
 
-No input data pointer is accepted yet, which prevents callers from mistaking a
-successful plan for completed inference.
+No public input data pointer is accepted yet, which prevents callers from
+mistaking a successful plan for completed inference. The internal executor is
+not an integration contract and may change without ABI notice.
 
 ## Errors
 

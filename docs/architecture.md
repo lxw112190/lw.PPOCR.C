@@ -5,13 +5,15 @@
 ```text
 Development machine                    Deployment target
 
-PP-OCR ONNX                            rec.lwm
+PP-OCR ONNX                            rec.lwm + FP32 input
     |                                     |
 Python + ONNX analyzer/converter          pure-C loader + session planner
     |                                     |
 validated, simplified REC graph           resolved shapes + one workspace
     |                                     |
-platform-independent LWM v0                tested scalar kernels; executor future
+platform-independent LWM v0                private executor + scalar kernels
+                                          |
+                                      REC probabilities
 ```
 
 The converter and runtime are separate products with separate dependency
@@ -48,7 +50,8 @@ isolated under `src/simd` after scalar correctness.
 4. Tensor and dynamic session memory planning — complete.
 5. One scalar operator at a time with reference tests — complete; all 15
    operator types and 161 converted REC nodes have scalar Kernels.
-6. Exact REC graph executor and complete-logit comparison.
+6. Exact REC graph executor and complete-output comparison — complete as a
+   private interface for widths 7 and 17; public ABI remains gated.
 7. Pure-C preprocess, CTC decoding, and REC golden tests.
 8. Only after correctness: memory, SIMD, threads, CLS, DET, and full OCR.
 

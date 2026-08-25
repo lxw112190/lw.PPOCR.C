@@ -50,11 +50,11 @@ verified until that workflow runs remotely.
 
 ## Deliberate boundary
 
-There is still no public inference call. All 161 converted REC nodes now have
-a reference-tested scalar Kernel, but graph dispatch, constant/workspace
-binding, full-logit comparison, preprocessing, and CTC decoding remain. The
-MatMul contract deliberately matches the supported REC graph: one or more
-input matrices multiplied by one shared two-dimensional weight matrix.
+There is still no public inference call. A private executor now dispatches all
+161 converted REC nodes, binds constants/workspace, and passes complete-output
+comparison. Preprocessing, CTC decoding, and the final public run contract
+remain. The MatMul contract deliberately matches the supported REC graph: one
+or more input matrices multiplied by one shared two-dimensional weight matrix.
 
 The Conv implementation is a direct scalar loop with no im2col allocation. A
 single grouped implementation covers the model's normal, grouped, and
