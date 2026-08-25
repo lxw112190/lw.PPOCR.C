@@ -1,0 +1,216 @@
+#include "scalar_kernels.h"
+
+#include <inttypes.h>
+#include <stddef.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <string.h>
+
+static void print_values(const char* name, const float* values, uint64_t count) {
+    uint64_t index;
+    printf("%s %" PRIu64, name, count);
+    for (index = 0u; index < count; ++index) {
+        printf(" %.9g", (double)values[index]);
+    }
+    putchar('\n');
+}
+
+static int expect_status(const char* name, lw_status actual, lw_status expected) {
+    if (actual != expected) {
+        fprintf(stderr, "%s: expected %s, got %s\n",
+                name, lw_status_string(expected), lw_status_string(actual));
+        return 0;
+    }
+    return 1;
+}
+
+static int is_32_bit_process(void) {
+    volatile size_t pointer_size = sizeof(size_t);
+    return pointer_size == 4u;
+}
+
+static void fill_values(float* values, uint32_t count, uint32_t multiplier,
+                        uint32_t modulus, int32_t offset, float divisor) {
+    uint32_t index;
+    for (index = 0u; index < count; ++index) {
+        values[index] =
+            (float)((int32_t)((index * multiplier) % modulus) - offset) / divisor;
+    }
+}
+
+int main(void) {
+    const int32_t normal_input_dimensions[4] = {1, 2, 4, 5};
+    const int32_t normal_weight_dimensions[4] = {3, 2, 3, 3};
+    const int32_t invalid_weight_dimensions[4] = {3, 1, 3, 3};
+    const int32_t normal_output_dimensions[4] = {1, 3, 2, 3};
+    const int32_t invalid_output_dimensions[4] = {1, 3, 2, 2};
+    const int32_t normal_kernel[2] = {3, 3};
+    const int32_t normal_strides[2] = {2, 2};
+    const int32_t unit_dilations[2] = {1, 1};
+    const int32_t normal_pads[4] = {1, 1, 1, 1};
+    const int32_t grouped_input_dimensions[4] = {1, 4, 4, 4};
+    const int32_t grouped_weight_dimensions[4] = {6, 2, 3, 3};
+    const int32_t grouped_output_dimensions[4] = {1, 6, 4, 4};
+    const int32_t unit_strides[2] = {1, 1};
+    const int32_t depthwise_input_dimensions[4] = {1, 3, 4, 5};
+    const int32_t depthwise_weight_dimensions[4] = {3, 1, 3, 2};
+    const int32_t depthwise_output_dimensions[4] = {1, 3, 4, 5};
+    const int32_t depthwise_kernel[2] = {3, 2};
+    const int32_t depthwise_dilations[2] = {1, 2};
+    const int32_t batch_norm_dimensions[4] = {2, 3, 2, 2};
+    const float normal_bias[3] = {0.25f, -0.5f, 1.0f};
+    const float batch_norm_scale[3] = {1.5f, -0.75f, 0.25f};
+    const float batch_norm_bias[3] = {0.1f, 0.5f, -1.0f};
+    const float batch_norm_mean[3] = {-0.25f, 1.0f, 0.5f};
+    const float batch_norm_variance[3] = {0.5f, 2.0f, 0.25f};
+    const float invalid_variance[3] = {0.5f, -1.0f, 0.25f};
+    float normal_input[40];
+    float normal_weights[54];
+    float normal_output[18];
+    float grouped_input[64];
+    float grouped_weights[108];
+    float grouped_output[96];
+    float depthwise_input[60];
+    float depthwise_weights[18];
+    float depthwise_output[60];
+    float batch_norm_input[24];
+    float batch_norm_output[24];
+    float batch_norm_in_place[24];
+    lw_status status;
+
+    fill_values(normal_input, 40u, 5u, 19u, 9, 4.0f);
+    fill_values(normal_weights, 54u, 7u, 17u, 8, 6.0f);
+    status = lw_scalar_conv2d_f32(
+        normal_input, normal_weights, normal_bias, 3u, normal_output,
+        normal_input_dimensions, normal_weight_dimensions,
+        normal_output_dimensions, normal_kernel, normal_strides,
+        unit_dilations, normal_pads, 1u);
+    if (!expect_status("normal conv", status, LW_STATUS_OK)) {
+        return 1;
+    }
+    print_values("conv", normal_output, 18u);
+
+    fill_values(grouped_input, 64u, 3u, 23u, 11, 5.0f);
+    fill_values(grouped_weights, 108u, 11u, 29u, 14, 7.0f);
+    status = lw_scalar_conv2d_f32(
+        grouped_input, grouped_weights, NULL, 0u, grouped_output,
+        grouped_input_dimensions, grouped_weight_dimensions,
+        grouped_output_dimensions, normal_kernel, unit_strides,
+        unit_dilations, normal_pads, 2u);
+    if (!expect_status("grouped conv", status, LW_STATUS_OK)) {
+        return 1;
+    }
+    print_values("grouped_conv", grouped_output, 96u);
+
+    fill_values(depthwise_input, 60u, 13u, 31u, 15, 8.0f);
+    fill_values(depthwise_weights, 18u, 5u, 13u, 6, 5.0f);
+    status = lw_scalar_conv2d_f32(
+        depthwise_input, depthwise_weights, NULL, 0u, depthwise_output,
+        depthwise_input_dimensions, depthwise_weight_dimensions,
+        depthwise_output_dimensions, depthwise_kernel, unit_strides,
+        depthwise_dilations, normal_pads, 3u);
+    if (!expect_status("depthwise conv", status, LW_STATUS_OK)) {
+        return 1;
+    }
+    print_values("depthwise_conv", depthwise_output, 60u);
+
+    fill_values(batch_norm_input, 24u, 7u, 21u, 10, 4.0f);
+    status = lw_scalar_batch_normalization_f32(
+        batch_norm_input, batch_norm_scale, batch_norm_bias,
+        batch_norm_mean, batch_norm_variance, 3u, 1.0e-5f,
+        batch_norm_output, 4u, batch_norm_dimensions);
+    if (!expect_status("batch normalization", status, LW_STATUS_OK)) {
+        return 1;
+    }
+    print_values("batch_norm", batch_norm_output, 24u);
+
+    memcpy(batch_norm_in_place, batch_norm_input, sizeof(batch_norm_input));
+    status = lw_scalar_batch_normalization_f32(
+        batch_norm_in_place, batch_norm_scale, batch_norm_bias,
+        batch_norm_mean, batch_norm_variance, 3u, 1.0e-5f,
+        batch_norm_in_place, 4u, batch_norm_dimensions);
+    if (!expect_status("in-place batch normalization", status, LW_STATUS_OK)) {
+        return 1;
+    }
+    print_values("batch_norm_in_place", batch_norm_in_place, 24u);
+
+    status = lw_scalar_conv2d_f32(
+        normal_input, normal_weights, normal_bias, 3u, normal_output,
+        normal_input_dimensions, invalid_weight_dimensions,
+        normal_output_dimensions, normal_kernel, normal_strides,
+        unit_dilations, normal_pads, 1u);
+    if (!expect_status("conv input channels", status, LW_STATUS_INVALID_SHAPE)) {
+        return 1;
+    }
+    status = lw_scalar_conv2d_f32(
+        normal_input, normal_weights, normal_bias, 3u, normal_output,
+        normal_input_dimensions, normal_weight_dimensions,
+        invalid_output_dimensions, normal_kernel, normal_strides,
+        unit_dilations, normal_pads, 1u);
+    if (!expect_status("conv output shape", status, LW_STATUS_INVALID_SHAPE)) {
+        return 1;
+    }
+    status = lw_scalar_conv2d_f32(
+        normal_input, normal_weights, normal_bias, 2u, normal_output,
+        normal_input_dimensions, normal_weight_dimensions,
+        normal_output_dimensions, normal_kernel, normal_strides,
+        unit_dilations, normal_pads, 1u);
+    if (!expect_status("conv bias count", status, LW_STATUS_INVALID_SHAPE)) {
+        return 1;
+    }
+    status = lw_scalar_conv2d_f32(
+        normal_input, normal_weights, normal_bias, 3u, normal_output,
+        normal_input_dimensions, normal_weight_dimensions,
+        normal_output_dimensions, normal_kernel, normal_strides,
+        unit_dilations, normal_pads, 0u);
+    if (!expect_status("conv zero groups", status, LW_STATUS_INVALID_SHAPE)) {
+        return 1;
+    }
+    status = lw_scalar_conv2d_f32(
+        normal_input, normal_weights, normal_bias, 3u, normal_input,
+        normal_input_dimensions, normal_weight_dimensions,
+        normal_output_dimensions, normal_kernel, normal_strides,
+        unit_dilations, normal_pads, 1u);
+    if (!expect_status("conv alias", status, LW_STATUS_INVALID_ARGUMENT)) {
+        return 1;
+    }
+    status = lw_scalar_batch_normalization_f32(
+        batch_norm_input, batch_norm_scale, batch_norm_bias,
+        batch_norm_mean, batch_norm_variance, 2u, 1.0e-5f,
+        batch_norm_output, 4u, batch_norm_dimensions);
+    if (!expect_status("batch normalization parameter count", status,
+                       LW_STATUS_INVALID_SHAPE)) {
+        return 1;
+    }
+    status = lw_scalar_batch_normalization_f32(
+        batch_norm_input, batch_norm_scale, batch_norm_bias,
+        batch_norm_mean, invalid_variance, 3u, 1.0e-5f,
+        batch_norm_output, 4u, batch_norm_dimensions);
+    if (!expect_status("batch normalization variance", status,
+                       LW_STATUS_INVALID_ARGUMENT)) {
+        return 1;
+    }
+    status = lw_scalar_batch_normalization_f32(
+        batch_norm_input, batch_norm_scale, batch_norm_bias,
+        batch_norm_mean, batch_norm_variance, 3u, 0.0f,
+        batch_norm_output, 4u, batch_norm_dimensions);
+    if (!expect_status("batch normalization epsilon", status,
+                       LW_STATUS_INVALID_SHAPE)) {
+        return 1;
+    }
+    if (is_32_bit_process()) {
+        const int32_t large_dimensions[4] = {1, 1, 65536, 65536};
+        const int32_t point_kernel[2] = {1, 1};
+        const int32_t no_pads[4] = {0, 0, 0, 0};
+        const int32_t point_weight_dimensions[4] = {1, 1, 1, 1};
+        status = lw_scalar_conv2d_f32(
+            normal_input, normal_weights, NULL, 0u, normal_output,
+            large_dimensions, point_weight_dimensions, large_dimensions,
+            point_kernel, unit_strides, unit_dilations, no_pads, 1u);
+        if (!expect_status("conv 32-bit byte overflow", status,
+                           LW_STATUS_OUT_OF_BOUNDS)) {
+            return 1;
+        }
+    }
+    return 0;
+}

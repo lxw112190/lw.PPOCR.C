@@ -21,7 +21,9 @@ interfaces; they are not part of the public C ABI yet.
 | Transpose | 3 | Contiguous rank-aware permutation |
 | Unsqueeze | 2 | Validated shape-only layout copy |
 | MatMul | 2 | Batched input matrices with one shared 2D weight matrix |
-| **Total** | **120 / 161** | Kernel available and reference-tested |
+| Conv | 37 | NCHW normal, grouped, and Depthwise convolution |
+| BatchNormalization | 4 | Inference-mode channel normalization |
+| **Total** | **161 / 161** | Kernel available and reference-tested |
 
 The binary kernels validate the expected output shape against NumPy/ONNX-style
 broadcast rules and reject an output buffer that aliases either input. The
@@ -34,20 +36,27 @@ are checked before pointer indexing, including 32-bit builds.
 `kernel-reference-driver` emits deterministic results for representative
 three-dimensional broadcasts, activations, and a Softmax input containing
 values near `+1000` and `-1000`. `tensor-reference-driver` covers layout
-changes, multi-axis reduction, padded AveragePool, and batched MatMul. Their
-Python tests reconstruct the same values with NumPy and check every output
-using a tight FP32 tolerance. The native drivers also check invalid shapes,
-duplicate or invalid axes, forbidden aliases, null inputs, and non-finite
-parameters.
+changes, multi-axis reduction, padded AveragePool, and batched MatMul.
+`conv-reference-driver` covers normal, grouped, and Depthwise Conv plus
+in-place BatchNormalization. The Conv/BN expectations come from ONNX's
+opset-11 ReferenceEvaluator; the other Python tests use NumPy. Every output is
+checked with an FP32 tolerance. The native drivers also check invalid shapes,
+duplicate or invalid axes, forbidden aliases, null inputs, non-finite
+parameters, and 32-bit buffer-size overflow.
 
-The same test is built and passes locally for Windows x64 and Windows x86.
+The same test suite is built and passes locally for Windows x64 and Windows x86.
 Linux remains covered by the repository CI definition but is not claimed as
 verified until that workflow runs remotely.
 
 ## Deliberate boundary
 
-There is still no public inference call. The runtime does not execute the REC
-graph until the remaining 37 `Conv` and 4 `BatchNormalization` nodes are
-implemented and the executor can reject unsupported nodes atomically. The
+There is still no public inference call. All 161 converted REC nodes now have
+a reference-tested scalar Kernel, but graph dispatch, constant/workspace
+binding, full-logit comparison, preprocessing, and CTC decoding remain. The
 MatMul contract deliberately matches the supported REC graph: one or more
 input matrices multiplied by one shared two-dimensional weight matrix.
+
+The Conv implementation is a direct scalar loop with no im2col allocation. A
+single grouped implementation covers the model's normal, grouped, and
+Depthwise configurations, including its 1x5 Depthwise layer. This is the
+correctness baseline, not a performance claim.

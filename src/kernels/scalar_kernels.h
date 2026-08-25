@@ -92,5 +92,30 @@ lw_status lw_scalar_matmul_shared_f32(
     uint32_t rows,
     uint32_t inner_dimension,
     uint32_t columns);
+lw_status lw_scalar_conv2d_f32(
+    const float* input,
+    const float* weights,
+    const float* bias,
+    uint32_t bias_count,
+    float* output,
+    const int32_t input_dimensions[4],
+    const int32_t weight_dimensions[4],
+    const int32_t output_dimensions[4],
+    const int32_t kernel[2],
+    const int32_t strides[2],
+    const int32_t dilations[2],
+    const int32_t pads[4],
+    uint32_t groups);
+lw_status lw_scalar_batch_normalization_f32(
+    const float* input,
+    const float* scale,
+    const float* bias,
+    const float* mean,
+    const float* variance,
+    uint32_t parameter_count,
+    float epsilon,
+    float* output,
+    uint32_t rank,
+    const int32_t* dimensions);
 
 #endif

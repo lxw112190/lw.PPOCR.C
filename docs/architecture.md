@@ -46,11 +46,11 @@ isolated under `src/simd` after scalar correctness.
 2. Non-frozen LWM v0 definition and deterministic REC converter — complete.
 3. Bounds-checked loader for untrusted LWM input — complete.
 4. Tensor and dynamic session memory planning — complete.
-5. One scalar operator at a time with reference tests — in progress; 13/15
-   operator types cover 120/161 converted REC nodes. Conv and
-   BatchNormalization remain.
-6. Pure-C preprocess, CTC decoding, and REC golden tests.
-7. Only after correctness: memory, SIMD, threads, CLS, DET, and full OCR.
+5. One scalar operator at a time with reference tests — complete; all 15
+   operator types and 161 converted REC nodes have scalar Kernels.
+6. Exact REC graph executor and complete-logit comparison.
+7. Pure-C preprocess, CTC decoding, and REC golden tests.
+8. Only after correctness: memory, SIMD, threads, CLS, DET, and full OCR.
 
 ## Compatibility claims
 

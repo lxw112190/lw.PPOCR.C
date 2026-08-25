@@ -43,6 +43,7 @@ add_custom_target(convert_rec_model ALL
 
 add_library(lw_ppocr_c STATIC
     src/kernels/scalar_activation.c
+    src/kernels/scalar_conv.c
     src/kernels/scalar_elementwise.c
     src/kernels/scalar_layout.c
     src/kernels/scalar_matmul.c
@@ -159,6 +160,25 @@ if(BUILD_TESTING)
                 "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_tensor_kernels_reference.py"
                 --driver "$<TARGET_FILE:tensor-reference-driver>")
     set_tests_properties(tensor_kernel_reference PROPERTIES
+        WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
+
+    add_executable(conv-reference-driver tests/conv_reference_driver.c)
+    target_link_libraries(conv-reference-driver PRIVATE lw_ppocr_c)
+    target_include_directories(conv-reference-driver PRIVATE
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/kernels")
+    target_compile_features(conv-reference-driver PRIVATE c_std_11)
+    if(MSVC)
+        target_compile_options(conv-reference-driver PRIVATE /W4 /WX /utf-8)
+    else()
+        target_compile_options(conv-reference-driver PRIVATE
+            -Wall -Wextra -Wpedantic -Werror)
+    endif()
+    add_test(
+        NAME conv_kernel_reference
+        COMMAND "${Python3_EXECUTABLE}"
+                "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_conv_kernels_reference.py"
+                --driver "$<TARGET_FILE:conv-reference-driver>")
+    set_tests_properties(conv_kernel_reference PROPERTIES
         WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
 
     add_test(

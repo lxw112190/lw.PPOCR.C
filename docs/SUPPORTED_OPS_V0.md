@@ -92,14 +92,13 @@ Operators: `Add` × 52, `AveragePool` × 1, `BatchNormalization` × 4, `Conv` ×
 
 The exact REC graph contains `Add`, `AveragePool`, `BatchNormalization`, `Conv`, `Div`, `Erf`, `HardSigmoid`, `Identity`, `MatMul`, `Mul`, `ReduceMean`, `Relu`, `Softmax`, `Squeeze`, `Transpose`, `Unsqueeze`.
 
-Before scalar kernel implementation, the converter should first remove all Identity
-nodes and fuse verified Conv + BatchNormalization pairs. Subject to numerical tests,
-the initial executable REC operator candidates are:
+The REC converter removes verified Identity aliases. The remaining executable
+operator requirement derived from this exact model is:
 
 `Add`, `AveragePool`, `BatchNormalization`, `Conv`, `Div`, `Erf`, `HardSigmoid`, `MatMul`, `Mul`, `ReduceMean`, `Relu`, `Softmax`, `Squeeze`, `Transpose`, `Unsqueeze`.
 
-This is a candidate set, not a frozen LWM contract. Each operator still needs an
-independent reference test before it becomes supported.
+This analysis-derived set is not a frozen LWM contract. Runtime implementation
+status and independent reference-test coverage are tracked in `scalar-kernels.md`.
 
 ## REC dynamic-width propagation
 
@@ -129,9 +128,9 @@ The first performance work should therefore follow correctness-tested scalar Con
 metadata operators should be minimized in the converter. No kernel is justified solely because
 it exists in ONNX—the exact model/operator matrix above is the requirement source.
 
-## Next implementation gate
+## Runtime handoff requirements
 
-1. Define non-frozen LWM v0 records for the verified REC graph only.
-2. Implement deterministic REC conversion with Identity removal and guarded BN fusion.
-3. Implement a bounds-checked pure-C LWM loader before adding executor kernels.
-4. Add one scalar operator at a time with NumPy/ONNX Runtime reference tests.
+1. Lock conversion to the exact verified REC model identity and opset.
+2. Remove only structurally verified aliases and retain every required data-path node.
+3. Require an independent NumPy or ONNX reference test for every LWM operator.
+4. Compare complete-graph logits before exposing a public inference call.
