@@ -59,6 +59,8 @@ int main(void) {
     const int32_t depthwise_output_dimensions[4] = {1, 3, 4, 5};
     const int32_t depthwise_kernel[2] = {3, 2};
     const int32_t depthwise_dilations[2] = {1, 2};
+    const int32_t unit_depthwise_dimensions[4] = {1, 2, 4, 10};
+    const int32_t unit_depthwise_weight_dimensions[4] = {2, 1, 3, 3};
     const int32_t asymmetric_input_dimensions[4] = {1, 1, 2, 3};
     const int32_t asymmetric_weight_dimensions[4] = {1, 1, 2, 2};
     const int32_t asymmetric_output_dimensions[4] = {1, 1, 3, 3};
@@ -73,6 +75,7 @@ int main(void) {
     const int32_t no_pads[4] = {0, 0, 0, 0};
     const int32_t batch_norm_dimensions[4] = {2, 3, 2, 2};
     const float normal_bias[3] = {0.25f, -0.5f, 1.0f};
+    const float unit_depthwise_bias[2] = {0.375f, -0.625f};
     const float pointwise_bias[6] = {0.25f, -0.5f, 1.0f, -1.25f, 0.75f, 0.5f};
     const float batch_norm_scale[3] = {1.5f, -0.75f, 0.25f};
     const float batch_norm_bias[3] = {0.1f, 0.5f, -1.0f};
@@ -88,6 +91,11 @@ int main(void) {
     float depthwise_input[60];
     float depthwise_weights[18];
     float depthwise_output[60];
+    float unit_depthwise_input[80];
+    float unit_depthwise_weights[18];
+    float unit_depthwise_output[80];
+    float unit_depthwise_dispatched_output[80];
+    float unit_depthwise_simd_output[80];
     float asymmetric_input[6];
     float asymmetric_weights[4];
     float asymmetric_output[9];
@@ -138,6 +146,45 @@ int main(void) {
     }
     print_values("depthwise_conv", depthwise_output, 60u);
 
+    fill_values(unit_depthwise_input, 80u, 17u, 37u, 18, 9.0f);
+    fill_values(unit_depthwise_weights, 18u, 7u, 19u, 9, 6.0f);
+    lw_scalar_depthwise_conv3x3_unit_pad1_f32(
+        unit_depthwise_input, unit_depthwise_weights, unit_depthwise_bias,
+        unit_depthwise_output, unit_depthwise_dimensions);
+    simd_level = lw_detect_simd_level();
+    if (simd_level >= LW_SIMD_LEVEL_SSE2) {
+        lw_sse2_depthwise_conv3x3_unit_pad1_f32(
+            unit_depthwise_input, unit_depthwise_weights, unit_depthwise_bias,
+            unit_depthwise_simd_output, unit_depthwise_dimensions);
+        if (memcmp(unit_depthwise_output, unit_depthwise_simd_output,
+                   sizeof(unit_depthwise_output)) != 0) {
+            fprintf(stderr, "SSE2 depthwise Conv differs from scalar output\n");
+            return 1;
+        }
+    }
+    if (simd_level >= LW_SIMD_LEVEL_AVX2) {
+        lw_avx2_depthwise_conv3x3_unit_pad1_f32(
+            unit_depthwise_input, unit_depthwise_weights, unit_depthwise_bias,
+            unit_depthwise_simd_output, unit_depthwise_dimensions);
+        if (memcmp(unit_depthwise_output, unit_depthwise_simd_output,
+                   sizeof(unit_depthwise_output)) != 0) {
+            fprintf(stderr, "AVX2 depthwise Conv differs from scalar output\n");
+            return 1;
+        }
+    }
+    status = lw_scalar_conv2d_f32(
+        unit_depthwise_input, unit_depthwise_weights, unit_depthwise_bias, 2u,
+        unit_depthwise_dispatched_output, unit_depthwise_dimensions,
+        unit_depthwise_weight_dimensions, unit_depthwise_dimensions,
+        normal_kernel, unit_strides, unit_dilations, normal_pads, 2u);
+    if (!expect_status("unit depthwise conv", status, LW_STATUS_OK) ||
+        memcmp(unit_depthwise_output, unit_depthwise_dispatched_output,
+               sizeof(unit_depthwise_output)) != 0) {
+        fprintf(stderr, "dispatched depthwise Conv differs from scalar output\n");
+        return 1;
+    }
+    print_values("unit_depthwise_conv", unit_depthwise_output, 80u);
+
     fill_values(asymmetric_input, 6u, 3u, 11u, 5, 4.0f);
     fill_values(asymmetric_weights, 4u, 5u, 13u, 6, 3.0f);
     status = lw_scalar_conv2d_f32(
@@ -156,7 +203,6 @@ int main(void) {
         pointwise_input, pointwise_weights, pointwise_bias, pointwise_output,
         pointwise_input_dimensions, pointwise_output_dimensions,
         2u, 2u, 3u);
-    simd_level = lw_detect_simd_level();
     if (simd_level >= LW_SIMD_LEVEL_SSE2) {
         lw_sse2_conv1x1_unit_f32(
             pointwise_input, pointwise_weights, pointwise_bias,

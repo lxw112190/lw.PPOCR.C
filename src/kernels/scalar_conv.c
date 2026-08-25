@@ -115,6 +115,62 @@ void lw_scalar_conv1x1_unit_f32(
     }
 }
 
+void lw_scalar_depthwise_conv3x3_unit_pad1_f32(
+    const float* input,
+    const float* weights,
+    const float* bias,
+    float* output,
+    const int32_t dimensions[4]) {
+    uint32_t height = (uint32_t)dimensions[2];
+    uint32_t width = (uint32_t)dimensions[3];
+    uint64_t channel_plane = (uint64_t)height * width;
+    uint32_t batch;
+    for (batch = 0u; batch < (uint32_t)dimensions[0]; ++batch) {
+        uint32_t channel;
+        for (channel = 0u; channel < (uint32_t)dimensions[1]; ++channel) {
+            uint64_t channel_offset =
+                ((uint64_t)batch * (uint32_t)dimensions[1] + channel) *
+                channel_plane;
+            const float* input_channel = input + (size_t)channel_offset;
+            const float* channel_weights = weights + (size_t)channel * 9u;
+            float* output_channel = output + (size_t)channel_offset;
+            float initial = bias == NULL ? 0.0f : bias[channel];
+            uint64_t spatial;
+            uint32_t kernel_y;
+            for (spatial = 0u; spatial < channel_plane; ++spatial) {
+                output_channel[(size_t)spatial] = initial;
+            }
+            for (kernel_y = 0u; kernel_y < 3u; ++kernel_y) {
+                uint32_t output_y_begin = kernel_y == 0u ? 1u : 0u;
+                uint32_t output_y_end =
+                    kernel_y == 2u && height != 0u ? height - 1u : height;
+                uint32_t kernel_x;
+                for (kernel_x = 0u; kernel_x < 3u; ++kernel_x) {
+                    uint32_t output_x_begin = kernel_x == 0u ? 1u : 0u;
+                    uint32_t output_x_end =
+                        kernel_x == 2u && width != 0u ? width - 1u : width;
+                    float weight = channel_weights[kernel_y * 3u + kernel_x];
+                    uint32_t output_y;
+                    for (output_y = output_y_begin;
+                         output_y < output_y_end; ++output_y) {
+                        uint32_t input_y = output_y + kernel_y - 1u;
+                        const float* input_row = input_channel +
+                            (size_t)((uint64_t)input_y * width);
+                        float* output_row = output_channel +
+                            (size_t)((uint64_t)output_y * width);
+                        uint32_t output_x;
+                        for (output_x = output_x_begin;
+                             output_x < output_x_end; ++output_x) {
+                            uint32_t input_x = output_x + kernel_x - 1u;
+                            output_row[output_x] += input_row[input_x] * weight;
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
 static void conv3x3_stride2_pad1_f32(
     const float* input,
     const float* weights,
@@ -308,6 +364,28 @@ lw_status lw_scalar_conv2d_f32(
                 input, weights, bias, output, input_dimensions,
                 output_dimensions, groups, input_channels_per_group,
                 output_channels_per_group);
+        }
+        return LW_STATUS_OK;
+    }
+    if (groups == (uint32_t)input_dimensions[1] &&
+        output_dimensions[1] == input_dimensions[1] &&
+        weight_dimensions[1] == 1 &&
+        kernel[0] == 3 && kernel[1] == 3 &&
+        strides[0] == 1 && strides[1] == 1 &&
+        dilations[0] == 1 && dilations[1] == 1 &&
+        pads[0] == 1 && pads[1] == 1 && pads[2] == 1 && pads[3] == 1 &&
+        output_dimensions[2] == input_dimensions[2] &&
+        output_dimensions[3] == input_dimensions[3]) {
+        lw_simd_level simd_level = lw_detect_simd_level();
+        if (simd_level >= LW_SIMD_LEVEL_AVX2) {
+            lw_avx2_depthwise_conv3x3_unit_pad1_f32(
+                input, weights, bias, output, input_dimensions);
+        } else if (simd_level >= LW_SIMD_LEVEL_SSE2) {
+            lw_sse2_depthwise_conv3x3_unit_pad1_f32(
+                input, weights, bias, output, input_dimensions);
+        } else {
+            lw_scalar_depthwise_conv3x3_unit_pad1_f32(
+                input, weights, bias, output, input_dimensions);
         }
         return LW_STATUS_OK;
     }

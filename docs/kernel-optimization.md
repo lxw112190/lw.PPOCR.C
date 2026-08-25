@@ -365,6 +365,51 @@ exact text and score, every benchmark identified the selected backend as
 `avx2`, and every run reported zero RSS growth. Ordinary 3x3 and depthwise Conv
 are now the next measured single-thread targets.
 
+## Tenth profile: stride-1 Depthwise 3x3 SIMD
+
+After removing the broadcast-coordinate cost, a fresh Conv shape profile found
+seven Depthwise nodes with identical 3x3, stride-1, dilation-1, pad-1 geometry.
+Their five-run medians were 3.039 ms on x64 and 4.753 ms on x86. Two additional
+Depthwise nodes use stride 2x1 and remain on the general implementation. The
+ordinary 3x3 candidates use stride 2x2, whose non-contiguous horizontal input
+access makes them a higher-complexity SIMD target.
+
+The tenth change adds:
+
+- a portable, weight-major specialization for the exact unit-stride Depthwise
+  shape;
+- isolated four-column SSE2 and eight-column AVX2 implementations with scalar
+  boundaries and row tails;
+- the existing CPUID/OSXSAVE/XGETBV dispatch hierarchy and non-x86 scalar
+  fallback;
+- strict matching of one output channel per input group, leaving depth
+  multipliers and every other grouped shape on the general path.
+
+Each output element starts with the same bias and receives valid kernel terms
+in the original row-major nine-weight order. A 4x10 direct reference exercises
+top/bottom/left/right boundaries, both vector widths, and scalar tails. Direct
+SSE2, direct AVX2, automatic dispatch, and the portable specialization must be
+byte-identical before comparison with ONNX ReferenceEvaluator. Release
+disassembly confirmed separate `mulps/addps` and `vmulps/vaddps/vzeroupper` in
+both x64 and x86 objects, with no FMA.
+
+Across five final profiles, the x64 target-node median fell from 3.039 ms to
+0.266 ms, a 91.26% reduction (11.439x). The x86 median fell from 4.753 ms to
+0.383 ms, a 91.95% reduction (12.415x). The two untouched stride-2x1 Depthwise
+nodes remained near their prior cost.
+
+## Tenth end-to-end A/B result
+
+| Process | Prior mean | Depthwise SIMD mean | Further reduction | Further speedup | Original baseline speedup | Throughput | RSS growth |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| Windows x64 | 24.142 ms | 21.345 ms | 11.59% | 1.131x | 26.739x | 46.849/s | 0 B |
+| Windows x86 | 46.368 ms | 43.023 ms | 7.21% | 1.078x | 32.925x | 23.243/s | 0 B |
+
+These values are medians from five repeated 3+20 runs. Every call retained the
+exact text and score, every benchmark identified the selected backend as
+`avx2`, and every run reported zero RSS growth. The two ordinary stride-2 3x3
+Conv nodes are now the largest remaining single-thread shape class.
+
 All results in this document describe one machine, compiler, model, and
 fixture. They should be reproduced on target machines before being used for
 capacity planning.

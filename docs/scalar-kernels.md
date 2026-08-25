@@ -45,6 +45,15 @@ requires scalar, SSE2, AVX2, and automatic-dispatch output to be byte-identical
 before NumPy comparison. Additional NumPy cases cover both single-axis block
 modes and the retained general-broadcast fallback.
 
+Seven Depthwise Conv nodes with 3x3 kernels, unit stride/dilation, symmetric
+pad 1, and one output channel per group dispatch across output width to isolated
+AVX2 or SSE2 kernels. Each lane starts from the channel bias and visits the same
+valid kernel positions in the same order as the portable scalar specialization;
+the only difference is that eight or four independent output positions advance
+together. Border positions and non-vector-aligned row tails remain scalar. All
+other Depthwise, grouped, dilated, or asymmetric shapes retain the general Conv
+implementation.
+
 ## Correctness tests
 
 `kernel-reference-driver` emits deterministic results for representative

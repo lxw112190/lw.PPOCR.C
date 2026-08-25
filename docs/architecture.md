@@ -94,8 +94,11 @@ and architecture-specific kernels are isolated under `src/simd`.
     REC binary nodes all broadcast one non-unit right dimension. Channel-style
     blocks reuse right-scalar SIMD and trailing-vector blocks reuse contiguous
     pair SIMD without per-element coordinate traversal.
-20. Next: reprofile ordinary 3x3 and depthwise Conv after the elementwise work
-    has been removed before considering threads, CLS, DET, or full OCR.
+20. Stride-1 3x3 Depthwise Conv SIMD — complete locally; seven REC nodes use
+    this exact pad-1 shape. Four- and eight-output-wide kernels retain each
+    output element's nine-weight accumulation order and scalar boundary tails.
+21. Next: reprofile the two remaining ordinary stride-2 3x3 Conv nodes before
+    considering threads, CLS, DET, or full OCR.
 
 ## Compatibility claims
 

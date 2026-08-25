@@ -189,3 +189,20 @@ The x64 single-axis broadcast median fell from 2.743 ms to 0.303 ms, an
 88.95% reduction (9.050x). The x86 median fell from 6.277 ms to 0.400 ms, a
 93.63% reduction (15.700x). Every run reported `avx2`, retained the exact text
 and score, and had zero measured RSS growth.
+
+## Stride-1 Depthwise 3x3 SIMD result
+
+Seven REC nodes share the same Depthwise 3x3, stride-1, dilation-1, pad-1
+shape. They now process eight output columns with AVX2 or four with SSE2 while
+preserving each output's scalar nine-weight accumulation order. Under a fresh
+five repeated 3+20 A/B protocol:
+
+| Process | Broadcast-block stage | Depthwise SIMD stage | Further reduction | Further speedup | Original baseline speedup | Throughput | RSS growth |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| Windows x64 | 24.142 ms | 21.345 ms | 11.59% | 1.131x | 26.739x | 46.849/s | 0 B |
+| Windows x86 | 46.368 ms | 43.023 ms | 7.21% | 1.078x | 32.925x | 23.243/s | 0 B |
+
+The x64 target-node median fell from 3.039 ms to 0.266 ms, a 91.26% reduction
+(11.439x). The x86 median fell from 4.753 ms to 0.383 ms, a 91.95% reduction
+(12.415x). Every run reported `avx2`, retained the exact text and score, and
+had zero measured RSS growth.
