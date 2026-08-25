@@ -237,6 +237,45 @@ exact text and score, every benchmark identified the selected backend as
 `avx2`, and every run reported zero RSS growth. With MatMul at 5.58% of the x64
 operator profile, pointwise Conv SIMD is the next measured candidate.
 
+## Seventh profile: runtime-dispatched pointwise Conv SIMD
+
+Release disassembly of the portable pointwise loop showed partial SSE2
+auto-vectorization on x64 but only scalar instructions on x86. Five pre-change
+profiles measured median pointwise totals of 10.000 ms on x64 and 69.400 ms on
+x86. The seventh change therefore adds:
+
+- isolated four-spatial-element SSE2 and eight-spatial-element AVX2 loops;
+- the existing CPUID/OSXSAVE/XGETBV runtime hierarchy and scalar fallback;
+- support for batch and groups without changing the NCHW tensor layout;
+- separate multiply and add operations that retain each spatial element's
+  input-channel accumulation order.
+
+There is no public C ABI, allocation, thread, model, workspace, or package
+layout change. A grouped pointwise reference case uses a ten-element spatial
+plane so both vector bodies and scalar tails execute. The test driver compares
+scalar, direct SSE2, direct AVX2, and automatic dispatch byte for byte before
+the ONNX reference comparison. Release disassembly confirmed `mulps/addps` in
+the SSE2 objects and `vmulps/vaddps/vzeroupper` in the AVX2 objects for both x64
+and x86, with no FMA instructions.
+
+Across five final profiles, x64 pointwise time fell from 10.000 ms to 5.502 ms,
+a 44.98% reduction (1.817x), while total Conv fell from 18.994 ms to 14.432 ms.
+On x86, pointwise time fell from 69.400 ms to 14.350 ms, a 79.32% reduction
+(4.836x), while total Conv fell from 79.867 ms to 25.914 ms.
+
+## Seventh end-to-end A/B result
+
+| Process | Prior mean | SIMD pointwise mean | Further reduction | Further speedup | Original baseline speedup | Throughput | RSS growth |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| Windows x64 | 34.164 ms | 29.504 ms | 13.64% | 1.158x | 19.345x | 33.893/s | 0 B |
+| Windows x86 | 114.499 ms | 59.540 ms | 48.00% | 1.923x | 23.791x | 16.795/s | 0 B |
+
+These values are medians from five repeated 3+20 runs. Every call retained the
+exact text and score, every benchmark identified the selected backend as
+`avx2`, and every run reported zero RSS growth. The remaining profile is now
+spread across ordinary/depthwise Conv and elementwise operators, so another
+target should be selected only after a fresh node-level comparison.
+
 All results in this document describe one machine, compiler, model, and
 fixture. They should be reproduced on target machines before being used for
 capacity planning.

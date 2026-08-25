@@ -138,3 +138,20 @@ The x64 MatMul operator median fell from 2.845 ms with SSE2 to 1.906 ms with
 AVX2, a 33.01% reduction. The x86 MatMul median fell from 2.869 ms to 1.898 ms,
 a 33.84% reduction. Every run reported `avx2`, retained the exact text and
 score, and had zero measured RSS growth.
+
+## SIMD pointwise Conv result
+
+The same OS-safe runtime dispatch now selects eight-lane AVX2, four-lane SSE2,
+or scalar pointwise Conv. Under the same five repeated 3+20 protocol:
+
+| Process | AVX2 MatMul stage | SIMD pointwise stage | Further reduction | Further speedup | Original baseline speedup | Throughput | RSS growth |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| Windows x64 | 34.164 ms | 29.504 ms | 13.64% | 1.158x | 19.345x | 33.893/s | 0 B |
+| Windows x86 | 114.499 ms | 59.540 ms | 48.00% | 1.923x | 23.791x | 16.795/s | 0 B |
+
+The x64 pointwise Conv node total fell from 10.000 ms to 5.502 ms, a 44.98%
+reduction. The x86 total fell from 69.400 ms to 14.350 ms, a 79.32% reduction.
+The larger x86 result reflects that its prior MSVC build kept this loop scalar,
+while the x64 compiler had already generated some SSE2 instructions. Every run
+reported `avx2`, retained the exact text and score, and had zero measured RSS
+growth.

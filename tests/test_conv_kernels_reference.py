@@ -69,7 +69,7 @@ def expected_results() -> dict[str, np.ndarray]:
     depthwise_weights = fill_values(18, 5, 13, 6, 5.0).reshape(3, 1, 3, 2)
     asymmetric_input = fill_values(6, 3, 11, 5, 4.0).reshape(1, 1, 2, 3)
     asymmetric_weights = fill_values(4, 5, 13, 6, 3.0).reshape(1, 1, 2, 2)
-    pointwise_input = fill_values(48, 7, 19, 9, 5.0).reshape(2, 4, 2, 3)
+    pointwise_input = fill_values(80, 7, 19, 9, 5.0).reshape(2, 4, 2, 5)
     pointwise_weights = fill_values(12, 11, 23, 11, 6.0).reshape(6, 2, 1, 1)
     pointwise_bias = np.asarray(
         [0.25, -0.5, 1.0, -1.25, 0.75, 0.5], dtype=np.float32

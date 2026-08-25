@@ -81,8 +81,12 @@ and architecture-specific kernels are isolated under `src/simd`.
     checks prevent AVX state use on unsupported operating systems, the isolated
     eight-column kernel avoids FMA so it preserves the scalar accumulation
     order, and SSE2/scalar fallbacks remain available.
-17. Next: profile and compare SSE2/AVX2 pointwise Conv candidates before
-    considering threads, CLS, DET, and full OCR.
+17. x86/x64 SSE2/AVX2 pointwise Conv dispatch — complete locally; isolated
+    four- and eight-lane spatial loops retain the input-channel accumulation
+    order, direct reference tests require byte-identical output, and grouped
+    pointwise Conv retains the scalar fallback.
+18. Next: reprofile the now-balanced Conv and elementwise work before
+    considering another SIMD target, threads, CLS, DET, or full OCR.
 
 ## Compatibility claims
 

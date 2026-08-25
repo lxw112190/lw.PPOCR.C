@@ -1,4 +1,6 @@
 #include "scalar_kernels.h"
+#include "cpu_features.h"
+#include "simd_kernels.h"
 
 #include <inttypes.h>
 #include <stddef.h>
@@ -64,9 +66,9 @@ int main(void) {
     const int32_t asymmetric_strides[2] = {1, 2};
     const int32_t asymmetric_dilations[2] = {2, 1};
     const int32_t asymmetric_pads[4] = {2, 1, 1, 2};
-    const int32_t pointwise_input_dimensions[4] = {2, 4, 2, 3};
+    const int32_t pointwise_input_dimensions[4] = {2, 4, 2, 5};
     const int32_t pointwise_weight_dimensions[4] = {6, 2, 1, 1};
-    const int32_t pointwise_output_dimensions[4] = {2, 6, 2, 3};
+    const int32_t pointwise_output_dimensions[4] = {2, 6, 2, 5};
     const int32_t point_kernel[2] = {1, 1};
     const int32_t no_pads[4] = {0, 0, 0, 0};
     const int32_t batch_norm_dimensions[4] = {2, 3, 2, 2};
@@ -89,12 +91,15 @@ int main(void) {
     float asymmetric_input[6];
     float asymmetric_weights[4];
     float asymmetric_output[9];
-    float pointwise_input[48];
+    float pointwise_input[80];
     float pointwise_weights[12];
-    float pointwise_output[72];
+    float pointwise_output[120];
+    float pointwise_dispatched_output[120];
+    float pointwise_simd_output[120];
     float batch_norm_input[24];
     float batch_norm_output[24];
     float batch_norm_in_place[24];
+    lw_simd_level simd_level;
     lw_status status;
 
     fill_values(normal_input, 80u, 5u, 19u, 9, 4.0f);
@@ -145,17 +150,49 @@ int main(void) {
     }
     print_values("asymmetric_conv", asymmetric_output, 9u);
 
-    fill_values(pointwise_input, 48u, 7u, 19u, 9, 5.0f);
+    fill_values(pointwise_input, 80u, 7u, 19u, 9, 5.0f);
     fill_values(pointwise_weights, 12u, 11u, 23u, 11, 6.0f);
+    lw_scalar_conv1x1_unit_f32(
+        pointwise_input, pointwise_weights, pointwise_bias, pointwise_output,
+        pointwise_input_dimensions, pointwise_output_dimensions,
+        2u, 2u, 3u);
+    simd_level = lw_detect_simd_level();
+    if (simd_level >= LW_SIMD_LEVEL_SSE2) {
+        lw_sse2_conv1x1_unit_f32(
+            pointwise_input, pointwise_weights, pointwise_bias,
+            pointwise_simd_output, pointwise_input_dimensions,
+            pointwise_output_dimensions, 2u, 2u, 3u);
+        if (memcmp(pointwise_output, pointwise_simd_output,
+                   sizeof(pointwise_output)) != 0) {
+            fprintf(stderr, "SSE2 pointwise Conv differs from scalar output\n");
+            return 1;
+        }
+    }
+    if (simd_level >= LW_SIMD_LEVEL_AVX2) {
+        lw_avx2_conv1x1_unit_f32(
+            pointwise_input, pointwise_weights, pointwise_bias,
+            pointwise_simd_output, pointwise_input_dimensions,
+            pointwise_output_dimensions, 2u, 2u, 3u);
+        if (memcmp(pointwise_output, pointwise_simd_output,
+                   sizeof(pointwise_output)) != 0) {
+            fprintf(stderr, "AVX2 pointwise Conv differs from scalar output\n");
+            return 1;
+        }
+    }
     status = lw_scalar_conv2d_f32(
         pointwise_input, pointwise_weights, pointwise_bias, 6u,
-        pointwise_output, pointwise_input_dimensions,
+        pointwise_dispatched_output, pointwise_input_dimensions,
         pointwise_weight_dimensions, pointwise_output_dimensions,
         point_kernel, unit_strides, unit_dilations, no_pads, 2u);
     if (!expect_status("grouped pointwise conv", status, LW_STATUS_OK)) {
         return 1;
     }
-    print_values("grouped_pointwise_conv", pointwise_output, 72u);
+    if (memcmp(pointwise_output, pointwise_dispatched_output,
+               sizeof(pointwise_output)) != 0) {
+        fprintf(stderr, "dispatched pointwise Conv differs from scalar output\n");
+        return 1;
+    }
+    print_values("grouped_pointwise_conv", pointwise_output, 120u);
 
     fill_values(batch_norm_input, 24u, 7u, 21u, 10, 4.0f);
     status = lw_scalar_batch_normalization_f32(

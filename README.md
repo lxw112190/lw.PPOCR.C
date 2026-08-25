@@ -21,8 +21,9 @@ ONNX model and remains a mandatory gate during runtime-only optimization. The
 profile-directed scalar optimizations now cover general Conv address/bounds
 simplification, a cache-contiguous pointwise path, a spatially local 3x3
 downsampling path, and cache-contiguous row-blocked MatMul. Windows x64/x86 A/B
-measurements retain unchanged recognition results. On x86/x64, MatMul now uses
-runtime-detected AVX2 or SSE2 with an automatic scalar fallback.
+measurements retain unchanged recognition results. On x86/x64, MatMul and
+pointwise Conv now use runtime-detected AVX2 or SSE2 with automatic scalar
+fallbacks.
 The public recognizer C API exposes that path with caller-owned UTF-8 output
 buffers and bounded, preallocated inference memory. Image-file decoding remains
 outside the core: applications currently provide decoded BGR8 pixels.

@@ -1,4 +1,6 @@
 #include "scalar_kernels.h"
+#include "cpu_features.h"
+#include "simd_kernels.h"
 
 #include <limits.h>
 #include <math.h>
@@ -56,7 +58,7 @@ static int spatial_output(
     return 1;
 }
 
-static void conv1x1_unit_f32(
+void lw_scalar_conv1x1_unit_f32(
     const float* input,
     const float* weights,
     const float* bias,
@@ -290,9 +292,23 @@ lw_status lw_scalar_conv2d_f32(
         strides[0] == 1 && strides[1] == 1 &&
         dilations[0] == 1 && dilations[1] == 1 &&
         pads[0] == 0 && pads[1] == 0 && pads[2] == 0 && pads[3] == 0) {
-        conv1x1_unit_f32(
-            input, weights, bias, output, input_dimensions, output_dimensions,
-            groups, input_channels_per_group, output_channels_per_group);
+        lw_simd_level simd_level = lw_detect_simd_level();
+        if (simd_level >= LW_SIMD_LEVEL_AVX2) {
+            lw_avx2_conv1x1_unit_f32(
+                input, weights, bias, output, input_dimensions,
+                output_dimensions, groups, input_channels_per_group,
+                output_channels_per_group);
+        } else if (simd_level >= LW_SIMD_LEVEL_SSE2) {
+            lw_sse2_conv1x1_unit_f32(
+                input, weights, bias, output, input_dimensions,
+                output_dimensions, groups, input_channels_per_group,
+                output_channels_per_group);
+        } else {
+            lw_scalar_conv1x1_unit_f32(
+                input, weights, bias, output, input_dimensions,
+                output_dimensions, groups, input_channels_per_group,
+                output_channels_per_group);
+        }
         return LW_STATUS_OK;
     }
     if (groups == 1u && kernel[0] == 3 && kernel[1] == 3 &&

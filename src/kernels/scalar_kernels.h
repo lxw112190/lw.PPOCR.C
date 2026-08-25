@@ -114,6 +114,16 @@ lw_status lw_scalar_conv2d_f32(
     const int32_t dilations[2],
     const int32_t pads[4],
     uint32_t groups);
+void lw_scalar_conv1x1_unit_f32(
+    const float* input,
+    const float* weights,
+    const float* bias,
+    float* output,
+    const int32_t input_dimensions[4],
+    const int32_t output_dimensions[4],
+    uint32_t groups,
+    uint32_t input_channels_per_group,
+    uint32_t output_channels_per_group);
 lw_status lw_scalar_batch_normalization_f32(
     const float* input,
     const float* scale,

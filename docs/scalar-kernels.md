@@ -83,9 +83,16 @@ row/channel pointers while preserving FP32 accumulation order; it still uses
 no explicit SIMD or threads. A second portable-C fast path traverses the
 spatial plane contiguously for 1x1, unit-stride, unit-dilation, zero-padding
 Conv, including batched and grouped inputs, while retaining the input-channel
-accumulation order. A third cache-local path covers ordinary 3x3, stride-2,
-unit-dilation, pad-1 Conv and keeps the same addition order. These paths add no
-allocation, explicit SIMD, or threads. The test-only executor profiler is
-private, reports Conv and MatMul node shapes, and is not part of the installed
-API or packages. See
+accumulation order. That pointwise path now dispatches to isolated AVX2 or SSE2
+spatial loops when supported and otherwise retains the portable scalar loop.
+The vector paths process eight or four spatial elements per instruction, use
+separate multiply and add operations rather than FMA, and preserve the
+input-channel accumulation order for each output element. A third cache-local
+path covers ordinary 3x3, stride-2, unit-dilation, pad-1 Conv and keeps the same
+addition order. These paths add no allocation or threads. A grouped test with a
+ten-element spatial plane exercises AVX2/SSE2 vector bodies and scalar tails;
+the direct SIMD and automatic-dispatch results must be byte-identical to the
+portable implementation before comparison with ONNX. The test-only executor
+profiler is private, reports Conv and MatMul node shapes, and is not part of the
+installed API or packages. See
 [`kernel-optimization.md`](kernel-optimization.md) for the measured A/B result.
