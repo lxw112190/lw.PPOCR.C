@@ -3,7 +3,7 @@
 Status: **experimental and not frozen**.
 
 LWM means LightWeight Model. Version 0.1 currently encodes only the exact
-PP-OCRv6 tiny REC graph documented in `SUPPORTED_OPS_V0.md`. It is not an ONNX
+PP-OCRv6 tiny REC and fixed-batch CLS graphs documented in `SUPPORTED_OPS_V0.md`. It is not an ONNX
 container and the runtime is not a general ONNX executor.
 
 ## Encoding invariants
@@ -122,6 +122,7 @@ fixed-width fields and have an exact size checked by the loader.
 | 13 | Unsqueeze | 40 |
 | 14 | MatMul | 0 |
 | 15 | Softmax | 16 |
+| 16 | Reshape | 0 |
 
 The writer normalizes omitted ONNX attributes to opset-11 defaults before
 encoding them. Conv and pooling records contain rank, kernel, stride, dilation,
@@ -141,7 +142,7 @@ SHA-256 hashes.
 
 - requires the bundled REC SHA-256 identity, one input, one output, and default
   ONNX opset 11;
-- rejects every operator outside the 15 IDs above;
+- rejects every operator outside its exact supported set;
 - removes 58 one-input/one-output Identity aliases;
 - emits 161 executable nodes and 282 tensors;
 - retains all four BatchNormalization nodes;
@@ -151,6 +152,23 @@ SHA-256 hashes.
 
 These choices deliberately avoid numerical graph rewrites before golden
 reference tests exist.
+
+## Current CLS conversion policy
+
+- requires the bundled CLS SHA-256 identity, one input, one output, and default
+  ONNX opset 7;
+- specializes batch size to one and rejects any remaining non-batch dynamic
+  dimension;
+- removes seven Identity aliases and the fixed Shape/Slice/Concat metadata
+  chain used only to construct the flatten shape;
+- rewrites three GlobalAveragePool nodes to equivalent ReduceMean records;
+- emits 133 executable nodes, 281 tensors, and one static Reshape node;
+- retains all 27 BatchNormalization nodes and canonical little-endian FP32
+  weights.
+
+The complete converted graph and public BGR-to-orientation path are compared
+with the original ONNX model. These rewrites remain exact-model transformations,
+not a promise of general ONNX conversion.
 
 ## Required loader validation
 

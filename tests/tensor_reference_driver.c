@@ -43,6 +43,8 @@ int main(void) {
     const int32_t invalid_squeeze_axis[1] = {2};
     const int32_t unsqueeze_input_dimensions[2] = {2, 3};
     const int32_t unsqueeze_output_dimensions[4] = {1, 2, 3, 1};
+    const int32_t reshape_output_dimensions[2] = {2, 3};
+    const int32_t invalid_reshape_output_dimensions[2] = {2, 4};
     const int32_t unsqueeze_axes[2] = {0, -1};
     const int32_t duplicate_unsqueeze_axes[2] = {0, -4};
     const int32_t reduce_input_dimensions[3] = {2, 3, 4};
@@ -103,6 +105,14 @@ int main(void) {
         return 1;
     }
     print_values("unsqueeze", reshape_output, 6u);
+
+    status = lw_scalar_reshape_f32(
+        tensor_input, reshape_output, 4u, squeeze_input_dimensions,
+        2u, reshape_output_dimensions);
+    if (!expect_status("reshape", status, LW_STATUS_OK)) {
+        return 1;
+    }
+    print_values("reshape", reshape_output, 6u);
 
     status = lw_scalar_reduce_mean_f32(
         tensor_input, reduce_output, 3u, reduce_input_dimensions,
@@ -204,6 +214,12 @@ int main(void) {
         tensor_input, reshape_output, 2u, unsqueeze_input_dimensions,
         2u, duplicate_unsqueeze_axes, 4u, unsqueeze_output_dimensions);
     if (!expect_status("unsqueeze duplicate axis", status, LW_STATUS_INVALID_SHAPE)) {
+        return 1;
+    }
+    status = lw_scalar_reshape_f32(
+        tensor_input, reshape_output, 4u, squeeze_input_dimensions,
+        2u, invalid_reshape_output_dimensions);
+    if (!expect_status("reshape element count", status, LW_STATUS_INVALID_SHAPE)) {
         return 1;
     }
     status = lw_scalar_reduce_mean_f32(

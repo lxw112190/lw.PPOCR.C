@@ -373,6 +373,31 @@ static lw_status resolve_node(
         }
         dimensions[batch_rank] = inputs[0]->dimensions[inputs[0]->rank - 2u];
         dimensions[batch_rank + 1u] = inputs[1]->dimensions[inputs[1]->rank - 1u];
+    } else if (op == 16u) {
+        uint64_t input_elements = 1u;
+        uint64_t output_elements = 1u;
+        if (input_count != 1u || output->rank > LW_MAX_DIMS) {
+            return shape_fail(error, "Reshape has invalid arity or output rank");
+        }
+        rank = output->rank;
+        memcpy(dimensions, output->dimensions, sizeof(dimensions));
+        for (i = 0u; i < inputs[0]->rank; ++i) {
+            if (inputs[0]->dimensions[i] <= 0 ||
+                input_elements > UINT64_MAX / (uint32_t)inputs[0]->dimensions[i]) {
+                return shape_fail(error, "Reshape input element count is invalid");
+            }
+            input_elements *= (uint32_t)inputs[0]->dimensions[i];
+        }
+        for (i = 0u; i < rank; ++i) {
+            if (dimensions[i] <= 0 ||
+                output_elements > UINT64_MAX / (uint32_t)dimensions[i]) {
+                return shape_fail(error, "Reshape output element count is invalid");
+            }
+            output_elements *= (uint32_t)dimensions[i];
+        }
+        if (input_elements != output_elements) {
+            return shape_fail(error, "Reshape changes the tensor element count");
+        }
     } else {
         lw_set_error(error, LW_STATUS_UNSUPPORTED, "shape resolver encountered an unsupported operator");
         return LW_STATUS_UNSUPPORTED;

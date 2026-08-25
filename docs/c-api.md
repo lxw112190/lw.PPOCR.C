@@ -2,8 +2,10 @@
 
 The public API in `include/lw_infer.h` is available for integration experiments
 but is not ABI-frozen before 1.0. It covers low-level model/session planning and
-a complete recognize-only API for decoded BGR8 pixels. The recognizer hides
-preprocessing, graph execution, dictionary indexing, and UTF-8 CTC decoding.
+complete recognize-only and direction-classification APIs for decoded BGR8
+pixels. The recognizer hides preprocessing, graph execution, dictionary
+indexing, and UTF-8 CTC decoding. The classifier hides resize/pad/normalize,
+graph execution, and the two-class 0/180-degree decision.
 
 ## Ownership and thread model
 
@@ -17,6 +19,11 @@ preprocessing, graph execution, dictionary indexing, and UTF-8 CTC decoding.
 - Source BGR pixels and output text remain caller-owned.
 - Recognition performs no heap allocation after successful creation.
 - A single recognizer must not be called concurrently. Separate recognizers
+  own independent mutable state and may run in parallel.
+- `lw_classifier_create` owns its model, session, and reusable input/output
+  buffers until `lw_classifier_free`; classification performs no heap
+  allocation after successful creation.
+- A single classifier must not be called concurrently. Separate classifiers
   own independent mutable state and may run in parallel.
 - Every successful create has one matching free; all free functions accept null.
 
@@ -148,6 +155,42 @@ free(text);
 lw_recognizer_free(recognizer);
 ```
 
+## Public CLS classifier
+
+`lw_classifier_create` accepts a UTF-8 path to the compatible fixed-batch CLS
+`.lwm` model. Its input is fixed at `[1,3,80,160]`. The options expose the same
+model, workspace, tensor, and decoded-image limits as the recognizer; zero
+values retain initialized defaults and reserved fields must remain zero.
+
+`lw_classifier_classify_bgr_u8` accepts interleaved BGR unsigned-byte pixels,
+accessible byte count, width, height, and row stride. It preserves aspect ratio,
+resizes to height 80, right-pads with zero-valued BGR pixels, normalizes to
+`[-1,1]`, and executes the two-class model. It does not decode JPEG/PNG bytes.
+
+`lw_classification_result.label` is `0` for upright and `1` for 180 degrees;
+`orientation_degrees` exposes the same decision as `0` or `180`. `score` is the
+selected Softmax probability and `resized_width` reports the non-padding width.
+The classifier reports orientation only—it does not rotate caller-owned pixels.
+
+```c
+lw_classifier* classifier = NULL;
+lw_classifier_options options;
+lw_classification_result result;
+lw_error error;
+
+lw_classifier_options_init(&options);
+lw_error_init(&error);
+if (lw_classifier_create("cls.lwm", &options, &classifier, &error) == LW_STATUS_OK) {
+    lw_classification_result_init(&result);
+    if (lw_classifier_classify_bgr_u8(
+            classifier, bgr, bgr_byte_count, width, height, stride,
+            &result, &error) == LW_STATUS_OK) {
+        /* result.orientation_degrees is 0 or 180; result.score is valid. */
+    }
+}
+lw_classifier_free(classifier);
+```
+
 ## Errors
 
 Programs should branch on `lw_status`, not parse diagnostic text. Relevant
@@ -159,6 +202,6 @@ planning errors are:
 - `LW_STATUS_OUT_OF_MEMORY`: host allocation failure;
 - model load errors defined by the LWM loader.
 
-Recognition additionally returns `LW_STATUS_INVALID_SHAPE` for a truncated BGR
+Recognition and classification additionally return `LW_STATUS_INVALID_SHAPE` for a truncated BGR
 layout, `LW_STATUS_OUT_OF_BOUNDS` for an insufficient text buffer, and
 `LW_STATUS_MEMORY_LIMIT` when decoded dimensions exceed `max_image_pixels`.

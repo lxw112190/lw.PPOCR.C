@@ -9,13 +9,13 @@ Python、OpenCV、ONNX Runtime、OpenVINO、TensorRT 或 protobuf。
 
 ## Current milestone
 
-Exact PP-OCRv6 tiny model analysis, the deterministic REC-to-LWM v0.1
-converter, the bounds-checked pure-C model loader, and runtime REC shape/workspace
-planning are implemented. Reference-tested scalar kernels now cover all 15
-converted REC operator types and all 161 nodes. A private, zero-allocation graph
-executor now binds LWM constants and planned workspace and matches the original
-ONNX REC output at two dynamic widths. Private pure-C BGR preprocessing and
-UTF-8 CTC decoding now complete a real cropped-text recognition golden path.
+Exact PP-OCRv6 tiny model analysis, deterministic REC/CLS-to-LWM v0.1
+converters, the bounds-checked pure-C model loader, and runtime shape/workspace
+planning are implemented. Reference-tested scalar kernels cover all converted
+REC operators plus the static Reshape needed by CLS. A private, zero-allocation
+graph executor matches the original ONNX REC output at two dynamic widths and
+the fixed-batch CLS output. Pure-C BGR preprocessing, UTF-8 CTC decoding, and
+direction classification now provide real cropped-text REC and CLS paths.
 That path is regression-tested on ten real text-line crops against the original
 ONNX model and remains a mandatory gate during runtime-only optimization. The
 profile-directed scalar optimizations now cover general Conv address/bounds
@@ -25,16 +25,16 @@ measurements retain unchanged recognition results. On x86/x64, MatMul,
 pointwise Conv, ordinary stride-2 3x3 Conv, stride-1 3x3 Depthwise Conv, flat
 Add/Mul/Div, and single-axis binary broadcasts now use runtime-detected AVX2 or
 SSE2 with automatic scalar fallbacks.
-The public recognizer C API exposes that path with caller-owned UTF-8 output
-buffers and bounded, preallocated inference memory. Image-file decoding remains
-outside the core: applications currently provide decoded BGR8 pixels.
+The public recognizer and classifier C APIs expose those paths with bounded,
+preallocated inference memory. Image-file decoding remains outside the core:
+applications provide decoded BGR8 pixels. DET, DB postprocessing, and the
+combined full-OCR API remain future milestones.
 
 Current scope:
 
 - PP-OCRv6 tiny;
-- REC first;
-- FP32, CPU, scalar/SSE2/AVX2 runtime dispatch, single-threaded; 15/15 REC operator
-  types implemented;
+- REC and fixed-batch CLS;
+- FP32, CPU, scalar/SSE2/AVX2 runtime dispatch, single-threaded;
 - custom, non-frozen LWM v0.1 format;
 - Windows x64 and Linux x64 first;
 - Windows 7 x86 compatibility preserved by design.
@@ -62,7 +62,7 @@ cmake --build build --config Release
 ctest --test-dir build -C Release --output-on-failure
 ```
 
-The normal build creates `build/models/rec.lwm`, static and shared pure-C
+The normal build creates `build/models/rec.lwm`, `build/models/cls.lwm`, static and shared pure-C
 libraries, the `lw-recognize-ppm` public-API Demo, the machine-readable
 `lw-rec-benchmark`, and `lwm-inspect`. Inspect the converted model with:
 
@@ -85,6 +85,8 @@ The private complete-graph execution gate is documented in
 [`docs/graph-executor.md`](docs/graph-executor.md).
 The private end-to-end REC preprocessing and decoding contract is documented in
 [`docs/rec-pipeline.md`](docs/rec-pipeline.md).
+The public CLS direction-classification contract and reference gates are documented in
+[`docs/cls-pipeline.md`](docs/cls-pipeline.md).
 The ten-crop ONNX-versus-pure-C correctness gate is documented in
 [`docs/rec-golden-corpus.md`](docs/rec-golden-corpus.md).
 The optimization baseline and benchmark protocol are documented in

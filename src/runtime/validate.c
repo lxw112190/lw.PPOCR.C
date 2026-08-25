@@ -280,7 +280,7 @@ lw_status lw_validate_lwm_v0(lw_model* model, lw_error* error) {
         uint32_t expected_size;
         uint32_t j;
         lw_status param_status;
-        if (op == 0u || op > 15u || input_count > LWM_V0_MAX_NODE_INPUTS ||
+        if (op == 0u || op > 16u || input_count > LWM_V0_MAX_NODE_INPUTS ||
             output_count == 0u || output_count > LWM_V0_MAX_NODE_OUTPUTS ||
             read_u16(n + 6) != 0u || read_u32(n + 68) != 0u) {
             return fail(error, LW_STATUS_INVALID_FORMAT, "invalid node operator, arity, flags, or reserved field");

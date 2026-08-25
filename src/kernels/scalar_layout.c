@@ -204,3 +204,27 @@ lw_status lw_scalar_unsqueeze_f32(
     }
     return copy_reshape(input, output, input_count);
 }
+
+lw_status lw_scalar_reshape_f32(
+    const float* input,
+    float* output,
+    uint32_t input_rank,
+    const int32_t* input_dimensions,
+    uint32_t output_rank,
+    const int32_t* output_dimensions) {
+    uint64_t input_count;
+    uint64_t output_count;
+    lw_status status = tensor_element_count(
+        input_rank, input_dimensions, &input_count);
+    if (status != LW_STATUS_OK) {
+        return status;
+    }
+    status = tensor_element_count(output_rank, output_dimensions, &output_count);
+    if (status != LW_STATUS_OK) {
+        return status;
+    }
+    if (input_count != output_count) {
+        return LW_STATUS_INVALID_SHAPE;
+    }
+    return copy_reshape(input, output, input_count);
+}

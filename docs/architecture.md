@@ -5,15 +5,16 @@
 ```text
 Development machine                    Deployment target
 
-PP-OCR ONNX                            rec.lwm + dictionary + BGR8 pixels
+PP-OCR ONNX                            rec.lwm / cls.lwm + BGR8 pixels
     |                                     |
 Python + ONNX analyzer/converter          pure-C loader + session planner
     |                                     |
-validated, simplified REC graph           public recognizer C API
+validated REC / fixed CLS graphs          public recognizer / classifier C APIs
     |                                     |
-platform-independent LWM v0                preprocess + executor + CTC
+platform-independent LWM v0                preprocess + executor + CTC/class result
                                           |
 decoded BGR pixels -> REC preprocess -> probabilities -> UTF-8 CTC text
+decoded BGR pixels -> CLS preprocess -> probabilities -> 0/180 orientation
 ```
 
 The converter and runtime are separate products with separate dependency
@@ -23,7 +24,8 @@ contracts:
 - the deployment runtime may use only C11, libc, and narrowly wrapped OS APIs;
 - ONNX names and graph metadata are not required at runtime unless retained for
   diagnostics in a non-executable debug section;
-- the first executable scope is the exact bundled PP-OCRv6 tiny REC graph.
+- the executable scope covers the exact bundled PP-OCRv6 tiny REC graph and
+  fixed-batch CLS graph; DET remains pending.
 
 ## Dependency direction
 
@@ -35,6 +37,7 @@ models + converter
 runtime loader -> tensor/memory -> executor -> scalar/SIMD kernels
                                            |
                               REC preprocess + CTC
+                              CLS preprocess + orientation
 ```
 
 `src/runtime` must not know about OCR text, dictionaries, boxes, or DB
@@ -100,8 +103,14 @@ and architecture-specific kernels are isolated under `src/simd`.
 21. Ordinary stride-2 3x3 Conv SIMD — complete locally; the two REC stem nodes
     use safe deinterleaving loads to advance eight AVX2 or four SSE2 output
     columns while preserving scalar accumulation order.
-22. Next: reprofile the balanced remaining graph before choosing between
-    pointwise Conv, Erf, MatMul, threading, CLS, DET, or full OCR work.
+22. Fixed-batch CLS converter and graph execution — complete; offline metadata
+    specialization reuses existing operators plus one checked static Reshape,
+    and full graph output matches the original ONNX model on x64/x86.
+23. Public CLS direction-classification API — complete; BGR preprocessing,
+    0/180-degree labels, scores, UTF-8 paths, resource limits, shared exports,
+    dependency-free PPM demo, and installed packages are contract-tested.
+24. Next: implement the exact DET graph, DB postprocessing, crop extraction,
+    and then a separately exposed full-OCR API.
 
 ## Compatibility claims
 

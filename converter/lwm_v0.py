@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 import dataclasses
 import hashlib
 import struct
@@ -24,6 +25,7 @@ MAX_NODE_INPUTS = 8
 MAX_NODE_OUTPUTS = 4
 UINT64_MAX = (1 << 64) - 1
 SUPPORTED_REC_SHA256 = "9ef676d6ed3c88256a2d92c640c44f25b0c40947e111b14b8be8f594091563e6"
+SUPPORTED_CLS_SHA256 = "dd8b2b61983d76ab230a58da9e0e0e84956b71c3877f2ce6e438fe22d74d2cf2"
 
 HEADER_FLAG_NO_MEMORY_PLAN = 1 << 0
 TENSOR_FLAG_CONSTANT = 1 << 0
@@ -51,6 +53,7 @@ OP_IDS = {
     "Unsqueeze": 13,
     "MatMul": 14,
     "Softmax": 15,
+    "Reshape": 16,
 }
 
 PARAM_SIZES = {
@@ -266,7 +269,10 @@ def _resolve_alias(name: str, aliases: dict[str, str]) -> str:
     return name
 
 
-def _build_records(model: onnx.ModelProto) -> tuple[list[TensorRecord], list[NodeRecord], list[int], list[int]]:
+def _build_records(
+    model: onnx.ModelProto,
+    inferred_model: onnx.ModelProto | None = None,
+) -> tuple[list[TensorRecord], list[NodeRecord], list[int], list[int]]:
     graph = model.graph
     aliases = {
         node.output[0]: node.input[0]
@@ -276,7 +282,9 @@ def _build_records(model: onnx.ModelProto) -> tuple[list[TensorRecord], list[Nod
     if sum(1 for node in graph.node if node.op_type == "Identity") != len(aliases):
         raise ValueError("only one-input, one-output Identity nodes are supported")
 
-    inferred = onnx.shape_inference.infer_shapes(model, strict_mode=True, data_prop=False)
+    inferred = inferred_model or onnx.shape_inference.infer_shapes(
+        model, strict_mode=True, data_prop=False
+    )
     values = {
         value.name: value
         for value in (*inferred.graph.input, *inferred.graph.value_info, *inferred.graph.output)
@@ -339,6 +347,17 @@ def _build_records(model: onnx.ModelProto) -> tuple[list[TensorRecord], list[Nod
     return tensors, nodes, [indexes[name] for name in input_names], [indexes[name] for name in output_names]
 
 
+def _write_model(
+    model: onnx.ModelProto,
+    output_path: Path,
+    inferred_model: onnx.ModelProto | None = None,
+) -> ConversionInfo:
+    tensors, nodes, graph_inputs, graph_outputs = _build_records(model, inferred_model)
+    return _write_records_layout(
+        tensors, nodes, graph_inputs, graph_outputs, output_path
+    )
+
+
 def convert_rec_model(input_path: Path, output_path: Path) -> ConversionInfo:
     digest = hashlib.sha256(input_path.read_bytes()).hexdigest()
     if digest != SUPPORTED_REC_SHA256:
@@ -354,8 +373,97 @@ def convert_rec_model(input_path: Path, output_path: Path) -> ConversionInfo:
     if len(model.graph.input) != 1 or len(model.graph.output) != 1:
         raise ValueError("REC converter requires exactly one graph input and one graph output")
 
-    tensors, nodes, graph_inputs, graph_outputs = _build_records(model)
+    return _write_model(model, output_path)
 
+
+def _prepare_cls_model(
+    model: onnx.ModelProto,
+) -> tuple[onnx.ModelProto, onnx.ModelProto]:
+    fixed = copy.deepcopy(model)
+    batch_dimension = fixed.graph.input[0].type.tensor_type.shape.dim[0]
+    batch_dimension.ClearField("dim_param")
+    batch_dimension.dim_value = 1
+    inferred = onnx.shape_inference.infer_shapes(
+        fixed, strict_mode=True, data_prop=False
+    )
+    for value in (
+        *inferred.graph.input,
+        *inferred.graph.value_info,
+        *inferred.graph.output,
+    ):
+        shape = value.type.tensor_type.shape
+        for axis, dimension in enumerate(shape.dim):
+            if not dimension.HasField("dim_value") or dimension.dim_value <= 0:
+                if axis != 0:
+                    raise ValueError(
+                        f"CLS tensor {value.name!r} has a non-batch dynamic dimension"
+                    )
+                dimension.ClearField("dim_param")
+                dimension.dim_value = 1
+
+    converted = copy.deepcopy(fixed)
+    rewritten_nodes: list[onnx.NodeProto] = []
+    removed_metadata_ops = {"Shape", "Slice", "Concat"}
+    for node in converted.graph.node:
+        if node.op_type in removed_metadata_ops:
+            continue
+        if node.op_type == "GlobalAveragePool":
+            replacement = onnx.helper.make_node(
+                "ReduceMean",
+                list(node.input),
+                list(node.output),
+                name=node.name,
+                axes=[2, 3],
+                keepdims=1,
+            )
+            rewritten_nodes.append(replacement)
+            continue
+        replacement = copy.deepcopy(node)
+        if replacement.op_type == "Reshape":
+            if len(replacement.input) != 2:
+                raise ValueError("CLS Reshape must have data and shape inputs")
+            del replacement.input[1:]
+        rewritten_nodes.append(replacement)
+    del converted.graph.node[:]
+    converted.graph.node.extend(rewritten_nodes)
+
+    used_initializers = {name for node in converted.graph.node for name in node.input}
+    retained_initializers = [
+        item for item in converted.graph.initializer if item.name in used_initializers
+    ]
+    del converted.graph.initializer[:]
+    converted.graph.initializer.extend(retained_initializers)
+    return converted, inferred
+
+
+def convert_cls_model(input_path: Path, output_path: Path) -> ConversionInfo:
+    digest = hashlib.sha256(input_path.read_bytes()).hexdigest()
+    if digest != SUPPORTED_CLS_SHA256:
+        raise ValueError(
+            "CLS converter only supports the bundled PP-OCRv6 tiny CLS model; "
+            f"expected SHA-256 {SUPPORTED_CLS_SHA256}, got {digest}"
+        )
+    model = onnx.load(str(input_path), load_external_data=True)
+    onnx.checker.check_model(model, full_check=True)
+    default_opset = next(
+        (item.version for item in model.opset_import if item.domain in ("", "ai.onnx")),
+        None,
+    )
+    if default_opset != 7:
+        raise ValueError(f"CLS converter requires ONNX opset 7, got {default_opset}")
+    if len(model.graph.input) != 1 or len(model.graph.output) != 1:
+        raise ValueError("CLS converter requires exactly one graph input and one graph output")
+    converted, inferred = _prepare_cls_model(model)
+    return _write_model(converted, output_path, inferred)
+
+
+def _write_records_layout(
+    tensors: list[TensorRecord],
+    nodes: list[NodeRecord],
+    graph_inputs: list[int],
+    graph_outputs: list[int],
+    output_path: Path,
+) -> ConversionInfo:
     input_offset = HEADER_SIZE
     output_offset = align8(input_offset + 4 * len(graph_inputs))
     tensor_offset = align8(output_offset + 4 * len(graph_outputs))

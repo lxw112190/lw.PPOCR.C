@@ -76,6 +76,13 @@ lw_status lw_scalar_unsqueeze_f32(
     const int32_t* axes,
     uint32_t output_rank,
     const int32_t* output_dimensions);
+lw_status lw_scalar_reshape_f32(
+    const float* input,
+    float* output,
+    uint32_t input_rank,
+    const int32_t* input_dimensions,
+    uint32_t output_rank,
+    const int32_t* output_dimensions);
 lw_status lw_scalar_reduce_mean_f32(
     const float* input,
     float* output,

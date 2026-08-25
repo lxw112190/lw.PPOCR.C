@@ -73,6 +73,7 @@ def expected_results() -> dict[str, np.ndarray]:
         "squeeze": squeezed.ravel(),
         "squeeze_all": np.squeeze(reshape_input).ravel(),
         "unsqueeze": np.expand_dims(squeezed, axis=(0, 3)).ravel(),
+        "reshape": reshape_input.reshape(2, 3).ravel(),
         "reduce_mean": np.mean(
             reduce_input, axis=(1, 2), keepdims=True, dtype=np.float32
         ).ravel(),

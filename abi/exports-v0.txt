@@ -1,4 +1,11 @@
 lw_error_init
+lw_classification_result_init
+lw_classifier_classify_bgr_u8
+lw_classifier_create
+lw_classifier_free
+lw_classifier_get_info
+lw_classifier_info_init
+lw_classifier_options_init
 lw_model_free
 lw_model_get_info
 lw_model_info_init

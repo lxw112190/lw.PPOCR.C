@@ -27,6 +27,9 @@ endfunction()
 add_executable(lw-recognize-ppm-consumer recognize_ppm.c)
 lw_configure_example(lw-recognize-ppm-consumer)
 
+add_executable(lw-classify-ppm-consumer classify_ppm.c)
+lw_configure_example(lw-classify-ppm-consumer)
+
 add_executable(lw-rec-benchmark-consumer benchmark_ppm.c)
 lw_configure_example(lw-rec-benchmark-consumer)
 if(WIN32)

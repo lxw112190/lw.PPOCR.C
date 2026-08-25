@@ -17,6 +17,12 @@ set(LW_PPOCR_C_REC_LWM
     "${CMAKE_CURRENT_BINARY_DIR}/models/rec.lwm")
 set(LW_PPOCR_C_REC_LWM_METADATA
     "${CMAKE_CURRENT_BINARY_DIR}/models/rec-lwm.json")
+set(LW_PPOCR_C_CLS_ONNX
+    "${CMAKE_CURRENT_SOURCE_DIR}/models/ppocrv6-tiny/cls.onnx")
+set(LW_PPOCR_C_CLS_LWM
+    "${CMAKE_CURRENT_BINARY_DIR}/models/cls.lwm")
+set(LW_PPOCR_C_CLS_LWM_METADATA
+    "${CMAKE_CURRENT_BINARY_DIR}/models/cls-lwm.json")
 
 add_custom_target(analyze_models
     COMMAND "${Python3_EXECUTABLE}"
@@ -43,6 +49,22 @@ add_custom_command(
 add_custom_target(convert_rec_model ALL
     DEPENDS "${LW_PPOCR_C_REC_LWM}" "${LW_PPOCR_C_REC_LWM_METADATA}")
 
+add_custom_command(
+    OUTPUT "${LW_PPOCR_C_CLS_LWM}" "${LW_PPOCR_C_CLS_LWM_METADATA}"
+    COMMAND "${Python3_EXECUTABLE}" -m converter.convert_cls
+            --input "${LW_PPOCR_C_CLS_ONNX}"
+            --output "${LW_PPOCR_C_CLS_LWM}"
+            --metadata-output "${LW_PPOCR_C_CLS_LWM_METADATA}"
+    DEPENDS
+        "${LW_PPOCR_C_CLS_ONNX}"
+        "${CMAKE_CURRENT_SOURCE_DIR}/converter/convert_cls.py"
+        "${CMAKE_CURRENT_SOURCE_DIR}/converter/lwm_v0.py"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+    COMMENT "Converting PP-OCRv6 tiny CLS to LWM v0.1"
+    VERBATIM)
+add_custom_target(convert_cls_model ALL
+    DEPENDS "${LW_PPOCR_C_CLS_LWM}" "${LW_PPOCR_C_CLS_LWM_METADATA}")
+
 set(LW_PPOCR_C_SOURCES
     src/kernels/scalar_activation.c
     src/kernels/scalar_conv.c
@@ -51,6 +73,8 @@ set(LW_PPOCR_C_SOURCES
     src/kernels/scalar_matmul.c
     src/kernels/scalar_reduction.c
     src/kernels/scalar_softmax.c
+    src/ppocr/classifier.c
+    src/ppocr/cls_preprocess.c
     src/ppocr/ctc_decode.c
     src/ppocr/rec_preprocess.c
     src/ppocr/recognizer.c
@@ -162,6 +186,24 @@ else()
     set_target_properties(lw-rec-benchmark PROPERTIES
         INSTALL_RPATH "$ORIGIN/../lib")
 endif()
+
+add_executable(lw-classify-ppm examples/classify_ppm.c)
+target_link_libraries(lw-classify-ppm PRIVATE lw_ppocr_c_shared)
+target_compile_features(lw-classify-ppm PRIVATE c_std_11)
+add_dependencies(lw-classify-ppm convert_cls_model rec_demo_fixture)
+if(WIN32)
+    target_link_libraries(lw-classify-ppm PRIVATE shell32)
+elseif(APPLE)
+    set_target_properties(lw-classify-ppm PROPERTIES INSTALL_RPATH "@loader_path/../lib")
+else()
+    set_target_properties(lw-classify-ppm PROPERTIES INSTALL_RPATH "$ORIGIN/../lib")
+endif()
+if(MSVC)
+    target_compile_options(lw-classify-ppm PRIVATE /W4 /WX /utf-8)
+else()
+    target_compile_options(lw-classify-ppm PRIVATE
+        -Wall -Wextra -Wpedantic -Werror)
+endif()
 if(MSVC)
     target_compile_options(lw-rec-benchmark PRIVATE /W4 /WX /utf-8)
 else()
@@ -200,6 +242,13 @@ if(BUILD_TESTING)
         COMMAND "${Python3_EXECUTABLE}" -m unittest -v
                 tests.test_convert_rec)
     set_tests_properties(rec_converter PROPERTIES
+        WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
+
+    add_test(
+        NAME cls_converter
+        COMMAND "${Python3_EXECUTABLE}" -m unittest -v
+                tests.test_convert_cls)
+    set_tests_properties(cls_converter PROPERTIES
         WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
 
     add_executable(test-lwm-loader tests/test_model.c)
@@ -249,6 +298,26 @@ if(BUILD_TESTING)
         COMMAND test-recognizer-api
                 "${LW_PPOCR_C_REC_LWM}"
                 "${CMAKE_CURRENT_SOURCE_DIR}/models/ppocrv6-tiny/ppocr_keys.txt")
+
+    add_executable(test-classifier-api tests/test_classifier.c)
+    target_link_libraries(test-classifier-api PRIVATE lw_ppocr_c)
+    target_compile_features(test-classifier-api PRIVATE c_std_11)
+    add_dependencies(test-classifier-api convert_cls_model)
+    if(MSVC)
+        target_compile_options(test-classifier-api PRIVATE /W4 /WX /utf-8)
+    else()
+        target_compile_options(test-classifier-api PRIVATE
+            -Wall -Wextra -Wpedantic -Werror)
+    endif()
+    add_test(
+        NAME classifier_api_contract
+        COMMAND test-classifier-api "${LW_PPOCR_C_CLS_LWM}")
+
+    add_test(
+        NAME c_demo_classification
+        COMMAND lw-classify-ppm
+                "${LW_PPOCR_C_CLS_LWM}"
+                "${LW_PPOCR_C_REC_DEMO_PPM}")
 
     add_test(
         NAME c_demo_recognition
@@ -372,6 +441,55 @@ if(BUILD_TESTING)
         WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
         TIMEOUT 360)
 
+    add_executable(cls-graph-driver tests/cls_graph_driver.c)
+    target_link_libraries(cls-graph-driver PRIVATE lw_ppocr_c)
+    target_include_directories(cls-graph-driver PRIVATE
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/runtime")
+    target_compile_features(cls-graph-driver PRIVATE c_std_11)
+    add_dependencies(cls-graph-driver convert_cls_model)
+    if(MSVC)
+        target_compile_options(cls-graph-driver PRIVATE /W4 /WX /utf-8)
+    else()
+        target_compile_options(cls-graph-driver PRIVATE
+            -Wall -Wextra -Wpedantic -Werror)
+    endif()
+    add_test(
+        NAME cls_graph_reference
+        COMMAND "${Python3_EXECUTABLE}"
+                "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_cls_graph_reference.py"
+                --driver "$<TARGET_FILE:cls-graph-driver>"
+                --lwm-model "${LW_PPOCR_C_CLS_LWM}"
+                --onnx-model "${LW_PPOCR_C_CLS_ONNX}")
+    set_tests_properties(cls_graph_reference PROPERTIES
+        WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+        TIMEOUT 360)
+
+    add_executable(cls-pipeline-driver tests/cls_pipeline_driver.c)
+    target_link_libraries(cls-pipeline-driver PRIVATE lw_ppocr_c)
+    if(WIN32)
+        target_link_libraries(cls-pipeline-driver PRIVATE shell32)
+    endif()
+    target_include_directories(cls-pipeline-driver PRIVATE
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/ppocr")
+    target_compile_features(cls-pipeline-driver PRIVATE c_std_11)
+    add_dependencies(cls-pipeline-driver convert_cls_model)
+    if(MSVC)
+        target_compile_options(cls-pipeline-driver PRIVATE /W4 /WX /utf-8)
+    else()
+        target_compile_options(cls-pipeline-driver PRIVATE
+            -Wall -Wextra -Wpedantic -Werror)
+    endif()
+    add_test(
+        NAME cls_pipeline_reference
+        COMMAND "${Python3_EXECUTABLE}"
+                "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_cls_pipeline_reference.py"
+                --driver "$<TARGET_FILE:cls-pipeline-driver>"
+                --lwm-model "${LW_PPOCR_C_CLS_LWM}"
+                --onnx-model "${LW_PPOCR_C_CLS_ONNX}")
+    set_tests_properties(cls_pipeline_reference PROPERTIES
+        WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+        TIMEOUT 360)
+
     add_executable(rec-profile-driver tests/rec_profile_driver.c)
     target_link_libraries(rec-profile-driver PRIVATE lw_ppocr_c)
     target_include_directories(rec-profile-driver PRIVATE
@@ -458,18 +576,20 @@ install(TARGETS lw_ppocr_c lw_ppocr_c_shared
     RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}"
     LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}"
     ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}")
-install(TARGETS lw-recognize-ppm lw-rec-benchmark
+install(TARGETS lw-recognize-ppm lw-rec-benchmark lw-classify-ppm
     RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}")
 install(FILES include/lw_infer.h
     DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}")
 install(FILES
     examples/CMakeLists.txt
     examples/benchmark_ppm.c
+    examples/classify_ppm.c
     examples/ppm_image.h
     examples/recognize_ppm.c
     DESTINATION examples)
 install(FILES
     "${LW_PPOCR_C_REC_LWM}"
+    "${LW_PPOCR_C_CLS_LWM}"
     "${CMAKE_CURRENT_SOURCE_DIR}/models/ppocrv6-tiny/ppocr_keys.txt"
     "${LW_PPOCR_C_REC_DEMO_PPM}"
     DESTINATION models)

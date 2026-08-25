@@ -12,6 +12,7 @@ lib/                         static library and shared-library import library
 lib/cmake/lw.PPOCR.C/        CMake package configuration
 examples/                    standalone CMake consumer example
 models/rec.lwm               converted PP-OCRv6 tiny REC model
+models/cls.lwm               converted PP-OCRv6 tiny CLS model
 models/ppocr_keys.txt        UTF-8 recognition dictionary
 models/sample-crop.ppm       dependency-free demo input
 docs/                        API and implementation documentation
@@ -43,6 +44,17 @@ The demo intentionally supports only binary P6 PPM. This keeps it pure C and
 dependency-free while demonstrating the complete public recognizer API. The
 core library accepts decoded BGR8 pixels; production applications may use their
 own JPEG/PNG decoder.
+
+Run the direction-classification demo against the same decoded crop:
+
+```powershell
+.\bin\lw-classify-ppm.exe `
+  .\models\cls.lwm `
+  .\models\sample-crop.ppm
+```
+
+It reports label `0`/`1`, orientation `0`/`180`, Softmax score, and resized
+content width. It reports orientation but does not rotate the image.
 
 ## Run the scalar benchmark
 

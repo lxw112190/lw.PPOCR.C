@@ -5,7 +5,7 @@
 ## Scope and decision boundary
 
 This report describes only the exact bundled PP-OCRv6 tiny DET, CLS, and REC models.
-It is not a promise to support arbitrary ONNX graphs. The v0.1 runtime remains REC-first,
+It is not a promise to support arbitrary ONNX graphs. The v0.1 runtime supports the exact REC and fixed-batch CLS graphs,
 FP32, CPU, scalar, and single-threaded. ONNX is a converter dependency only.
 
 ## Model inventory

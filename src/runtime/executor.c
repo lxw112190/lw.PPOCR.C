@@ -22,7 +22,8 @@ enum {
     LW_OP_TRANSPOSE = 12,
     LW_OP_UNSQUEEZE = 13,
     LW_OP_MATMUL = 14,
-    LW_OP_SOFTMAX = 15
+    LW_OP_SOFTMAX = 15,
+    LW_OP_RESHAPE = 16
 };
 
 static float read_f32(const uint8_t* bytes) {
@@ -228,6 +229,13 @@ static lw_status dispatch_node(
                 lw_scalar_softmax_f32(
                     inputs[0], output, input_tensors[0]->rank, input_tensors[0]->dimensions,
                     lwm_read_i32(params + 4)) :
+                LW_STATUS_INVALID_SHAPE;
+        case LW_OP_RESHAPE:
+            return input_count == 1u ?
+                lw_scalar_reshape_f32(
+                    inputs[0], output,
+                    input_tensors[0]->rank, input_tensors[0]->dimensions,
+                    output_tensor->rank, output_tensor->dimensions) :
                 LW_STATUS_INVALID_SHAPE;
         default:
             return LW_STATUS_UNSUPPORTED;

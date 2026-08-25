@@ -11,6 +11,9 @@ _Static_assert(sizeof(lw_session_info) == 24u, "lw_session_info ABI changed");
 _Static_assert(sizeof(lw_recognizer_options) == 48u, "lw_recognizer_options ABI changed");
 _Static_assert(sizeof(lw_recognizer_info) == 40u, "lw_recognizer_info ABI changed");
 _Static_assert(sizeof(lw_recognition_result) == 32u, "lw_recognition_result ABI changed");
+_Static_assert(sizeof(lw_classifier_options) == 40u, "lw_classifier_options ABI changed");
+_Static_assert(sizeof(lw_classifier_info) == 24u, "lw_classifier_info ABI changed");
+_Static_assert(sizeof(lw_classification_result) == 24u, "lw_classification_result ABI changed");
 _Static_assert(LW_STATUS_OK == 0, "success status must remain zero");
 _Static_assert(LW_STATUS_UNSUPPORTED == 8, "status numbering changed");
 _Static_assert(LW_STATUS_MEMORY_LIMIT == 10, "status numbering changed");
@@ -24,6 +27,9 @@ int main(void) {
     lw_recognizer_options recognizer_options;
     lw_recognizer_info recognizer_info;
     lw_recognition_result recognition_result;
+    lw_classifier_options classifier_options;
+    lw_classifier_info classifier_info;
+    lw_classification_result classification_result;
     lw_model_options_init(&options);
     lw_error_init(&error);
     lw_tensor_desc_init(&tensor);
@@ -32,6 +38,9 @@ int main(void) {
     lw_recognizer_options_init(&recognizer_options);
     lw_recognizer_info_init(&recognizer_info);
     lw_recognition_result_init(&recognition_result);
+    lw_classifier_options_init(&classifier_options);
+    lw_classifier_info_init(&classifier_info);
+    lw_classification_result_init(&classification_result);
     return options.struct_size == sizeof(options) && error.struct_size == sizeof(error) &&
                    tensor.struct_size == sizeof(tensor) &&
                    session_options.struct_size == sizeof(session_options) &&
@@ -39,7 +48,10 @@ int main(void) {
                    recognizer_options.struct_size == sizeof(recognizer_options) &&
                    recognizer_options.target_width == 320u &&
                    recognizer_info.struct_size == sizeof(recognizer_info) &&
-                   recognition_result.struct_size == sizeof(recognition_result)
+                   recognition_result.struct_size == sizeof(recognition_result) &&
+                   classifier_options.struct_size == sizeof(classifier_options) &&
+                   classifier_info.struct_size == sizeof(classifier_info) &&
+                   classification_result.struct_size == sizeof(classification_result)
                ? 0
                : 1;
 }

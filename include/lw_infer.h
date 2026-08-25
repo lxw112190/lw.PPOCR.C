@@ -124,9 +124,36 @@ typedef struct lw_recognition_result {
     uint64_t required_text_capacity;
 } lw_recognition_result;
 
+typedef struct lw_classifier_options {
+    uint32_t struct_size;
+    uint32_t reserved;
+    uint64_t max_model_file_size;
+    uint64_t max_workspace_size;
+    uint64_t max_tensor_size;
+    uint64_t max_image_pixels;
+} lw_classifier_options;
+
+typedef struct lw_classifier_info {
+    uint32_t struct_size;
+    uint32_t input_width;
+    uint32_t input_height;
+    uint32_t class_count;
+    uint64_t workspace_size;
+} lw_classifier_info;
+
+typedef struct lw_classification_result {
+    uint32_t struct_size;
+    uint32_t label;
+    float score;
+    uint32_t resized_width;
+    uint32_t orientation_degrees;
+    uint32_t reserved;
+} lw_classification_result;
+
 typedef struct lw_model lw_model;
 typedef struct lw_session lw_session;
 typedef struct lw_recognizer lw_recognizer;
+typedef struct lw_classifier lw_classifier;
 
 LW_API void lw_model_options_init(lw_model_options* options);
 LW_API void lw_model_info_init(lw_model_info* info);
@@ -177,6 +204,27 @@ LW_API lw_status lw_recognizer_recognize_bgr_u8(
     char* text_utf8,
     uint64_t text_capacity,
     lw_recognition_result* result,
+    lw_error* error);
+LW_API void lw_classifier_options_init(lw_classifier_options* options);
+LW_API void lw_classifier_info_init(lw_classifier_info* info);
+LW_API void lw_classification_result_init(lw_classification_result* result);
+LW_API lw_status lw_classifier_create(
+    const char* model_path_utf8,
+    const lw_classifier_options* options,
+    lw_classifier** out_classifier,
+    lw_error* error);
+LW_API void lw_classifier_free(lw_classifier* classifier);
+LW_API lw_status lw_classifier_get_info(
+    const lw_classifier* classifier,
+    lw_classifier_info* info);
+LW_API lw_status lw_classifier_classify_bgr_u8(
+    lw_classifier* classifier,
+    const uint8_t* source,
+    uint64_t source_byte_count,
+    uint32_t source_width,
+    uint32_t source_height,
+    uint32_t source_stride,
+    lw_classification_result* result,
     lw_error* error);
 LW_API const char* lw_status_string(lw_status status);
 
