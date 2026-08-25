@@ -98,6 +98,36 @@ Every measured call again returned exactly `纯臻营养护发素` with score
 `0.998993874`. The ONNX complete-graph comparison, ten-crop Golden Corpus,
 deterministic-repeat check, and x64/x86 reference tests remain green.
 
+## Third profile: ordinary 3x3 downsampling Conv
+
+After pointwise optimization, the remaining Conv profile identified two
+ordinary `3x3`, stride-2, unit-dilation, pad-1, group-1 nodes. They consumed
+about 10.76 ms per graph on Windows x64, or 43.6% of Conv time.
+
+The third change adds a portable-C path for this shape. It initializes each
+output plane once, then scans valid output positions in input-channel,
+kernel-row, kernel-column order. Input and output traversal is spatially local,
+while the FP32 addition order for each output element remains unchanged. The
+existing ONNX reference case exercises the same path with an odd input width,
+covering the right-edge boundary.
+
+Across five repeated node profiles, the median measurement for those two nodes
+was 5.601 ms after the change, a 47.94% reduction. Median total Conv time was
+19.150 ms, 24.54% below the prior 25.379 ms measurement. The full operator
+profile is now more balanced: median Conv share is 43.38% and MatMul is 29.33%,
+so the two-node MatMul implementation becomes the next concentrated target.
+
+## Third end-to-end A/B result
+
+| Process | Pointwise optimized mean | 3x3 optimized mean | Further reduction | Further speedup | Original baseline speedup | Throughput | RSS growth |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| Windows x64 | 51.495 ms | 44.444 ms | 13.69% | 1.159x | 12.842x | 22.500/s | 0 B |
+| Windows x86 | 139.297 ms | 126.773 ms | 8.99% | 1.099x | 11.174x | 7.888/s | 0 B |
+
+The optimized mean and throughput values are medians from five repeated 3+20
+runs. Every run retained the exact text and score, deterministic output, and
+zero measured RSS growth.
+
 All results in this document describe one machine, compiler, model, and
 fixture. They should be reproduced on target machines before being used for
 capacity planning.

@@ -39,11 +39,11 @@ static void fill_values(float* values, uint32_t count, uint32_t multiplier,
 }
 
 int main(void) {
-    const int32_t normal_input_dimensions[4] = {1, 2, 4, 5};
+    const int32_t normal_input_dimensions[4] = {2, 2, 4, 5};
     const int32_t normal_weight_dimensions[4] = {3, 2, 3, 3};
     const int32_t invalid_weight_dimensions[4] = {3, 1, 3, 3};
-    const int32_t normal_output_dimensions[4] = {1, 3, 2, 3};
-    const int32_t invalid_output_dimensions[4] = {1, 3, 2, 2};
+    const int32_t normal_output_dimensions[4] = {2, 3, 2, 3};
+    const int32_t invalid_output_dimensions[4] = {2, 3, 2, 2};
     const int32_t normal_kernel[2] = {3, 3};
     const int32_t normal_strides[2] = {2, 2};
     const int32_t unit_dilations[2] = {1, 1};
@@ -77,9 +77,9 @@ int main(void) {
     const float batch_norm_mean[3] = {-0.25f, 1.0f, 0.5f};
     const float batch_norm_variance[3] = {0.5f, 2.0f, 0.25f};
     const float invalid_variance[3] = {0.5f, -1.0f, 0.25f};
-    float normal_input[40];
+    float normal_input[80];
     float normal_weights[54];
-    float normal_output[18];
+    float normal_output[36];
     float grouped_input[64];
     float grouped_weights[108];
     float grouped_output[96];
@@ -97,7 +97,7 @@ int main(void) {
     float batch_norm_in_place[24];
     lw_status status;
 
-    fill_values(normal_input, 40u, 5u, 19u, 9, 4.0f);
+    fill_values(normal_input, 80u, 5u, 19u, 9, 4.0f);
     fill_values(normal_weights, 54u, 7u, 17u, 8, 6.0f);
     status = lw_scalar_conv2d_f32(
         normal_input, normal_weights, normal_bias, 3u, normal_output,
@@ -107,7 +107,7 @@ int main(void) {
     if (!expect_status("normal conv", status, LW_STATUS_OK)) {
         return 1;
     }
-    print_values("conv", normal_output, 18u);
+    print_values("conv", normal_output, 36u);
 
     fill_values(grouped_input, 64u, 3u, 23u, 11, 5.0f);
     fill_values(grouped_weights, 108u, 11u, 29u, 14, 7.0f);

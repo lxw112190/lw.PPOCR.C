@@ -113,6 +113,110 @@ static void conv1x1_unit_f32(
     }
 }
 
+static void conv3x3_stride2_pad1_f32(
+    const float* input,
+    const float* weights,
+    const float* bias,
+    float* output,
+    const int32_t input_dimensions[4],
+    const int32_t output_dimensions[4]) {
+    uint64_t input_channel_plane =
+        (uint64_t)(uint32_t)input_dimensions[2] *
+        (uint32_t)input_dimensions[3];
+    uint64_t output_channel_plane =
+        (uint64_t)(uint32_t)output_dimensions[2] *
+        (uint32_t)output_dimensions[3];
+    uint32_t output_y_begin[3];
+    uint32_t output_y_end[3];
+    uint32_t output_x_begin[3];
+    uint32_t output_x_end[3];
+    uint32_t kernel_index;
+    uint32_t batch;
+    for (kernel_index = 0u; kernel_index < 3u; ++kernel_index) {
+        output_y_begin[kernel_index] = 0u;
+        output_y_end[kernel_index] = (uint32_t)output_dimensions[2];
+        while (output_y_begin[kernel_index] < output_y_end[kernel_index] &&
+               (int64_t)output_y_begin[kernel_index] * 2 - 1 + kernel_index < 0) {
+            ++output_y_begin[kernel_index];
+        }
+        while (output_y_end[kernel_index] > output_y_begin[kernel_index] &&
+               (int64_t)(output_y_end[kernel_index] - 1u) * 2 - 1 +
+                   kernel_index >= input_dimensions[2]) {
+            --output_y_end[kernel_index];
+        }
+        output_x_begin[kernel_index] = 0u;
+        output_x_end[kernel_index] = (uint32_t)output_dimensions[3];
+        while (output_x_begin[kernel_index] < output_x_end[kernel_index] &&
+               (int64_t)output_x_begin[kernel_index] * 2 - 1 + kernel_index < 0) {
+            ++output_x_begin[kernel_index];
+        }
+        while (output_x_end[kernel_index] > output_x_begin[kernel_index] &&
+               (int64_t)(output_x_end[kernel_index] - 1u) * 2 - 1 +
+                   kernel_index >= input_dimensions[3]) {
+            --output_x_end[kernel_index];
+        }
+    }
+    for (batch = 0u; batch < (uint32_t)input_dimensions[0]; ++batch) {
+        const float* batch_input = input + (size_t)(
+            (uint64_t)batch * (uint32_t)input_dimensions[1] *
+            input_channel_plane);
+        float* batch_output = output + (size_t)(
+            (uint64_t)batch * (uint32_t)output_dimensions[1] *
+            output_channel_plane);
+        uint32_t output_channel;
+        for (output_channel = 0u;
+             output_channel < (uint32_t)output_dimensions[1];
+             ++output_channel) {
+            const float* output_channel_weights = weights + (size_t)(
+                (uint64_t)output_channel *
+                (uint32_t)input_dimensions[1] * 9u);
+            float* output_channel_data = batch_output + (size_t)(
+                (uint64_t)output_channel * output_channel_plane);
+            float initial = bias == NULL ? 0.0f : bias[output_channel];
+            uint64_t spatial;
+            uint32_t input_channel;
+            for (spatial = 0u; spatial < output_channel_plane; ++spatial) {
+                output_channel_data[(size_t)spatial] = initial;
+            }
+            for (input_channel = 0u;
+                 input_channel < (uint32_t)input_dimensions[1];
+                 ++input_channel) {
+                const float* input_channel_data = batch_input + (size_t)(
+                    (uint64_t)input_channel * input_channel_plane);
+                const float* weight_channel_data = output_channel_weights +
+                    (size_t)((uint64_t)input_channel * 9u);
+                uint32_t kernel_y;
+                for (kernel_y = 0u; kernel_y < 3u; ++kernel_y) {
+                    uint32_t kernel_x;
+                    for (kernel_x = 0u; kernel_x < 3u; ++kernel_x) {
+                        uint32_t output_y;
+                        float weight = weight_channel_data[
+                            (size_t)kernel_y * 3u + kernel_x];
+                        for (output_y = output_y_begin[kernel_y];
+                             output_y < output_y_end[kernel_y]; ++output_y) {
+                            uint32_t input_y = (uint32_t)(
+                                (int64_t)output_y * 2 - 1 + kernel_y);
+                            const float* input_row = input_channel_data + (size_t)(
+                                (uint64_t)input_y *
+                                (uint32_t)input_dimensions[3]);
+                            float* output_row = output_channel_data + (size_t)(
+                                (uint64_t)output_y *
+                                (uint32_t)output_dimensions[3]);
+                            uint32_t output_x;
+                            for (output_x = output_x_begin[kernel_x];
+                                 output_x < output_x_end[kernel_x]; ++output_x) {
+                                uint32_t input_x = (uint32_t)(
+                                    (int64_t)output_x * 2 - 1 + kernel_x);
+                                output_row[output_x] += input_row[input_x] * weight;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
 lw_status lw_scalar_conv2d_f32(
     const float* input,
     const float* weights,
@@ -189,6 +293,14 @@ lw_status lw_scalar_conv2d_f32(
         conv1x1_unit_f32(
             input, weights, bias, output, input_dimensions, output_dimensions,
             groups, input_channels_per_group, output_channels_per_group);
+        return LW_STATUS_OK;
+    }
+    if (groups == 1u && kernel[0] == 3 && kernel[1] == 3 &&
+        strides[0] == 2 && strides[1] == 2 &&
+        dilations[0] == 1 && dilations[1] == 1 &&
+        pads[0] == 1 && pads[1] == 1 && pads[2] == 1 && pads[3] == 1) {
+        conv3x3_stride2_pad1_f32(
+            input, weights, bias, output, input_dimensions, output_dimensions);
         return LW_STATUS_OK;
     }
     for (batch = 0u; batch < (uint32_t)input_dimensions[0]; ++batch) {

@@ -66,6 +66,8 @@ row/channel pointers while preserving FP32 accumulation order; it still uses
 no explicit SIMD or threads. A second portable-C fast path traverses the
 spatial plane contiguously for 1x1, unit-stride, unit-dilation, zero-padding
 Conv, including batched and grouped inputs, while retaining the input-channel
-accumulation order. The test-only executor profiler is private and is not part
-of the installed API or packages. See
+accumulation order. A third cache-local path covers ordinary 3x3, stride-2,
+unit-dilation, pad-1 Conv and keeps the same addition order. These paths add no
+allocation, explicit SIMD, or threads. The test-only executor profiler is
+private and is not part of the installed API or packages. See
 [`kernel-optimization.md`](kernel-optimization.md) for the measured A/B result.

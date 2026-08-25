@@ -60,7 +60,7 @@ def conv2d_reference(
 
 
 def expected_results() -> dict[str, np.ndarray]:
-    normal_input = fill_values(40, 5, 19, 9, 4.0).reshape(1, 2, 4, 5)
+    normal_input = fill_values(80, 5, 19, 9, 4.0).reshape(2, 2, 4, 5)
     normal_weights = fill_values(54, 7, 17, 8, 6.0).reshape(3, 2, 3, 3)
     normal_bias = np.asarray([0.25, -0.5, 1.0], dtype=np.float32)
     grouped_input = fill_values(64, 3, 23, 11, 5.0).reshape(1, 4, 4, 4)

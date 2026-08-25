@@ -71,3 +71,20 @@ result under the same 3+20 protocol:
 
 The full node profile and implementation constraints are recorded in
 [`kernel-optimization.md`](kernel-optimization.md).
+
+## 3x3 downsampling optimized result
+
+The two remaining ordinary 3x3 downsampling nodes received a cache-local
+portable-C path. Under the same 3+20 protocol:
+
+| Process | Original baseline | Pointwise optimized | 3x3 optimized | Overall speedup | Throughput | RSS growth |
+|---|---:|---:|---:|---:|---:|---:|
+| Windows x64 | 570.752 ms | 51.495 ms | 44.444 ms | 12.842x | 22.500/s | 0 B |
+| Windows x86 | 1416.520 ms | 139.297 ms | 126.773 ms | 11.174x | 7.888/s | 0 B |
+
+The 3x3 result uses the median reported mean and throughput from five repeated
+3+20 runs; all five runs had zero measured RSS growth.
+
+The latest profile makes Conv and MatMul comparable hotspots; further work
+should follow the new operator evidence rather than continue specializing
+low-cost Depthwise nodes.

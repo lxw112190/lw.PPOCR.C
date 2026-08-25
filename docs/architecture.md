@@ -68,8 +68,11 @@ isolated under `src/simd` after scalar correctness.
 12. Profile-directed pointwise Conv data-layout fast path — complete locally;
     node profiling identified 25 pointwise nodes as 96.24% of Conv time and
     Windows x64/x86 end-to-end latency fell by about 90% from the baseline.
-13. Next: evaluate the two remaining ordinary 3x3 hotspots, then consider
-    explicit SIMD and threads before CLS, DET, and full OCR.
+13. Ordinary 3x3 stride-2 Conv spatially local path — complete locally with
+    unchanged x64/x86 reference and Golden results; median end-to-end latency
+    is now 12.842x and 11.174x faster than the original baselines respectively.
+14. Next: profile and optimize MatMul, now about 29% of x64 operator time, then
+    consider explicit SIMD and threads before CLS, DET, and full OCR.
 
 ## Compatibility claims
 
