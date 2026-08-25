@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import subprocess
 import sys
 import unittest
@@ -10,10 +11,20 @@ from pathlib import Path
 class StagedPackageTest(unittest.TestCase):
     def test_required_files_and_live_demo(self) -> None:
         root = ARGUMENTS.root.resolve()
-        executable = "lw-recognize-ppm.exe" if sys.platform == "win32" else "lw-recognize-ppm"
+        executable = (
+            "lw-recognize-ppm.exe"
+            if sys.platform == "win32"
+            else "lw-recognize-ppm"
+        )
+        benchmark = (
+            "lw-rec-benchmark.exe"
+            if sys.platform == "win32"
+            else "lw-rec-benchmark"
+        )
         shared = "lw_ppocr_c.dll" if sys.platform == "win32" else "liblw_ppocr_c.so"
         required = [
             root / "bin" / executable,
+            root / "bin" / benchmark,
             root / ("bin" if sys.platform == "win32" else "lib") / shared,
             root / "include" / "lw_infer.h",
             root / "models" / "rec.lwm",
@@ -59,6 +70,28 @@ class StagedPackageTest(unittest.TestCase):
         self.assertEqual(completed.returncode, 0, completed.stdout + completed.stderr)
         self.assertIn("text=纯臻营养护发素", completed.stdout)
         self.assertIn("chars=7", completed.stdout)
+        measured = subprocess.run(
+            [
+                str(root / "bin" / benchmark),
+                str(root / "models" / "rec.lwm"),
+                str(root / "models" / "ppocr_keys.txt"),
+                str(root / "models" / "sample-crop.ppm"),
+                "1",
+                "2",
+            ],
+            cwd=root,
+            check=False,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=180,
+        )
+        self.assertEqual(measured.returncode, 0, measured.stdout + measured.stderr)
+        report = json.loads(measured.stdout)
+        self.assertEqual(report["schema_version"], 1)
+        self.assertEqual(report["text"], "纯臻营养护发素")
+        self.assertEqual(report["iterations"], 2)
 
 
 def parse_args() -> argparse.Namespace:

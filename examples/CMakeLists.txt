@@ -4,21 +4,31 @@ project(lw_ppocr_c_package_example LANGUAGES C)
 
 find_package(lw.PPOCR.C CONFIG REQUIRED)
 
+function(lw_configure_example target)
+    target_link_libraries(${target} PRIVATE lw.PPOCR.C::shared)
+    target_compile_features(${target} PRIVATE c_std_11)
+    if(WIN32)
+        target_link_libraries(${target} PRIVATE shell32)
+    elseif(APPLE)
+        set_target_properties(${target} PROPERTIES
+            BUILD_RPATH "@loader_path/../lib")
+    else()
+        set_target_properties(${target} PROPERTIES
+            BUILD_RPATH "$ORIGIN/../lib")
+    endif()
+    if(MSVC)
+        target_compile_options(${target} PRIVATE /W4 /WX /utf-8)
+    else()
+        target_compile_options(${target} PRIVATE
+            -Wall -Wextra -Wpedantic -Werror)
+    endif()
+endfunction()
+
 add_executable(lw-recognize-ppm-consumer recognize_ppm.c)
-target_link_libraries(lw-recognize-ppm-consumer PRIVATE lw.PPOCR.C::shared)
-target_compile_features(lw-recognize-ppm-consumer PRIVATE c_std_11)
+lw_configure_example(lw-recognize-ppm-consumer)
+
+add_executable(lw-rec-benchmark-consumer benchmark_ppm.c)
+lw_configure_example(lw-rec-benchmark-consumer)
 if(WIN32)
-    target_link_libraries(lw-recognize-ppm-consumer PRIVATE shell32)
-elseif(APPLE)
-    set_target_properties(lw-recognize-ppm-consumer PROPERTIES
-        BUILD_RPATH "@loader_path/../lib")
-else()
-    set_target_properties(lw-recognize-ppm-consumer PROPERTIES
-        BUILD_RPATH "$ORIGIN/../lib")
-endif()
-if(MSVC)
-    target_compile_options(lw-recognize-ppm-consumer PRIVATE /W4 /WX /utf-8)
-else()
-    target_compile_options(lw-recognize-ppm-consumer PRIVATE
-        -Wall -Wextra -Wpedantic -Werror)
+    target_link_libraries(lw-rec-benchmark-consumer PRIVATE psapi)
 endif()

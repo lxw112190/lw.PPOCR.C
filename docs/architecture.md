@@ -60,7 +60,10 @@ isolated under `src/simd` after scalar correctness.
    contract-tested on Windows x64/x86; ABI remains experimental before 1.0.
 9. Static/shared development packages and dependency-free C Demo — complete
    locally for Windows x64/x86, including installed-package execution.
-10. Only after correctness: memory, SIMD, threads, CLS, DET, and full OCR.
+10. Scalar performance, deterministic-repeat, and RSS baseline — complete
+    locally on Windows x64/x86 with a packaged JSON benchmark tool.
+11. Next: profiled memory/kernel optimization, then SIMD, threads, CLS, DET,
+    and full OCR.
 
 ## Compatibility claims
 

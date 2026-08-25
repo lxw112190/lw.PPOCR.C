@@ -124,6 +124,26 @@ elseif(APPLE)
 else()
     set_target_properties(lw-recognize-ppm PROPERTIES INSTALL_RPATH "$ORIGIN/../lib")
 endif()
+
+add_executable(lw-rec-benchmark examples/benchmark_ppm.c)
+target_link_libraries(lw-rec-benchmark PRIVATE lw_ppocr_c_shared)
+target_compile_features(lw-rec-benchmark PRIVATE c_std_11)
+add_dependencies(lw-rec-benchmark convert_rec_model rec_demo_fixture)
+if(WIN32)
+    target_link_libraries(lw-rec-benchmark PRIVATE shell32 psapi)
+elseif(APPLE)
+    set_target_properties(lw-rec-benchmark PROPERTIES
+        INSTALL_RPATH "@loader_path/../lib")
+else()
+    set_target_properties(lw-rec-benchmark PROPERTIES
+        INSTALL_RPATH "$ORIGIN/../lib")
+endif()
+if(MSVC)
+    target_compile_options(lw-rec-benchmark PRIVATE /W4 /WX /utf-8)
+else()
+    target_compile_options(lw-rec-benchmark PRIVATE
+        -Wall -Wextra -Wpedantic -Werror)
+endif()
 if(MSVC)
     target_compile_options(lw-recognize-ppm PRIVATE /W4 /WX /utf-8)
 else()
@@ -217,6 +237,18 @@ if(BUILD_TESTING)
     set_tests_properties(c_demo_recognition PROPERTIES
         WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
         TIMEOUT 180)
+
+    add_test(
+        NAME rec_scalar_benchmark
+        COMMAND "${Python3_EXECUTABLE}"
+                "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_rec_benchmark.py"
+                --benchmark "$<TARGET_FILE:lw-rec-benchmark>"
+                --model "${LW_PPOCR_C_REC_LWM}"
+                --dictionary "${CMAKE_CURRENT_SOURCE_DIR}/models/ppocrv6-tiny/ppocr_keys.txt"
+                --image "${LW_PPOCR_C_REC_DEMO_PPM}")
+    set_tests_properties(rec_scalar_benchmark PROPERTIES
+        WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+        TIMEOUT 240)
 
     if(MSVC)
         get_filename_component(LW_EXPORT_TOOL_DIR "${CMAKE_C_COMPILER}" DIRECTORY)
@@ -377,12 +409,14 @@ install(TARGETS lw_ppocr_c lw_ppocr_c_shared
     RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}"
     LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}"
     ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}")
-install(TARGETS lw-recognize-ppm
+install(TARGETS lw-recognize-ppm lw-rec-benchmark
     RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}")
 install(FILES include/lw_infer.h
     DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}")
 install(FILES
     examples/CMakeLists.txt
+    examples/benchmark_ppm.c
+    examples/ppm_image.h
     examples/recognize_ppm.c
     DESTINATION examples)
 install(FILES

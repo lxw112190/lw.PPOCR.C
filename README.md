@@ -55,8 +55,8 @@ ctest --test-dir build -C Release --output-on-failure
 ```
 
 The normal build creates `build/models/rec.lwm`, static and shared pure-C
-libraries, the `lw-recognize-ppm` public-API Demo, and `lwm-inspect`. Inspect the
-converted model with:
+libraries, the `lw-recognize-ppm` public-API Demo, the machine-readable
+`lw-rec-benchmark`, and `lwm-inspect`. Inspect the converted model with:
 
 ```powershell
 .\build\Release\lwm-inspect.exe .\build\models\rec.lwm
@@ -79,6 +79,8 @@ The private end-to-end REC preprocessing and decoding contract is documented in
 [`docs/rec-pipeline.md`](docs/rec-pipeline.md).
 The ten-crop ONNX-versus-pure-C correctness gate is documented in
 [`docs/rec-golden-corpus.md`](docs/rec-golden-corpus.md).
+The optimization baseline and benchmark protocol are documented in
+[`docs/performance-baseline.md`](docs/performance-baseline.md).
 Development package contents and Demo commands are documented in
 [`docs/package.md`](docs/package.md).
 

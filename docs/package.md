@@ -6,7 +6,7 @@ releases. Windows x64 and x86 archives are separate and must not be mixed.
 ## Contents
 
 ```text
-bin/                         PPM demo, shared runtime, Windows CRT files
+bin/                         PPM demo, benchmark, shared runtime, Windows CRT
 include/lw_infer.h           public C header
 lib/                         static library and shared-library import library
 lib/cmake/lw.PPOCR.C/        CMake package configuration
@@ -43,6 +43,21 @@ The demo intentionally supports only binary P6 PPM. This keeps it pure C and
 dependency-free while demonstrating the complete public recognizer API. The
 core library accepts decoded BGR8 pixels; production applications may use their
 own JPEG/PNG decoder.
+
+## Run the scalar benchmark
+
+The packaged benchmark reuses one recognizer and emits machine-readable JSON:
+
+```powershell
+.\bin\lw-rec-benchmark.exe `
+  .\models\rec.lwm `
+  .\models\ppocr_keys.txt `
+  .\models\sample-crop.ppm `
+  3 20
+```
+
+The last two values select warm-up and measured iterations. Latency and RSS are
+environment-dependent measurements, not release-wide performance guarantees.
 
 ## Consume with CMake
 
