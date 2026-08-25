@@ -11,15 +11,15 @@ Python、OpenCV、ONNX Runtime、OpenVINO、TensorRT 或 protobuf。
 
 Exact PP-OCRv6 tiny model analysis, the deterministic REC-to-LWM v0.1
 converter, the bounds-checked pure-C model loader, and runtime REC shape/workspace
-planning are implemented. Reference-tested scalar kernels now cover Add, Mul,
-Div, Relu, Erf, HardSigmoid, and Softmax (106 of the converted REC graph's 161
-nodes). Full-graph inference is not implemented yet.
+planning are implemented. Reference-tested scalar kernels now cover 13 of the
+15 converted REC operator types and 120 of its 161 nodes. Conv and
+BatchNormalization remain before full-graph inference can be implemented.
 
 Current scope:
 
 - PP-OCRv6 tiny;
 - REC first;
-- FP32, CPU, scalar, single-threaded;
+- FP32, CPU, scalar, single-threaded; 13/15 REC operator types implemented;
 - custom, non-frozen LWM v0.1 format;
 - Windows x64 and Linux x64 first;
 - Windows 7 x86 compatibility preserved by design.

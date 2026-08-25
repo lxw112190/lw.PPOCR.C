@@ -44,6 +44,9 @@ add_custom_target(convert_rec_model ALL
 add_library(lw_ppocr_c STATIC
     src/kernels/scalar_activation.c
     src/kernels/scalar_elementwise.c
+    src/kernels/scalar_layout.c
+    src/kernels/scalar_matmul.c
+    src/kernels/scalar_reduction.c
     src/kernels/scalar_softmax.c
     src/runtime/memory.c
     src/runtime/model.c
@@ -137,6 +140,25 @@ if(BUILD_TESTING)
                 "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_scalar_kernels_reference.py"
                 --driver "$<TARGET_FILE:kernel-reference-driver>")
     set_tests_properties(scalar_kernel_reference PROPERTIES
+        WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
+
+    add_executable(tensor-reference-driver tests/tensor_reference_driver.c)
+    target_link_libraries(tensor-reference-driver PRIVATE lw_ppocr_c)
+    target_include_directories(tensor-reference-driver PRIVATE
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/kernels")
+    target_compile_features(tensor-reference-driver PRIVATE c_std_11)
+    if(MSVC)
+        target_compile_options(tensor-reference-driver PRIVATE /W4 /WX /utf-8)
+    else()
+        target_compile_options(tensor-reference-driver PRIVATE
+            -Wall -Wextra -Wpedantic -Werror)
+    endif()
+    add_test(
+        NAME tensor_kernel_reference
+        COMMAND "${Python3_EXECUTABLE}"
+                "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_tensor_kernels_reference.py"
+                --driver "$<TARGET_FILE:tensor-reference-driver>")
+    set_tests_properties(tensor_kernel_reference PROPERTIES
         WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
 
     add_test(
