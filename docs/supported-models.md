@@ -1,8 +1,9 @@
 # Supported models
 
 No model is exposed through a public inference API yet. The exact REC model is
-now private-runtime verified through its full graph; the gate is intentionally
-kept internal until preprocessing, output ownership, and CTC contracts are set.
+now private-runtime verified through preprocessing, its full graph, and UTF-8
+CTC decoding. The gate remains internal while the public input/output ownership
+and image-decoding contracts are designed.
 
 The following exact conversion inputs are analysis-verified. REC is also
 converter-, loader-, dynamic-shape-, workspace-planner-, and full-graph-output
@@ -17,7 +18,9 @@ verified; CLS and DET do not yet have LWM converters.
 “Analysis-verified” means ONNX validation, shape inference, operator inventory,
 initializer inventory, dynamic-shape reporting, and representative FLOP
 analysis pass. For REC only, the private executor additionally produces the
-complete output tensor and compares it with the original ONNX model.
+complete output tensor and compares it with the original ONNX model. A real
+sample crop also passes the pure-C preprocessing-to-text golden test with the
+production dictionary.
 
 The deterministic REC conversion currently produces a 4,455,632-byte LWM v0.1
 file with SHA-256

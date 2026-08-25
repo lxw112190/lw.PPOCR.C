@@ -1,6 +1,7 @@
 #ifndef LW_MODEL_INTERNAL_H
 #define LW_MODEL_INTERNAL_H
 
+#include "error_internal.h"
 #include "lw_infer.h"
 
 #include <stddef.h>
@@ -33,7 +34,6 @@ struct lw_model {
     uint64_t weight_size;
 };
 
-void lw_set_error(lw_error* error, lw_status status, const char* message);
 lw_status lw_validate_lwm_v0(lw_model* model, lw_error* error);
 
 #endif

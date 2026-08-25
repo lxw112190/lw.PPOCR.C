@@ -14,8 +14,10 @@ converter, the bounds-checked pure-C model loader, and runtime REC shape/workspa
 planning are implemented. Reference-tested scalar kernels now cover all 15
 converted REC operator types and all 161 nodes. A private, zero-allocation graph
 executor now binds LWM constants and planned workspace and matches the original
-ONNX REC output at two dynamic widths. A public run API, preprocessing, and CTC
-decoding remain before recognition is available to applications.
+ONNX REC output at two dynamic widths. Private pure-C BGR preprocessing and
+UTF-8 CTC decoding now complete a real cropped-text recognition golden path.
+A public run API and image-file decoder remain before recognition is available
+to applications.
 
 Current scope:
 
@@ -69,6 +71,8 @@ The internal scalar-kernel scope and its test boundary are documented in
 [`docs/scalar-kernels.md`](docs/scalar-kernels.md).
 The private complete-graph execution gate is documented in
 [`docs/graph-executor.md`](docs/graph-executor.md).
+The private end-to-end REC preprocessing and decoding contract is documented in
+[`docs/rec-pipeline.md`](docs/rec-pipeline.md).
 
 ## Runtime dependency boundary
 

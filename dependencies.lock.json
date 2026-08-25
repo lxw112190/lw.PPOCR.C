@@ -27,6 +27,14 @@
       "purl": "pkg:pypi/onnxruntime@1.21.0"
     },
     {
+      "name": "Pillow",
+      "version": "10.4.0",
+      "license": "HPND",
+      "scope": "image-fixture-reference-tests",
+      "source": "https://github.com/python-pillow/Pillow",
+      "purl": "pkg:pypi/pillow@10.4.0"
+    },
+    {
       "name": "protobuf",
       "version": "4.25.3",
       "license": "BSD-3-Clause",

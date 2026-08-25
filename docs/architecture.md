@@ -13,7 +13,7 @@ validated, simplified REC graph           resolved shapes + one workspace
     |                                     |
 platform-independent LWM v0                private executor + scalar kernels
                                           |
-                                      REC probabilities
+decoded BGR pixels -> REC preprocess -> probabilities -> UTF-8 CTC text
 ```
 
 The converter and runtime are separate products with separate dependency
@@ -52,7 +52,9 @@ isolated under `src/simd` after scalar correctness.
    operator types and 161 converted REC nodes have scalar Kernels.
 6. Exact REC graph executor and complete-output comparison — complete as a
    private interface for widths 7 and 17; public ABI remains gated.
-7. Pure-C preprocess, CTC decoding, and REC golden tests.
+7. Pure-C preprocess, CTC decoding, and REC golden tests — complete behind
+   private interfaces, including a real sample crop and the production
+   dictionary.
 8. Only after correctness: memory, SIMD, threads, CLS, DET, and full OCR.
 
 ## Compatibility claims

@@ -52,8 +52,9 @@ verified until that workflow runs remotely.
 
 There is still no public inference call. A private executor now dispatches all
 161 converted REC nodes, binds constants/workspace, and passes complete-output
-comparison. Preprocessing, CTC decoding, and the final public run contract
-remain. The MatMul contract deliberately matches the supported REC graph: one
+comparison. Private preprocessing and CTC decoding now complete the REC golden
+path; the final public run contract remains. The MatMul contract deliberately
+matches the supported REC graph: one
 or more input matrices multiplied by one shared two-dimensional weight matrix.
 
 The Conv implementation is a direct scalar loop with no im2col allocation. A

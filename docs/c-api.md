@@ -3,7 +3,8 @@
 The public API in `include/lw_infer.h` is available for integration experiments
 but is not ABI-frozen before 1.0. It currently covers model loading and REC
 session planning. Complete REC graph execution exists behind a private test
-interface but is not exposed in the public header yet.
+interface but is not exposed in the public header yet. Pure-C BGR preprocessing
+and UTF-8 CTC decoding are also private implementation contracts.
 
 ## Ownership and thread model
 
@@ -77,7 +78,9 @@ lw_model_free(model);
 
 No public input data pointer is accepted yet, which prevents callers from
 mistaking a successful plan for completed inference. The internal executor is
-not an integration contract and may change without ABI notice.
+not an integration contract and may change without ABI notice. Applications
+also cannot pass JPEG/PNG bytes yet; the private preprocessing path starts from
+decoded BGR pixels.
 
 ## Errors
 

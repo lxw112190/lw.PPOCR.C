@@ -37,5 +37,7 @@ measured:
 | 7 | `[1, 1, 6906]` | `6.377697e-6` | `1.0609754e-9` |
 | 17 | `[1, 2, 6906]` | `3.8087368e-5` | `3.8027901e-9` |
 
-Both Windows x64 and x86 builds pass the complete ten-test suite locally.
+Both Windows x64 and x86 builds pass the complete eleven-test suite locally,
+including the downstream real cropped-text recognition golden test described
+in [`rec-pipeline.md`](rec-pipeline.md).
 Physical Windows 7 and remote Linux CI remain separate platform claims.

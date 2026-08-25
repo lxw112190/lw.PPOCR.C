@@ -49,6 +49,8 @@ add_library(lw_ppocr_c STATIC
     src/kernels/scalar_matmul.c
     src/kernels/scalar_reduction.c
     src/kernels/scalar_softmax.c
+    src/ppocr/ctc_decode.c
+    src/ppocr/rec_preprocess.c
     src/runtime/executor.c
     src/runtime/memory.c
     src/runtime/model.c
@@ -57,7 +59,10 @@ add_library(lw_ppocr_c STATIC
     src/runtime/validate.c)
 target_include_directories(lw_ppocr_c
     PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include"
-    PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src/kernels")
+    PRIVATE
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/kernels"
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/runtime"
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/ppocr")
 target_compile_features(lw_ppocr_c PUBLIC c_std_11)
 if(MSVC)
     target_compile_options(lw_ppocr_c PRIVATE /W4 /WX /utf-8)
@@ -202,6 +207,32 @@ if(BUILD_TESTING)
                 --lwm-model "${LW_PPOCR_C_REC_LWM}"
                 --onnx-model "${LW_PPOCR_C_REC_ONNX}")
     set_tests_properties(rec_graph_reference PROPERTIES
+        WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+        TIMEOUT 360)
+
+    add_executable(rec-pipeline-driver tests/rec_pipeline_driver.c)
+    target_link_libraries(rec-pipeline-driver PRIVATE lw_ppocr_c)
+    target_include_directories(rec-pipeline-driver PRIVATE
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/runtime"
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/ppocr")
+    target_compile_features(rec-pipeline-driver PRIVATE c_std_11)
+    add_dependencies(rec-pipeline-driver convert_rec_model)
+    if(MSVC)
+        target_compile_options(rec-pipeline-driver PRIVATE /W4 /WX /utf-8)
+    else()
+        target_compile_options(rec-pipeline-driver PRIVATE
+            -Wall -Wextra -Wpedantic -Werror)
+    endif()
+    add_test(
+        NAME rec_pipeline_reference
+        COMMAND "${Python3_EXECUTABLE}"
+                "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_rec_pipeline_reference.py"
+                --driver "$<TARGET_FILE:rec-pipeline-driver>"
+                --lwm-model "${LW_PPOCR_C_REC_LWM}"
+                --onnx-model "${LW_PPOCR_C_REC_ONNX}"
+                --dictionary "${CMAKE_CURRENT_SOURCE_DIR}/models/ppocrv6-tiny/ppocr_keys.txt"
+                --sample "${CMAKE_CURRENT_SOURCE_DIR}/models/ppocrv6-tiny/sample.jpg")
+    set_tests_properties(rec_pipeline_reference PROPERTIES
         WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
         TIMEOUT 360)
 
