@@ -1,0 +1,134 @@
+name: release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+# Only the final job can write a Release. The reusable build workflows and
+# their third-party actions receive read-only repository access.
+permissions:
+  contents: read
+
+jobs:
+  native:
+    name: Build and test native packages
+    uses: ./.github/workflows/ci.yml
+    permissions:
+      contents: read
+
+  wasm:
+    name: Build and test standalone WASM
+    uses: ./.github/workflows/wasm-html.yml
+    permissions:
+      contents: read
+
+  publish:
+    name: Publish tested assets
+    needs: [native, wasm]
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Validate release tag and project version
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME}"
+          if [[ ! "${tag}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z][0-9A-Za-z.-]*)?$ ]]; then
+            echo "unsupported release tag: ${tag}" >&2
+            exit 1
+          fi
+
+          version="${tag#v}"
+          base_version="${version%%-*}"
+          project_version="$(sed -nE 's/^project\(lw\.PPOCR\.C VERSION ([0-9]+\.[0-9]+\.[0-9]+) LANGUAGES C\)$/\1/p' CMakeLists.txt)"
+          if [[ -z "${project_version}" || "${base_version}" != "${project_version}" ]]; then
+            echo "tag ${tag} does not match CMake project version ${project_version:-<missing>}" >&2
+            exit 1
+          fi
+
+          echo "tag=${tag}" >> "${GITHUB_OUTPUT}"
+          echo "version=${version}" >> "${GITHUB_OUTPUT}"
+          echo "base_version=${base_version}" >> "${GITHUB_OUTPUT}"
+
+      - name: Download tested build artifacts
+        uses: actions/download-artifact@v8
+        with:
+          path: release-assets
+          merge-multiple: true
+
+      - name: Verify and prepare release assets
+        shell: bash
+        env:
+          VERSION: ${{ steps.version.outputs.base_version }}
+        run: |
+          set -euo pipefail
+          windows="lw.PPOCR.C-${VERSION}-windows-x64-msvc.zip"
+          linux="lw.PPOCR.C-${VERSION}-linux-x86_64.tar.gz"
+          wasm="lw.PPOCR.C-${VERSION}-ocr-demo.html"
+
+          test -s "release-assets/${windows}"
+          test -s "release-assets/${windows}.sha256"
+          test -s "release-assets/${linux}"
+          test -s "release-assets/${linux}.sha256"
+          test -s "release-assets/ocr-demo.html"
+
+          (
+            cd release-assets
+            sha256sum -c "${windows}.sha256"
+            sha256sum -c "${linux}.sha256"
+            mv ocr-demo.html "${wasm}"
+            sha256sum "${wasm}" > "${wasm}.sha256"
+          )
+
+          find release-assets -maxdepth 1 -type f -printf '%f\n' | sort
+
+      - name: Publish GitHub Release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.version.outputs.tag }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          publish_flags=(--draft=false)
+          if [[ "${VERSION}" == 0.* || "${VERSION}" == *-* ]]; then
+            publish_flags+=(--prerelease)
+          else
+            publish_flags+=(--latest)
+          fi
+
+          mapfile -t assets < <(find release-assets -maxdepth 1 -type f -print | sort)
+          if [[ "${#assets[@]}" -ne 6 ]]; then
+            echo "expected six release assets, found ${#assets[@]}" >&2
+            printf '%s\n' "${assets[@]}" >&2
+            exit 1
+          fi
+
+          if existing_draft="$(gh release view "${TAG}" --repo "${GITHUB_REPOSITORY}" \
+              --json isDraft --jq .isDraft 2>/dev/null)"; then
+            if [[ "${existing_draft}" != "true" ]]; then
+              echo "release ${TAG} already exists and is not a draft" >&2
+              exit 1
+            fi
+          else
+            gh release create "${TAG}" \
+              --repo "${GITHUB_REPOSITORY}" \
+              --verify-tag \
+              --draft \
+              --generate-notes \
+              --title "${TAG} — lw.PPOCR.C Pure C OCR Runtime / 纯 C OCR 运行时"
+          fi
+
+          # Upload into a draft first so customers never see a partially
+          # populated Release. A failed run can safely resume the same draft.
+          gh release upload "${TAG}" "${assets[@]}" \
+            --repo "${GITHUB_REPOSITORY}" \
+            --clobber
+          gh release edit "${TAG}" \
+            --repo "${GITHUB_REPOSITORY}" \
+            "${publish_flags[@]}"

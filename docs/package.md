@@ -146,3 +146,19 @@ CPack writes the archive and its `.sha256` checksum under `build/packages`.
 The package test installs to a clean staging directory, builds consumers using
 the installed CMake package, and runs the installed Demos against installed
 models, dictionary, and fixtures before packaging.
+
+## Publish a tagged release
+
+Pushing a tag whose base version matches the CMake project version starts the
+release workflow. Stable and prerelease suffixes are accepted, for example:
+
+```bash
+git tag -a v0.1.0 -m "lw.PPOCR.C v0.1.0"
+git push origin v0.1.0
+```
+
+The workflow rebuilds and tests the Windows x64, Linux x64, and standalone WASM
+packages from the tagged commit. A GitHub Release is created only after all
+three jobs succeed. The Release contains the native archives, the offline HTML,
+and a SHA-256 file for every downloadable asset. Tags with a `0.x` version or a
+prerelease suffix are automatically marked as GitHub prereleases.

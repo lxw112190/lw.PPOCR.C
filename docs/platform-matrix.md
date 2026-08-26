@@ -5,8 +5,9 @@ verification.
 
 | Platform | Design target | CI verified | Physical machine verified | Current status |
 |---|---:|---:|---:|---|
-| Windows 10/11 x64 | Yes | No | Windows 10 development host | Full REC path, DLL/static package, and installed Demo pass |
-| Linux x86_64 | Yes | No | No | Primary implementation target |
+| Windows x64 (VS 2022 baseline) | Yes | Yes | Windows 10 development host | Full OCR, DLL/static package and installed HTTP Demo pass |
+| Linux x86_64 (Ubuntu 22.04 baseline) | Yes | Yes | No | Full OCR, package and installed HTTP Demo pass in CI |
+| Browser WASM (Chromium baseline) | Yes | Yes | No | Standalone HTML runs real OCR repeatedly with stable WASM heap in CI |
 | Linux ARM64 | Yes | No | No | Planned primary target |
 | Windows 7 SP1 x64 | Yes | No | No | Planned compatibility validation |
 | Windows 7 SP1 x86 | Yes | No | No | Compatibility profile; not a v0.1 blocker |
@@ -20,5 +21,6 @@ The local Windows packages are development artifacts tested on the stated host;
 they are not yet remote-CI or physical Windows 7 compatibility claims.
 Windows 10 x86 success checks 32-bit build/ABI, memory, and scalar execution
 assumptions; it does not establish Windows 7 compatibility.
-The CI column remains `No` until the updated workflow has run in the remote
-repository.
+The CI claims above apply to the pinned GitHub-hosted runner and browser
+baselines. They do not imply validation on every Windows edition, Linux
+distribution, browser, or physical machine.
