@@ -21,8 +21,8 @@ jobs:
     env:
       SCCACHE_GHA_ENABLED: "true"
     steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-python@v6
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
           cache: pip
@@ -59,7 +59,7 @@ jobs:
         shell: bash
         run: git diff --exit-code -- docs/SUPPORTED_OPS_V0.md docs/ppocrv6-tiny-analysis.json
       - name: Upload development archive
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: lw.PPOCR.C-${{ runner.os }}-${{ runner.arch }}
           path: build/packages/*
