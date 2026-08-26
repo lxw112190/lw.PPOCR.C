@@ -7,14 +7,14 @@
 
 #include <stddef.h>
 
-#if defined(_M_IX86) || defined(_M_X64)
+#if defined(_MSC_VER) && (defined(_M_IX86) || defined(_M_X64))
 #  include <intrin.h>
 #elif defined(__i386__) || defined(__x86_64__)
 #  include <cpuid.h>
 #endif
 
 lw_simd_level lw_detect_simd_level(void) {
-#if defined(_M_IX86) || defined(_M_X64)
+#if defined(_MSC_VER) && (defined(_M_IX86) || defined(_M_X64))
     int registers[4];
     int maximum_leaf;
     int has_sse2;

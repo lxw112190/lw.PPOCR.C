@@ -11,6 +11,12 @@
 #  include <shellapi.h>
 #endif
 
+/* Keep allocation checks valid on both 32-bit and 64-bit targets without
+ * triggering GCC's constant-range warning for uint32_t capacities. */
+static int allocation_fits(uint64_t count, size_t element_size) {
+    return element_size != 0u && count <= (uint64_t)(SIZE_MAX / element_size);
+}
+
 static int demo_main(int argc, char** argv) {
     lw_detector* detector = NULL;
     lw_detector_info info;
@@ -39,7 +45,7 @@ static int demo_main(int argc, char** argv) {
     lw_detector_info_init(&info);
     status = lw_detector_get_info(detector, &info);
     if (status != LW_STATUS_OK || info.max_candidates == 0u ||
-        info.max_candidates > SIZE_MAX / sizeof(*boxes)) {
+        !allocation_fits(info.max_candidates, sizeof(*boxes))) {
         fprintf(stderr, "unable to read detector limits\n");
         goto cleanup;
     }

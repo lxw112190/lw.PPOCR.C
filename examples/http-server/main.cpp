@@ -44,6 +44,10 @@ namespace {
 const uint64_t kMaxImagePixels = UINT64_C(40000000);
 const size_t kMaxWebPageBytes = 4u * 1024u * 1024u;
 
+bool AllocationFits(uint64_t count, size_t element_size) {
+    return element_size != 0u && count <= static_cast<uint64_t>(SIZE_MAX / element_size);
+}
+
 struct Config {
     std::string host;
     int port;
@@ -435,8 +439,8 @@ public:
         lw_ocr_info_init(&info_);
         if (lw_ocr_get_info(handle_, &info_) != LW_STATUS_OK ||
             info_.max_line_capacity == 0u || info_.max_text_capacity == 0u ||
-            info_.max_line_capacity > SIZE_MAX / sizeof(lw_ocr_line) ||
-            info_.max_text_capacity > SIZE_MAX) {
+            !AllocationFits(info_.max_line_capacity, sizeof(lw_ocr_line)) ||
+            !AllocationFits(info_.max_text_capacity, sizeof(char))) {
             lw_ocr_free(handle_);
             handle_ = NULL;
             throw std::runtime_error("unable to query OCR output capacities");

@@ -11,6 +11,12 @@
 #  include <shellapi.h>
 #endif
 
+/* Capacities cross the public ABI as fixed-width integers. Check them through
+ * uint64_t so the same source remains warning-clean on 32-bit and 64-bit. */
+static int allocation_fits(uint64_t count, size_t element_size) {
+    return element_size != 0u && count <= (uint64_t)(SIZE_MAX / element_size);
+}
+
 static int demo_main(int argc, char** argv) {
     lw_ocr* ocr = NULL;
     lw_ocr_info info;
@@ -40,8 +46,9 @@ static int demo_main(int argc, char** argv) {
     }
     lw_ocr_info_init(&info);
     if (lw_ocr_get_info(ocr, &info) != LW_STATUS_OK || info.max_line_capacity == 0u ||
-        info.max_text_capacity == 0u || info.max_line_capacity > SIZE_MAX / sizeof(*lines) ||
-        info.max_text_capacity > SIZE_MAX) {
+        info.max_text_capacity == 0u ||
+        !allocation_fits(info.max_line_capacity, sizeof(*lines)) ||
+        !allocation_fits(info.max_text_capacity, sizeof(*text))) {
         fprintf(stderr, "unable to query OCR capacities\n");
         goto cleanup;
     }
