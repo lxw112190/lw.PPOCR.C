@@ -15,7 +15,7 @@ EXPECTED_FIRST_LINE = "纯臻营养护发素"
 def wait_for_run(page: Page, previous_count: int) -> dict[str, int | bool]:
     page.wait_for_function(
         "count => window.__lwOcrTest.snapshot().runCount > count",
-        previous_count,
+        arg=previous_count,
         timeout=180_000,
     )
     snapshot = page.evaluate("window.__lwOcrTest.snapshot()")
