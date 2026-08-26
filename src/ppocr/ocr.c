@@ -16,15 +16,56 @@
 #include <stdlib.h>
 #include <string.h>
 
+#if defined(_WIN32)
+#  define WIN32_LEAN_AND_MEAN
+#  include <process.h>
+#  include <windows.h>
+#elif !defined(__EMSCRIPTEN__)
+#  include <pthread.h>
+#endif
+
 #define LW_OCR_DEFAULT_MAX_CROP_PIXELS UINT64_C(16000000)
+#define LW_OCR_MAX_WORKER_COUNT 16u
+
+#if INTPTR_MAX > INT32_MAX && !defined(__EMSCRIPTEN__)
+#  define LW_OCR_DEFAULT_WORKER_COUNT 4u
+#else
+#  define LW_OCR_DEFAULT_WORKER_COUNT 1u
+#endif
+
+typedef struct lw_ocr_crop {
+    uint64_t offset;
+    uint64_t byte_count;
+    uint32_t width;
+    uint32_t height;
+    uint32_t box_index;
+} lw_ocr_crop;
+
+typedef struct lw_ocr_worker_task {
+    lw_ocr* ocr;
+    uint32_t worker_index;
+    uint32_t begin;
+    uint32_t end;
+    lw_status status;
+    lw_error error;
+} lw_ocr_worker_task;
 
 struct lw_ocr {
     lw_detector* detector;
-    lw_classifier* classifier;
-    lw_recognizer* recognizer;
+    lw_classifier** classifiers;
+    lw_recognizer** recognizers;
+    uint32_t worker_count;
     lw_detection_box* detected_boxes;
     lw_ocr_line* scratch_lines;
     char* scratch_text;
+    lw_ocr_crop* crops;
+    lw_ocr_worker_task* worker_tasks;
+#if defined(_WIN32)
+    HANDLE* worker_threads;
+#elif !defined(__EMSCRIPTEN__)
+    pthread_t* worker_threads;
+#endif
+    uint8_t* worker_started;
     uint8_t* crop;
     uint64_t crop_capacity;
     uint64_t max_crop_pixels;
@@ -51,6 +92,7 @@ void lw_ocr_options_init(lw_ocr_options* options) {
     options->struct_size = (uint32_t)sizeof(*options);
     options->use_direction_classification = 1u;
     options->classifier_threshold = 0.9f;
+    options->worker_count = LW_OCR_DEFAULT_WORKER_COUNT;
     options->max_crop_pixels = LW_OCR_DEFAULT_MAX_CROP_PIXELS;
     lw_detector_options_init(&options->detector);
     lw_classifier_options_init(&options->classifier);
@@ -74,7 +116,7 @@ static lw_status validate_options(const lw_ocr_options* options, lw_ocr_options*
                                   lw_error* error) {
     lw_ocr_options_init(values);
     if (options != NULL) {
-        if (options->struct_size != sizeof(*options) || options->reserved != 0u) {
+        if (options->struct_size != sizeof(*options)) {
             lw_set_error(error, LW_STATUS_INVALID_ARGUMENT, "invalid OCR options structure");
             return LW_STATUS_INVALID_ARGUMENT;
         }
@@ -87,8 +129,9 @@ static lw_status validate_options(const lw_ocr_options* options, lw_ocr_options*
         values->detector.struct_size != sizeof(values->detector) ||
         values->classifier.struct_size != sizeof(values->classifier) ||
         values->recognizer.struct_size != sizeof(values->recognizer) ||
-        values->detector.reserved != 0u || values->classifier.reserved != 0u ||
-        values->recognizer.reserved0 != 0u || values->recognizer.reserved1 != 0u) {
+        values->worker_count > LW_OCR_MAX_WORKER_COUNT || values->detector.reserved != 0u ||
+        values->classifier.reserved != 0u || values->recognizer.reserved0 != 0u ||
+        values->recognizer.reserved1 != 0u) {
         lw_set_error(error, LW_STATUS_INVALID_ARGUMENT,
                      "OCR classifier policy or nested options are invalid");
         return LW_STATUS_INVALID_ARGUMENT;
@@ -118,6 +161,15 @@ lw_status lw_ocr_create(const char* detector_model_path_utf8,
     status = validate_options(options, &values, error);
     if (status != LW_STATUS_OK)
         return status;
+    if (values.worker_count == 0u)
+        values.worker_count = LW_OCR_DEFAULT_WORKER_COUNT;
+#if defined(__EMSCRIPTEN__)
+    if (values.worker_count != 1u) {
+        lw_set_error(error, LW_STATUS_UNSUPPORTED,
+                     "WebAssembly OCR requires worker_count=1 without pthreads");
+        return LW_STATUS_UNSUPPORTED;
+    }
+#endif
     if (values.use_direction_classification != 0u &&
         (classifier_model_path_utf8 == NULL || classifier_model_path_utf8[0] == '\0')) {
         lw_set_error(error, LW_STATUS_INVALID_ARGUMENT,
@@ -132,20 +184,44 @@ lw_status lw_ocr_create(const char* detector_model_path_utf8,
     status = lw_detector_create(detector_model_path_utf8, &values.detector, &ocr->detector, error);
     if (status != LW_STATUS_OK)
         goto fail;
-    if (values.use_direction_classification != 0u) {
-        status = lw_classifier_create(classifier_model_path_utf8, &values.classifier,
-                                      &ocr->classifier, error);
-        if (status != LW_STATUS_OK)
-            goto fail;
-    }
-    status = lw_recognizer_create(recognizer_model_path_utf8, dictionary_path_utf8,
-                                  &values.recognizer, &ocr->recognizer, error);
-    if (status != LW_STATUS_OK)
+    ocr->worker_count = values.worker_count;
+    ocr->classifiers = (lw_classifier**)calloc(ocr->worker_count, sizeof(*ocr->classifiers));
+    ocr->recognizers = (lw_recognizer**)calloc(ocr->worker_count, sizeof(*ocr->recognizers));
+    ocr->worker_tasks = (lw_ocr_worker_task*)calloc(ocr->worker_count, sizeof(*ocr->worker_tasks));
+    ocr->worker_started = (uint8_t*)calloc(ocr->worker_count, sizeof(*ocr->worker_started));
+#if defined(_WIN32) || !defined(__EMSCRIPTEN__)
+    ocr->worker_threads = calloc(ocr->worker_count, sizeof(*ocr->worker_threads));
+#endif
+    if (ocr->classifiers == NULL || ocr->recognizers == NULL || ocr->worker_tasks == NULL ||
+        ocr->worker_started == NULL
+#if defined(_WIN32) || !defined(__EMSCRIPTEN__)
+        || ocr->worker_threads == NULL
+#endif
+    ) {
+        lw_set_error(error, LW_STATUS_OUT_OF_MEMORY, "unable to allocate OCR worker pool");
+        status = LW_STATUS_OUT_OF_MEMORY;
         goto fail;
+    }
+    {
+        uint32_t worker_index;
+        for (worker_index = 0u; worker_index < ocr->worker_count; ++worker_index) {
+            if (values.use_direction_classification != 0u) {
+                status = lw_classifier_create(classifier_model_path_utf8, &values.classifier,
+                                              &ocr->classifiers[worker_index], error);
+                if (status != LW_STATUS_OK)
+                    goto fail;
+            }
+            status =
+                lw_recognizer_create(recognizer_model_path_utf8, dictionary_path_utf8,
+                                     &values.recognizer, &ocr->recognizers[worker_index], error);
+            if (status != LW_STATUS_OK)
+                goto fail;
+        }
+    }
     lw_detector_info_init(&detector_info);
     lw_recognizer_info_init(&recognizer_info);
     if (lw_detector_get_info(ocr->detector, &detector_info) != LW_STATUS_OK ||
-        lw_recognizer_get_info(ocr->recognizer, &recognizer_info) != LW_STATUS_OK ||
+        lw_recognizer_get_info(ocr->recognizers[0], &recognizer_info) != LW_STATUS_OK ||
         detector_info.max_candidates == 0u || recognizer_info.max_text_capacity == 0u) {
         lw_set_error(error, LW_STATUS_INVALID_SHAPE, "unable to query OCR component capacities");
         status = LW_STATUS_INVALID_SHAPE;
@@ -170,8 +246,10 @@ lw_status lw_ocr_create(const char* detector_model_path_utf8,
         (lw_detection_box*)calloc(detector_info.max_candidates, sizeof(*ocr->detected_boxes));
     ocr->scratch_lines =
         (lw_ocr_line*)calloc(detector_info.max_candidates, sizeof(*ocr->scratch_lines));
+    ocr->crops = (lw_ocr_crop*)calloc(detector_info.max_candidates, sizeof(*ocr->crops));
     ocr->scratch_text = (char*)malloc((size_t)maximum_text_capacity);
-    if (ocr->detected_boxes == NULL || ocr->scratch_lines == NULL || ocr->scratch_text == NULL) {
+    if (ocr->detected_boxes == NULL || ocr->scratch_lines == NULL || ocr->crops == NULL ||
+        ocr->scratch_text == NULL) {
         lw_set_error(error, LW_STATUS_OUT_OF_MEMORY,
                      "unable to allocate OCR output scratch buffers");
         status = LW_STATUS_OUT_OF_MEMORY;
@@ -183,6 +261,7 @@ lw_status lw_ocr_create(const char* detector_model_path_utf8,
     lw_ocr_info_init(&ocr->info);
     ocr->info.use_direction_classification = values.use_direction_classification;
     ocr->info.max_line_capacity = detector_info.max_candidates;
+    ocr->info.worker_count = ocr->worker_count;
     ocr->info.max_text_capacity = maximum_text_capacity;
     ocr->info.max_text_capacity_per_line = recognizer_info.max_text_capacity;
     ocr->info.max_crop_pixels = values.max_crop_pixels;
@@ -196,14 +275,25 @@ fail:
 }
 
 void lw_ocr_free(lw_ocr* ocr) {
+    uint32_t worker_index;
     if (ocr == NULL)
         return;
     free(ocr->crop);
+    free(ocr->worker_started);
+#if defined(_WIN32) || !defined(__EMSCRIPTEN__)
+    free(ocr->worker_threads);
+#endif
+    free(ocr->worker_tasks);
+    free(ocr->crops);
     free(ocr->scratch_text);
     free(ocr->scratch_lines);
     free(ocr->detected_boxes);
-    lw_recognizer_free(ocr->recognizer);
-    lw_classifier_free(ocr->classifier);
+    for (worker_index = 0u; worker_index < ocr->worker_count; ++worker_index) {
+        lw_recognizer_free(ocr->recognizers == NULL ? NULL : ocr->recognizers[worker_index]);
+        lw_classifier_free(ocr->classifiers == NULL ? NULL : ocr->classifiers[worker_index]);
+    }
+    free(ocr->recognizers);
+    free(ocr->classifiers);
     lw_detector_free(ocr->detector);
     free(ocr);
 }
@@ -233,13 +323,159 @@ static lw_status ensure_crop_capacity(lw_ocr* ocr, uint64_t byte_count, lw_error
     return LW_STATUS_OK;
 }
 
+/* Each worker owns its CLS and REC handles, while crop/output slots are
+ * disjoint. This keeps the public OCR handle non-reentrant but lets one request
+ * recognize independent text lines concurrently. */
+static void process_worker_task(lw_ocr_worker_task* task) {
+    lw_ocr* ocr = task->ocr;
+    uint32_t index;
+    task->status = LW_STATUS_OK;
+    lw_error_init(&task->error);
+    for (index = task->begin; index < task->end; ++index) {
+        lw_ocr_crop* crop = &ocr->crops[index];
+        lw_detection_box* box = &ocr->detected_boxes[crop->box_index];
+        lw_classification_result classification;
+        lw_recognition_result recognition;
+        lw_ocr_line* line = &ocr->scratch_lines[index];
+        uint8_t* crop_pixels = ocr->crop + (size_t)crop->offset;
+        uint64_t text_offset = (uint64_t)index * ocr->text_capacity_per_line;
+        char* line_text = ocr->scratch_text + (size_t)text_offset;
+
+        memset(&classification, 0, sizeof(classification));
+        if (ocr->classifiers[task->worker_index] != NULL) {
+            lw_classification_result_init(&classification);
+            task->status = lw_classifier_classify_bgr_u8(
+                ocr->classifiers[task->worker_index], crop_pixels, crop->byte_count, crop->width,
+                crop->height, crop->width * 3u, &classification, &task->error);
+            if (task->status != LW_STATUS_OK)
+                return;
+            if ((classification.label & 1u) != 0u &&
+                classification.score > ocr->classifier_threshold) {
+                lw_rotate_bgr_u8_180(crop_pixels, crop->width, crop->height);
+            }
+        }
+
+        lw_recognition_result_init(&recognition);
+        task->status = lw_recognizer_recognize_bgr_u8(
+            ocr->recognizers[task->worker_index], crop_pixels, crop->byte_count, crop->width,
+            crop->height, crop->width * 3u, line_text, ocr->text_capacity_per_line, &recognition,
+            &task->error);
+        if (task->status != LW_STATUS_OK)
+            return;
+        if (recognition.required_text_capacity == 0u ||
+            recognition.required_text_capacity > ocr->text_capacity_per_line) {
+            task->status = LW_STATUS_OUT_OF_BOUNDS;
+            lw_set_error(&task->error, task->status,
+                         "recognizer returned an invalid text capacity");
+            return;
+        }
+
+        memset(line, 0, sizeof(*line));
+        line->box = *box;
+        line->recognition_score = recognition.score;
+        line->classification_score = classification.score;
+        line->classification_label = classification.label;
+        line->applied_rotation_degrees = ocr->classifiers[task->worker_index] != NULL &&
+                                                 (classification.label & 1u) != 0u &&
+                                                 classification.score > ocr->classifier_threshold
+                                             ? 180u
+                                             : 0u;
+        line->emitted_count = recognition.emitted_count;
+        line->text_offset = text_offset;
+        line->text_length = recognition.required_text_capacity - 1u;
+    }
+}
+
+#if defined(_WIN32)
+static unsigned __stdcall worker_entry(void* context) {
+    process_worker_task((lw_ocr_worker_task*)context);
+    return 0u;
+}
+#elif !defined(__EMSCRIPTEN__)
+static void* worker_entry(void* context) {
+    process_worker_task((lw_ocr_worker_task*)context);
+    return NULL;
+}
+#endif
+
+static lw_status run_worker_tasks(lw_ocr* ocr, uint32_t first_crop, uint32_t crop_count,
+                                  lw_error* error) {
+    uint32_t active_workers = crop_count < ocr->worker_count ? crop_count : ocr->worker_count;
+    uint32_t base_count;
+    uint32_t remainder;
+    uint32_t begin = first_crop;
+    uint32_t worker_index;
+    lw_status status = LW_STATUS_OK;
+    if (active_workers == 0u)
+        return LW_STATUS_OK;
+    base_count = crop_count / active_workers;
+    remainder = crop_count % active_workers;
+    memset(ocr->worker_started, 0, ocr->worker_count * sizeof(*ocr->worker_started));
+    for (worker_index = 0u; worker_index < active_workers; ++worker_index) {
+        uint32_t count = base_count + (worker_index < remainder ? 1u : 0u);
+        lw_ocr_worker_task* task = &ocr->worker_tasks[worker_index];
+        memset(task, 0, sizeof(*task));
+        task->ocr = ocr;
+        task->worker_index = worker_index;
+        task->begin = begin;
+        task->end = begin + count;
+        begin += count;
+    }
+
+    /* Keep worker zero on the calling thread and launch the remaining ranges.
+     * If a platform thread cannot be created, execute that range synchronously
+     * so the request remains correct instead of returning a partial result. */
+    for (worker_index = 1u; worker_index < active_workers; ++worker_index) {
+#if defined(_WIN32)
+        ocr->worker_threads[worker_index] = (HANDLE)_beginthreadex(
+            NULL, 0u, worker_entry, &ocr->worker_tasks[worker_index], 0u, NULL);
+        if (ocr->worker_threads[worker_index] != NULL) {
+            ocr->worker_started[worker_index] = 1u;
+        } else {
+            process_worker_task(&ocr->worker_tasks[worker_index]);
+        }
+#elif !defined(__EMSCRIPTEN__)
+        if (pthread_create(&ocr->worker_threads[worker_index], NULL, worker_entry,
+                           &ocr->worker_tasks[worker_index]) == 0) {
+            ocr->worker_started[worker_index] = 1u;
+        } else {
+            process_worker_task(&ocr->worker_tasks[worker_index]);
+        }
+#else
+        process_worker_task(&ocr->worker_tasks[worker_index]);
+#endif
+    }
+    process_worker_task(&ocr->worker_tasks[0]);
+    for (worker_index = 1u; worker_index < active_workers; ++worker_index) {
+        if (ocr->worker_started[worker_index] == 0u)
+            continue;
+#if defined(_WIN32)
+        WaitForSingleObject(ocr->worker_threads[worker_index], INFINITE);
+        CloseHandle(ocr->worker_threads[worker_index]);
+        ocr->worker_threads[worker_index] = NULL;
+#elif !defined(__EMSCRIPTEN__)
+        (void)pthread_join(ocr->worker_threads[worker_index], NULL);
+#endif
+    }
+    for (worker_index = 0u; worker_index < active_workers; ++worker_index) {
+        if (ocr->worker_tasks[worker_index].status != LW_STATUS_OK) {
+            status = ocr->worker_tasks[worker_index].status;
+            lw_set_error(error, status, ocr->worker_tasks[worker_index].error.message);
+            break;
+        }
+    }
+    return status;
+}
+
 lw_status lw_ocr_run_bgr_u8(lw_ocr* ocr, const uint8_t* source, uint64_t source_byte_count,
                             uint32_t source_width, uint32_t source_height, uint32_t source_stride,
                             lw_ocr_line* lines, uint32_t line_capacity, char* text_utf8,
                             uint64_t text_capacity, lw_ocr_result* result, lw_error* error) {
     lw_detection_result detection;
     uint32_t line_count = 0u;
+    uint32_t batch_begin = 0u;
     uint64_t text_used = 0u;
+    uint64_t crop_used = 0u;
     uint32_t index;
     int capacity_query;
     lw_status status;
@@ -265,18 +501,15 @@ lw_status lw_ocr_run_bgr_u8(lw_ocr* ocr, const uint8_t* source, uint64_t source_
     result->detector_resized_height = detection.resized_height;
     if (status != LW_STATUS_OK)
         return status;
-    /* Process boxes in DET reading order. Invalid degenerate boxes are skipped;
-     * allocation, inference and contract failures abort the complete request. */
+    /* Crop all boxes first. Offsets, rather than raw pointers, survive realloc
+     * while the aggregate crop buffer grows. */
     for (index = 0u; index < detection.box_count; ++index) {
         lw_detection_box* box = &ocr->detected_boxes[index];
-        lw_classification_result classification;
-        lw_recognition_result recognition;
-        lw_ocr_line* line;
+        lw_ocr_crop* crop;
         uint32_t crop_width;
         uint32_t crop_height;
         uint64_t crop_bytes;
         uint64_t crop_pixels;
-        char* line_text;
         status = lw_crop_quad_size(box, &crop_width, &crop_height, &crop_bytes);
         if (status == LW_STATUS_INVALID_SHAPE)
             continue;
@@ -293,66 +526,56 @@ lw_status lw_ocr_run_bgr_u8(lw_ocr* ocr, const uint8_t* source, uint64_t source_
             lw_set_error(error, LW_STATUS_OUT_OF_BOUNDS, "OCR crop row stride overflows");
             return LW_STATUS_OUT_OF_BOUNDS;
         }
-        status = ensure_crop_capacity(ocr, crop_bytes, error);
+        if (crop_used > UINT64_MAX - crop_bytes) {
+            lw_set_error(error, LW_STATUS_OUT_OF_BOUNDS, "aggregate OCR crop size overflows");
+            return LW_STATUS_OUT_OF_BOUNDS;
+        }
+        status = ensure_crop_capacity(ocr, crop_used + crop_bytes, error);
         if (status != LW_STATUS_OK)
             return status;
         status = lw_crop_quad_bgr_u8(source, source_byte_count, source_width, source_height,
-                                     source_stride, box, ocr->crop, ocr->crop_capacity, &crop_width,
-                                     &crop_height, &crop_bytes);
+                                     source_stride, box, ocr->crop + (size_t)crop_used, crop_bytes,
+                                     &crop_width, &crop_height, &crop_bytes);
         if (status == LW_STATUS_INVALID_SHAPE)
             continue;
         if (status != LW_STATUS_OK) {
             lw_set_error(error, status, "OCR perspective crop failed");
             return status;
         }
-        memset(&classification, 0, sizeof(classification));
-        if (ocr->classifier != NULL) {
-            lw_classification_result_init(&classification);
-            status =
-                lw_classifier_classify_bgr_u8(ocr->classifier, ocr->crop, crop_bytes, crop_width,
-                                              crop_height, crop_width * 3u, &classification, error);
+        crop = &ocr->crops[line_count];
+        crop->offset = crop_used;
+        crop->byte_count = crop_bytes;
+        crop->width = crop_width;
+        crop->height = crop_height;
+        crop->box_index = index;
+        crop_used += crop_bytes;
+        ++line_count;
+        if (line_count - batch_begin == ocr->worker_count) {
+            status = run_worker_tasks(ocr, batch_begin, line_count - batch_begin, error);
             if (status != LW_STATUS_OK)
                 return status;
-            if ((classification.label & 1u) != 0u &&
-                classification.score > ocr->classifier_threshold) {
-                /* CLS label 1 means the recognizer should see a 180-degree
-                 * corrected crop, but only when confidence clears policy. */
-                lw_rotate_bgr_u8_180(ocr->crop, crop_width, crop_height);
-            }
+            batch_begin = line_count;
+            crop_used = 0u;
         }
-        if (text_used > ocr->info.max_text_capacity - ocr->text_capacity_per_line) {
+    }
+    if (line_count != batch_begin) {
+        status = run_worker_tasks(ocr, batch_begin, line_count - batch_begin, error);
+        if (status != LW_STATUS_OK)
+            return status;
+    }
+    /* Workers write fixed-size text slots to avoid synchronization. Compact
+     * those slots in reading order before publishing the public result. */
+    for (index = 0u; index < line_count; ++index) {
+        lw_ocr_line* line = &ocr->scratch_lines[index];
+        uint64_t line_bytes = line->text_length + 1u;
+        if (text_used > ocr->info.max_text_capacity - line_bytes) {
             lw_set_error(error, LW_STATUS_OUT_OF_BOUNDS, "OCR text scratch capacity is exhausted");
             return LW_STATUS_OUT_OF_BOUNDS;
         }
-        line_text = ocr->scratch_text + (size_t)text_used;
-        lw_recognition_result_init(&recognition);
-        status = lw_recognizer_recognize_bgr_u8(ocr->recognizer, ocr->crop, crop_bytes, crop_width,
-                                                crop_height, crop_width * 3u, line_text,
-                                                ocr->text_capacity_per_line, &recognition, error);
-        if (status != LW_STATUS_OK)
-            return status;
-        if (recognition.required_text_capacity == 0u ||
-            recognition.required_text_capacity > ocr->text_capacity_per_line) {
-            lw_set_error(error, LW_STATUS_OUT_OF_BOUNDS,
-                         "recognizer returned an invalid text capacity");
-            return LW_STATUS_OUT_OF_BOUNDS;
-        }
-        line = &ocr->scratch_lines[line_count];
-        memset(line, 0, sizeof(*line));
-        line->box = *box;
-        line->recognition_score = recognition.score;
-        line->classification_score = classification.score;
-        line->classification_label = classification.label;
-        line->applied_rotation_degrees = ocr->classifier != NULL &&
-                                                 (classification.label & 1u) != 0u &&
-                                                 classification.score > ocr->classifier_threshold
-                                             ? 180u
-                                             : 0u;
-        line->emitted_count = recognition.emitted_count;
+        memmove(ocr->scratch_text + (size_t)text_used,
+                ocr->scratch_text + (size_t)line->text_offset, (size_t)line_bytes);
         line->text_offset = text_used;
-        line->text_length = recognition.required_text_capacity - 1u;
-        text_used += recognition.required_text_capacity;
-        ++line_count;
+        text_used += line_bytes;
     }
     result->line_count = line_count;
     result->required_line_capacity = line_count;

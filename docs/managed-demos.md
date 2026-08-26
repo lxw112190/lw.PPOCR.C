@@ -56,7 +56,9 @@ The application supports common `System.Drawing` image formats, optional
 classification, background OCR, original-image quadrilateral drawing,
 per-line text/scores/rotation, and complete JSON output. Its P/Invoke wrapper
 checks native structure sizes, explicitly marshals UTF-8 model paths, validates
-all returned text ranges, and serializes access to the native handle.
+all returned text ranges, and serializes access to the native handle. The
+six-argument `NativeOcr` constructor additionally accepts `workerCount`; zero
+keeps the platform default.
 
 ## Native HTTP and browser Demo
 
@@ -65,7 +67,8 @@ Run on Windows:
 ```powershell
 .\build\bin\lw.PPOCR.C.HttpServer.exe `
   --host 127.0.0.1 --port 8787 `
-  --models .\build\models --www .\build\www
+  --models .\build\models --www .\build\www `
+  --ocr-workers 4
 ```
 
 On Linux/macOS, use the same arguments with
@@ -136,7 +139,9 @@ canonical flattened coordinate form:
 Errors contain the same API version/request ID plus stable `error_code` and
 `error` fields. x64 requests are limited to 50 MiB and x86 requests to 10
 MiB. OCR access is serialized because one native OCR handle is reused, while
-cpp-httplib can process unrelated HTTP work on its worker pool.
+cpp-httplib can process unrelated HTTP work on its worker pool. Inside one OCR
+request, `--ocr-workers 1..16` controls independent CLS/REC line workers; x64
+defaults to 4 and x86 defaults to 1.
 
 The Demo defaults to loopback and provides no TLS, authentication, CORS, rate
 limit, or production access log. Do not bind it to an untrusted network.

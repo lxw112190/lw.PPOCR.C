@@ -64,7 +64,7 @@ namespace LwPpocrCSharp
         public uint StructSize;
         public uint UseDirectionClassification;
         public float ClassifierThreshold;
-        public uint Reserved;
+        public uint WorkerCount;
         public ulong MaxCropPixels;
         public LwDetectorOptions Detector;
         public LwClassifierOptions Classifier;
@@ -77,7 +77,7 @@ namespace LwPpocrCSharp
         public uint StructSize;
         public uint UseDirectionClassification;
         public uint MaxLineCapacity;
-        public uint Reserved;
+        public uint WorkerCount;
         public ulong MaxTextCapacity;
         public ulong MaxTextCapacityPerLine;
         public ulong MaxCropPixels;
@@ -184,7 +184,21 @@ namespace LwPpocrCSharp
             string recognizerPath,
             string dictionaryPath,
             bool useDirectionClassification)
+            : this(detectorPath, classifierPath, recognizerPath, dictionaryPath,
+                useDirectionClassification, 0u)
         {
+        }
+
+        public NativeOcr(
+            string detectorPath,
+            string classifierPath,
+            string recognizerPath,
+            string dictionaryPath,
+            bool useDirectionClassification,
+            uint workerCount)
+        {
+            if (workerCount > 16u)
+                throw new ArgumentOutOfRangeException("workerCount", "workerCount必须在0到16之间");
             ValidateAbi();
             ValidateFile(detectorPath, "DET模型");
             ValidateFile(recognizerPath, "REC模型");
@@ -204,6 +218,7 @@ namespace LwPpocrCSharp
                 LwOcrOptions options = new LwOcrOptions();
                 lw_ocr_options_init(ref options);
                 options.UseDirectionClassification = useDirectionClassification ? 1u : 0u;
+                if (workerCount != 0u) options.WorkerCount = workerCount;
                 LwError error = CreateError();
                 int status = lw_ocr_create(detector, classifier, recognizer, dictionary,
                     ref options, out handle, ref error);

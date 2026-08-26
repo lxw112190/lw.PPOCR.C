@@ -15,6 +15,9 @@ include(CTest)
 include(GNUInstallDirs)
 include(CMakePackageConfigHelpers)
 find_package(Python3 3.9 COMPONENTS Interpreter REQUIRED)
+if(NOT EMSCRIPTEN)
+    find_package(Threads REQUIRED)
+endif()
 
 set(LW_PPOCR_C_ANALYSIS_JSON
     "${CMAKE_CURRENT_SOURCE_DIR}/docs/ppocrv6-tiny-analysis.json")
@@ -152,6 +155,9 @@ function(lw_configure_runtime_target target)
             "${CMAKE_CURRENT_SOURCE_DIR}/src/ppocr"
             "${CMAKE_CURRENT_SOURCE_DIR}/src/simd")
     target_compile_features(${target} PUBLIC c_std_11)
+    if(NOT EMSCRIPTEN)
+        target_link_libraries(${target} PUBLIC Threads::Threads)
+    endif()
     if(MSVC)
         target_compile_options(${target} PRIVATE /W4 /WX /utf-8)
     else()
@@ -270,6 +276,24 @@ else()
         INSTALL_RPATH "$ORIGIN/../lib")
 endif()
 
+add_executable(lw-ocr-benchmark examples/ocr_benchmark_ppm.c)
+target_sources(lw-ocr-benchmark PRIVATE src/simd/cpu_features.c)
+target_link_libraries(lw-ocr-benchmark PRIVATE lw_ppocr_c_shared)
+target_include_directories(lw-ocr-benchmark PRIVATE
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/simd")
+target_compile_features(lw-ocr-benchmark PRIVATE c_std_11)
+add_dependencies(lw-ocr-benchmark convert_det_model convert_cls_model
+    convert_rec_model det_demo_fixture)
+if(WIN32)
+    target_link_libraries(lw-ocr-benchmark PRIVATE shell32 psapi)
+elseif(APPLE)
+    set_target_properties(lw-ocr-benchmark PROPERTIES
+        INSTALL_RPATH "@loader_path/../lib")
+else()
+    set_target_properties(lw-ocr-benchmark PROPERTIES
+        INSTALL_RPATH "$ORIGIN/../lib")
+endif()
+
 add_executable(lw-classify-ppm examples/classify_ppm.c)
 target_link_libraries(lw-classify-ppm PRIVATE lw_ppocr_c_shared)
 target_compile_features(lw-classify-ppm PRIVATE c_std_11)
@@ -328,6 +352,12 @@ if(MSVC)
     target_compile_options(lw-rec-benchmark PRIVATE /W4 /WX /utf-8)
 else()
     target_compile_options(lw-rec-benchmark PRIVATE
+        -Wall -Wextra -Wpedantic -Werror)
+endif()
+if(MSVC)
+    target_compile_options(lw-ocr-benchmark PRIVATE /W4 /WX /utf-8)
+else()
+    target_compile_options(lw-ocr-benchmark PRIVATE
         -Wall -Wextra -Wpedantic -Werror)
 endif()
 if(MSVC)
@@ -592,6 +622,17 @@ if(BUILD_TESTING AND NOT EMSCRIPTEN)
     set_tests_properties(rec_scalar_benchmark PROPERTIES
         WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
         TIMEOUT 240)
+
+    add_test(
+        NAME full_ocr_parallel_benchmark
+        COMMAND lw-ocr-benchmark
+                "${LW_PPOCR_C_DET_LWM}"
+                "${LW_PPOCR_C_CLS_LWM}"
+                "${LW_PPOCR_C_REC_LWM}"
+                "${CMAKE_CURRENT_SOURCE_DIR}/models/ppocrv6-tiny/ppocr_keys.txt"
+                "${LW_PPOCR_C_DET_DEMO_PPM}"
+                1 1 4)
+    set_tests_properties(full_ocr_parallel_benchmark PROPERTIES TIMEOUT 300)
 
     if(MSVC)
         get_filename_component(LW_EXPORT_TOOL_DIR "${CMAKE_C_COMPILER}" DIRECTORY)
@@ -912,7 +953,7 @@ install(TARGETS lw_ppocr_c lw_ppocr_c_shared
     RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}"
     LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}"
     ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}")
-install(TARGETS lw-recognize-ppm lw-rec-benchmark lw-classify-ppm lw-detect-ppm
+install(TARGETS lw-recognize-ppm lw-rec-benchmark lw-ocr-benchmark lw-classify-ppm lw-detect-ppm
     lw-ocr-ppm
     RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}")
 install(FILES include/lw_infer.h

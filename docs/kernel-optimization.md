@@ -457,3 +457,26 @@ balanced, so another complete profile should precede the next optimization.
 All results in this document describe one machine, compiler, model, and
 fixture. They should be reproduced on target machines before being used for
 capacity planning.
+
+## Full OCR line-level parallelism
+
+The OpenCV reference implementation gains multi-line throughput from multiple
+recognition predictors. The pure-C equivalent keeps DET and every individual
+graph deterministic and single-threaded, but gives each full-OCR worker its own
+CLS/REC model, session, and reusable buffers. After DET, crops are processed in
+batches of at most `worker_count`; Windows uses native threads and Linux/macOS
+use pthreads. WebAssembly and x86 default to one worker, while native 64-bit
+builds default to four. The public OCR handle remains non-reentrant.
+
+The crop buffer holds only the active batch rather than every detected line,
+so peak crop memory scales with worker count instead of page line count. Thread
+creation failure falls back to synchronous processing of the affected range.
+Output is written to disjoint fixed slots and compacted in detector reading
+order after workers join.
+
+On the local Windows x64 500x500/16-line fixture, the same Release AVX2 binary
+measured 862.322 ms with one worker and 626.414 ms with four workers (3 warm-up
++ 8 measured calls). That is a 27.36% full-pipeline reduction. The stage after
+DET fell from 356.226 ms to 119.818 ms, while steady RSS rose from 67.58 MiB to
+98.02 MiB. The complete full-OCR Golden and public C Demo retained the expected
+16 UTF-8 lines, scores, coordinates, and rotation metadata.

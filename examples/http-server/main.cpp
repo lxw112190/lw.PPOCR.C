@@ -54,8 +54,10 @@ struct Config {
     std::string models;
     std::string web_root;
     bool use_classifier;
+    uint32_t ocr_workers;
 
-    Config() : host("127.0.0.1"), port(8787), use_classifier(true) {}
+    Config() : host("127.0.0.1"), port(8787), use_classifier(true),
+               ocr_workers(sizeof(void*) == 4u ? 1u : 4u) {}
 };
 
 struct BgrImage {
@@ -424,6 +426,7 @@ public:
         lw_error error;
         lw_ocr_options_init(&options);
         options.use_direction_classification = config.use_classifier ? 1u : 0u;
+        options.worker_count = config.ocr_workers;
         lw_error_init(&error);
         const std::string detector = JoinPath(config.models, "det.lwm");
         const std::string classifier = JoinPath(config.models, "cls.lwm");
@@ -563,7 +566,8 @@ Config ParseArguments(const std::vector<std::string>& arguments) {
         if (argument == "--no-cls") {
             config.use_classifier = false;
         } else if (argument == "--host" || argument == "--port" ||
-                   argument == "--models" || argument == "--www") {
+                   argument == "--models" || argument == "--www" ||
+                   argument == "--ocr-workers") {
             if (index + 1u >= arguments.size()) {
                 throw std::runtime_error("missing value after " + argument);
             }
@@ -571,10 +575,16 @@ Config ParseArguments(const std::vector<std::string>& arguments) {
             if (argument == "--host") config.host = value;
             else if (argument == "--port") config.port = ParsePort(value);
             else if (argument == "--models") config.models = value;
-            else config.web_root = value;
+            else if (argument == "--www") config.web_root = value;
+            else {
+                config.ocr_workers = ParsePositiveU32(value, "ocr-workers");
+                if (config.ocr_workers > 16u)
+                    throw std::runtime_error("ocr-workers must be between 1 and 16");
+            }
         } else if (argument == "--help" || argument == "-h") {
             std::cout << "Usage: lw.PPOCR.C.HttpServer [--host ADDRESS] [--port PORT] "
-                         "[--models DIRECTORY] [--www DIRECTORY] [--no-cls]\n";
+                         "[--models DIRECTORY] [--www DIRECTORY] [--ocr-workers COUNT] "
+                         "[--no-cls]\n";
             std::exit(0);
         } else {
             throw std::runtime_error("unknown argument: " + argument);
@@ -660,6 +670,7 @@ int Run(const std::vector<std::string>& arguments) {
             << "HTTP: http://" << config.host << ':' << config.port << "/\n"
             << "models: " << config.models << "\n"
             << "www: " << config.web_root << "\n"
+            << "OCR line workers: " << config.ocr_workers << "\n"
             << "HTTP workers: " << LW_HTTP_THREAD_POOL_COUNT;
     Log(startup.str());
     const bool listening = server.listen(config.host.c_str(), config.port);

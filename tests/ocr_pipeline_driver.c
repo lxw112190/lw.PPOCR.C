@@ -144,6 +144,12 @@ static int run_pipeline(int argc, char** argv) {
     if (status != LW_STATUS_INVALID_ARGUMENT || rejected != NULL)
         goto cleanup;
     lw_ocr_options_init(&options);
+    options.worker_count = 17u;
+    lw_error_init(&error);
+    status = lw_ocr_create(argv[2], argv[3], argv[4], argv[5], &options, &rejected, &error);
+    if (status != LW_STATUS_INVALID_ARGUMENT || rejected != NULL)
+        goto cleanup;
+    lw_ocr_options_init(&options);
     options.use_direction_classification = 0u;
     options.detector.limit_side_length = 320u;
     lw_error_init(&error);
@@ -166,7 +172,7 @@ static int run_pipeline(int argc, char** argv) {
     lw_ocr_info_init(&info);
     if (lw_ocr_get_info(ocr, &info) != LW_STATUS_OK ||
         info.use_direction_classification != use_classifier || info.max_line_capacity == 0u ||
-        info.max_text_capacity == 0u)
+        info.max_text_capacity == 0u || info.worker_count == 0u || info.worker_count > 16u)
         goto cleanup;
     memset(&query, 0, sizeof(query));
     lw_error_init(&error);

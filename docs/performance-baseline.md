@@ -26,6 +26,23 @@ must be in `1..10000`. The output is UTF-8 JSON with `schema_version: 1`.
 The `backend` field reports the selected `scalar`, `sse2`, or `avx2` kernel
 level.
 
+For the complete DET/CLS/REC path, use the reusable-handle benchmark. The final
+argument is `lw_ocr_options.worker_count`:
+
+```powershell
+.\build-ninja-c\lw-ocr-benchmark.exe `
+  .\build-ninja-c\models\det.lwm `
+  .\build-ninja-c\models\cls.lwm `
+  .\build-ninja-c\models\rec.lwm `
+  .\models\ppocrv6-tiny\ppocr_keys.txt `
+  .\build-ninja-c\models\sample.ppm `
+  3 8 4
+```
+
+The JSON separates DET latency from full OCR latency and reports the derived
+crop/CLS/REC remainder, line count, selected worker count, throughput, and RSS.
+Every warm-up and measured call must return identical packed UTF-8 text.
+
 ## Local baseline
 
 The following is one local measurement, not a general performance promise:
@@ -46,6 +63,23 @@ Both runs produced exactly `纯臻营养护发素` on every warm-up and measured
 The runtime planned 2,948,160 workspace bytes and 1,289,280 preallocated
 input/output bytes. Future optimization reports must use the same fixture and
 protocol, retain the Golden Tests, and compare both latency and memory.
+
+## Full OCR line-worker A/B
+
+The full-OCR benchmark on the same local x64 host used the 500x500 bundled
+16-line fixture, AVX2, three warm-ups, and eight measured iterations. Both
+processes used the same optimized binary; only `worker_count` changed.
+
+| Workers | DET mean | Full OCR mean | After DET | Throughput | RSS after warm-up |
+|---:|---:|---:|---:|---:|---:|
+| 1 | 506.096 ms | 862.322 ms | 356.226 ms | 1.160/s | 67.58 MiB |
+| 4 | 506.596 ms | 626.414 ms | 119.818 ms | 1.596/s | 98.02 MiB |
+
+Four workers reduced complete OCR latency by 27.36% (1.377x) and the
+crop/CLS/REC portion by 66.36% (2.973x). The measured steady RSS increased by
+30.44 MiB because every worker owns independent CLS/REC models, sessions, and
+workspaces. DET remained single-threaded and statistically unchanged. This is
+a local engineering result, not a release-wide performance guarantee.
 
 ## First optimized result
 

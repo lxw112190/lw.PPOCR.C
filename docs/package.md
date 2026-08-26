@@ -121,6 +121,20 @@ The packaged benchmark reuses one recognizer and emits machine-readable JSON:
 The last two values select warm-up and measured iterations. Latency and RSS are
 environment-dependent measurements, not release-wide performance guarantees.
 
+The complete-pipeline benchmark reports reusable-handle DET latency, full OCR
+latency, and the remaining crop/CLS/REC time. Its final argument selects the
+line worker count:
+
+```powershell
+.\bin\lw-ocr-benchmark.exe `
+  .\models\det.lwm `
+  .\models\cls.lwm `
+  .\models\rec.lwm `
+  .\models\ppocr_keys.txt `
+  .\models\sample.ppm `
+  3 10 4
+```
+
 ## Consume with CMake
 
 Point `CMAKE_PREFIX_PATH` at the extracted package, then use either target:

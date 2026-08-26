@@ -35,10 +35,12 @@ optional direction correction.
   transient scratch memory.
 - A single detector must not be called concurrently. Separate detectors own
   independent mutable state and may run in parallel.
-- `lw_ocr_create` owns its detector, optional classifier, recognizer, model
-  handles, sessions, and reusable line/text/crop scratch until `lw_ocr_free`.
-- A full-OCR handle grows its crop buffer only when a larger text region is
-  encountered. Detection postprocessing may also use bounded transient memory.
+- `lw_ocr_create` owns its detector, one CLS/REC pair per configured worker,
+  their model handles/sessions, and reusable line/text/crop scratch until
+  `lw_ocr_free`.
+- Full OCR crops and processes at most `worker_count` lines per batch. Its crop
+  buffer grows to the largest such batch encountered and is then reused.
+  Detection postprocessing may also use bounded transient memory.
 - A single full-OCR handle must not be called concurrently. Separate handles
   own independent mutable state and may run in parallel.
 - Every successful create has one matching free; all free functions accept null.
@@ -270,9 +272,11 @@ precise implementation and correctness boundary are documented in
 `lw_ocr_create` composes a DET model, an optional CLS model, a REC model, and a
 UTF-8 dictionary. Initialized options enable direction classification, use a
 classifier threshold of `0.9`, limit one perspective crop to 16,000,000 pixels,
-and embed the normal DET/CLS/REC option structures. Initialize the outer and
-nested structures with `lw_ocr_options_init`; all reserved fields must remain
-zero.
+and embed the normal DET/CLS/REC option structures. Native 64-bit builds default
+to four independent CLS/REC workers after DET; x86 and WebAssembly default to
+one. Set `worker_count` in `1..16` to override that policy. Initialize the outer
+and nested structures with `lw_ocr_options_init`; remaining reserved fields
+must stay zero.
 
 Set `use_direction_classification` to zero to omit CLS. In that mode the CLS
 model path may be null, classification fields are zero, and no 180-degree

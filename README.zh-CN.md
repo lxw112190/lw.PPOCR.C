@@ -15,6 +15,8 @@ Python、OpenCV、ONNX Runtime、OpenVINO、TensorRT 或 protobuf，适合将文
 - 独立的 DET、CLS、REC 公共 C API；
 - 纯 C11 核心，公共 ABI 不暴露 C++、STL 或第三方库类型；
 - 支持标量、SSE2 和 AVX2 运行时自动分派，不支持 SIMD 时自动回退；
+- 完整 OCR 在 DET 后使用独立 CLS/REC worker 并行处理文字行；原生 64 位默认 4 个，
+  x86 与 WebAssembly 默认 1 个，可通过 `lw_ocr_options.worker_count` 调整；
 - 输入为调用方已经解码的 BGR8 图像，核心库不绑定具体图片解码库；
 - 提供 C 命令行示例、C# WinForms Demo、原生 HTTP/Web Demo 和单文件离线 WASM Demo；
 - 自定义 LWM v0.1 模型格式，加载时执行边界、结构和校验和检查；
@@ -47,7 +49,8 @@ PP-OCR ONNX 模型
 - 模型：PP-OCRv6 tiny；
 - 精度与设备：FP32、CPU；
 - 指令集：标量、SSE2、AVX2；
-- 线程模型：单个 OCR 句柄由调用方串行使用；多个句柄可以由应用自行并行调度；
+- 线程模型：单个 OCR 句柄仍由调用方串行使用，但句柄内部可并行处理不同文字行；
+  多个句柄也可以由应用自行并行调度；
 - 首要平台：Windows x64、Linux x64；
 - 兼容目标：Windows 7 x86；
 - 模型格式：LWM v0.1，目前尚未冻结为稳定格式。
@@ -108,7 +111,7 @@ Windows 上使用 MSVC + Ninja 时，请先打开“x64 Native Tools Command Pro
 
 - 静态和动态纯 C 库；
 - `lw-recognize-ppm`、`lw-classify-ppm`、`lw-detect-ppm`、`lw-ocr-ppm` 示例；
-- `lw-rec-benchmark` 基准程序；
+- `lw-rec-benchmark` 与 `lw-ocr-benchmark` 基准程序；
 - `lwm-inspect` 模型检查工具；
 - `lw.PPOCR.C.HttpServer` 原生 HTTP 服务及 Web 测试页。
 

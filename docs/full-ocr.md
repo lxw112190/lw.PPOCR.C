@@ -51,14 +51,22 @@ a valid crop. Valid output preserves detector reading order.
 ## Limits and memory
 
 The full-OCR handle owns separate component sessions and reusable maximum-sized
-line/text scratch. Its perspective-crop buffer grows to the largest crop seen
-by that handle and is then reused. The default maximum is 16,000,000 pixels per
-crop; exceeding it returns `LW_STATUS_MEMORY_LIMIT`. DET and each nested model
-retain their own image, tensor, workspace, and model-size limits.
+line/text scratch. After DET, independent CLS/REC worker pairs process batches
+of text-line crops in parallel. The crop buffer holds at most one crop per
+active worker, grows to the largest batch seen by that handle, and is then
+reused. The default maximum is 16,000,000 pixels per crop; exceeding it returns
+`LW_STATUS_MEMORY_LIMIT`. DET and each nested model retain their own image,
+tensor, workspace, and model-size limits.
+
+Native 64-bit builds default to four workers; x86 and WebAssembly default to
+one. `lw_ocr_options.worker_count` accepts `1..16`. More workers trade model,
+workspace, and crop memory for lower multi-line latency, so applications should
+benchmark `1`, `2`, and `4` on their target CPU and memory budget.
 
 The detector's DB postprocessor may allocate bounded transient scratch. The
 full-OCR path therefore promises bounded resources and buffer reuse, not zero
-allocations per call. One handle is not thread-safe; use one handle per worker.
+allocations per call. Internal line workers do not make the public handle
+reentrant: concurrent requests still require separate OCR handles.
 
 ## Correctness gates
 

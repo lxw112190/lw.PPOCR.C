@@ -35,7 +35,9 @@ decoding remains outside the core: applications provide decoded BGR8 pixels.
 A public full-OCR C API now composes detection, pure-C perspective cropping,
 optional direction classification/180-degree correction, and recognition. It
 returns one canonical quadrilateral per UTF-8 text line through caller-owned,
-capacity-checked buffers.
+capacity-checked buffers. Native 64-bit full OCR defaults to four independent
+CLS/REC workers after detection; x86 and WebAssembly default to one. The worker
+count is configurable without making one OCR handle reentrant.
 An optional .NET Framework 3.5 WinForms example demonstrates direct C# P/Invoke
 with local image decoding and result overlays. A separate native C++
 `cpp-httplib` Demo provides the cross-platform HTTP API and browser UI; the
@@ -49,7 +51,9 @@ Current scope:
 
 - PP-OCRv6 tiny;
 - public REC, fixed-batch CLS, DET, and composed full-OCR paths;
-- FP32, CPU, scalar/SSE2/AVX2 runtime dispatch, single-threaded;
+- FP32, CPU, scalar/SSE2/AVX2 runtime dispatch; DET and individual graph runs
+  remain single-threaded, while full OCR can process independent lines in
+  parallel;
 - custom, non-frozen LWM v0.1 format;
 - Windows x64 and Linux x64 first;
 - Windows 7 x86 compatibility preserved by design.
@@ -82,7 +86,8 @@ The normal build creates `build/models/rec.lwm`, `build/models/cls.lwm`,
 `build/models/det.lwm`, static and shared pure-C
 libraries, the `lw-recognize-ppm`, `lw-detect-ppm`, and `lw-ocr-ppm`
 public-API Demos, the machine-readable
-`lw-rec-benchmark`, the native `lw.PPOCR.C.HttpServer` plus browser page, and
+`lw-rec-benchmark` and `lw-ocr-benchmark`, the native
+`lw.PPOCR.C.HttpServer` plus browser page, and
 `lwm-inspect`. Inspect the converted model with:
 
 ```powershell
