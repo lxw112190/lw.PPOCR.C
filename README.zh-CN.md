@@ -138,6 +138,19 @@ HTTP Demo 使用原生 C++ 和 vendored `cpp-httplib`，没有 .NET 运行时依
 .\build\bin\lw.PPOCR.C.HttpServer.exe --host 127.0.0.1 --port 8787
 ```
 
+### 单文件离线 WASM Demo
+
+安装并激活 Emscripten SDK 后（确保 `emcmake` 已在 `PATH` 中），可以用 Ninja 生成一个自包含的离线页面：
+
+```powershell
+emcmake cmake -S . -B build-wasm -G Ninja -DCMAKE_BUILD_TYPE=Release -DLW_BUILD_HTTP_DEMO=OFF -DBUILD_TESTING=OFF
+cmake --build build-wasm --target lw_ppocr_web
+```
+
+Windows 下可在 emsdk 目录运行 `emsdk_env.bat`，或按 emsdk 文档使用对应的环境初始化脚本；不同安装位置无需修改上述构建命令。
+
+生成的 `build-wasm/ocr-demo.html` 已内嵌 WASM、三个 LWM 模型和字典，可以直接双击打开并选择图片进行完整 OCR。
+
 浏览器打开 `http://127.0.0.1:8787/`，选择常见格式图片即可测试。浏览器通过 Canvas
 完成图片解码，再把像素转换成 P6 PPM 上传；服务端把 RGB 转成 BGR 后调用纯 C OCR API。
 

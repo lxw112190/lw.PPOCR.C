@@ -167,6 +167,7 @@ set_target_properties(lw_ppocr_c PROPERTIES
     OUTPUT_NAME lw_ppocr_c_static)
 lw_configure_runtime_target(lw_ppocr_c)
 
+if(NOT EMSCRIPTEN)
 add_library(lw_ppocr_c_shared SHARED ${LW_PPOCR_C_SOURCES})
 set_target_properties(lw_ppocr_c_shared PROPERTIES
     EXPORT_NAME shared
@@ -178,6 +179,35 @@ target_compile_definitions(lw_ppocr_c_shared
     PRIVATE LW_PPOCR_C_BUILD LW_PPOCR_C_SHARED
     INTERFACE LW_PPOCR_C_SHARED)
 lw_configure_runtime_target(lw_ppocr_c_shared)
+endif()
+
+if(EMSCRIPTEN)
+    add_executable(lw_ppocr_web web/lw_web_api.c)
+    target_link_libraries(lw_ppocr_web PRIVATE lw_ppocr_c)
+    target_include_directories(lw_ppocr_web PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/include")
+    target_compile_features(lw_ppocr_web PRIVATE c_std_11)
+    target_link_options(lw_ppocr_web PRIVATE
+        "-sMODULARIZE=1" "-sEXPORT_NAME=LwPpocrModule" "-sSINGLE_FILE=1"
+        "-sFORCE_FILESYSTEM=1" "-sALLOW_MEMORY_GROWTH=1" "-sNO_EXIT_RUNTIME=1"
+        "-sEXPORTED_RUNTIME_METHODS=['FS','HEAPU8','HEAPU32','HEAPF32']"
+        "-sEXPORTED_FUNCTIONS=['_lw_web_init','_lw_web_shutdown','_lw_web_get_info','_lw_web_run','_lw_web_last_error','_lw_web_malloc','_lw_web_free']"
+        "--no-entry")
+    set_target_properties(lw_ppocr_web PROPERTIES OUTPUT_NAME "lw_ppocr_web")
+    set_property(TARGET lw_ppocr_web APPEND PROPERTY LINK_DEPENDS
+        "${CMAKE_CURRENT_SOURCE_DIR}/web/ocr-demo.template.html"
+        "${CMAKE_CURRENT_SOURCE_DIR}/web/package_ocr_html.py")
+    add_dependencies(lw_ppocr_web convert_det_model convert_cls_model convert_rec_model)
+    add_custom_command(TARGET lw_ppocr_web POST_BUILD
+        COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/web/package_ocr_html.py"
+            --template "${CMAKE_CURRENT_SOURCE_DIR}/web/ocr-demo.template.html"
+            --runtime "$<TARGET_FILE_DIR:lw_ppocr_web>/lw_ppocr_web.js"
+            --det "${LW_PPOCR_C_DET_LWM}" --cls "${LW_PPOCR_C_CLS_LWM}"
+            --rec "${LW_PPOCR_C_REC_LWM}"
+            --dictionary "${CMAKE_CURRENT_SOURCE_DIR}/models/ppocrv6-tiny/ppocr_keys.txt"
+            --output "$<TARGET_FILE_DIR:lw_ppocr_web>/ocr-demo.html"
+        VERBATIM)
+    add_custom_target(lw-ocr-html DEPENDS lw_ppocr_web)
+endif()
 
 set(LW_PPOCR_C_REC_DEMO_PPM
     "${CMAKE_CURRENT_BINARY_DIR}/models/sample-crop.ppm")
@@ -209,6 +239,7 @@ add_custom_command(
     VERBATIM)
 add_custom_target(det_demo_fixture ALL DEPENDS "${LW_PPOCR_C_DET_DEMO_PPM}")
 
+if(NOT EMSCRIPTEN)
 add_executable(lw-recognize-ppm examples/recognize_ppm.c)
 target_link_libraries(lw-recognize-ppm PRIVATE lw_ppocr_c_shared)
 target_compile_features(lw-recognize-ppm PRIVATE c_std_11)
@@ -421,7 +452,9 @@ if(LW_BUILD_CSHARP_DEMOS)
         VERBATIM)
 endif()
 
-if(BUILD_TESTING)
+endif()
+
+if(BUILD_TESTING AND NOT EMSCRIPTEN)
     add_test(
         NAME model_analysis
         COMMAND "${Python3_EXECUTABLE}" -m unittest -v
@@ -872,6 +905,7 @@ if(MSVC)
     include(InstallRequiredSystemLibraries)
 endif()
 
+if(NOT EMSCRIPTEN)
 install(TARGETS lw_ppocr_c lw_ppocr_c_shared
     EXPORT lw.PPOCR.CTargets
     RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}"
@@ -906,6 +940,7 @@ install(FILES
     "${LW_PPOCR_C_DET_DEMO_PPM}"
     "${CMAKE_CURRENT_SOURCE_DIR}/models/ppocrv6-tiny/sample.jpg"
     DESTINATION models)
+endif()
 if(LW_BUILD_CSHARP_DEMOS)
     install(FILES
         "${LW_MANAGED_WINFORMS_EXE}"
@@ -936,6 +971,7 @@ install(FILES
     licenses/cpp-httplib-MIT.txt
     DESTINATION licenses)
 
+if(NOT EMSCRIPTEN)
 set(LW_CMAKE_PACKAGE_DIR "${CMAKE_INSTALL_LIBDIR}/cmake/lw.PPOCR.C")
 configure_package_config_file(
     cmake/lw.PPOCR.CConfig.cmake.in
@@ -953,8 +989,9 @@ install(FILES
     "${CMAKE_CURRENT_BINARY_DIR}/lw.PPOCR.CConfig.cmake"
     "${CMAKE_CURRENT_BINARY_DIR}/lw.PPOCR.CConfigVersion.cmake"
     DESTINATION "${LW_CMAKE_PACKAGE_DIR}")
+endif()
 
-if(BUILD_TESTING)
+if(BUILD_TESTING AND NOT EMSCRIPTEN)
     add_test(
         NAME staged_package
         COMMAND "${CMAKE_COMMAND}"
