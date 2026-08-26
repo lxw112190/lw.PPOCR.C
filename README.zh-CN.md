@@ -19,6 +19,7 @@ Python、OpenCV、ONNX Runtime、OpenVINO、TensorRT 或 protobuf，适合将文
   x86 与 WebAssembly 默认 1 个，可通过 `lw_ocr_options.worker_count` 调整；
 - 输入为调用方已经解码的 BGR8 图像，核心库不绑定具体图片解码库；
 - 提供 C 命令行示例、C# WinForms Demo、原生 HTTP/Web Demo 和单文件离线 WASM Demo；
+- WinForms 测试工具支持拖放图片、切换模型目录和 OCR 工作器数量，并记录平均/P95耗时；
 - 自定义 LWM v0.1 模型格式，加载时执行边界、结构和校验和检查；
 - 调用方拥有输入和输出缓冲区，内存容量不足时返回明确错误，不在 ABI 两侧交叉释放内存。
 

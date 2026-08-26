@@ -52,13 +52,26 @@ Run:
   .\build\managed\models
 ```
 
-The application supports common `System.Drawing` image formats, optional
-classification, background OCR, original-image quadrilateral drawing,
-per-line text/scores/rotation, and complete JSON output. Its P/Invoke wrapper
-checks native structure sizes, explicitly marshals UTF-8 model paths, validates
-all returned text ranges, and serializes access to the native handle. The
-six-argument `NativeOcr` constructor additionally accepts `workerCount`; zero
-keeps the platform default.
+The application supports common `System.Drawing` image formats, file drag and
+drop, a selectable model directory, optional classification, background OCR,
+original-image quadrilateral drawing, per-line text/scores/rotation, and
+complete JSON output. The status bar reports the process architecture and the
+actual loaded `lw_ppocr_c.dll` path, which helps diagnose x86/x64 or stale-DLL
+problems.
+
+For line-worker A/B tests, select `1`, `2`, or `4` workers, set warm-up and
+measured iteration counts, and click **性能测试**. The image is decoded once;
+only native DET/CLS/REC calls are timed. The **性能记录** tab retains worker
+count, CLS state, line count, mean, P95, minimum, maximum, and decode time so
+multiple configurations can be compared in one session. Every repeated result
+must have identical text and coordinates or the measurement is rejected.
+
+The P/Invoke wrapper checks native structure sizes, explicitly marshals UTF-8
+model paths, validates all returned text ranges, and serializes access to the
+native handle. The six-argument `NativeOcr` constructor additionally accepts
+`workerCount`; zero keeps the platform default. `WorkerCount` reports the
+effective native value, while the internal decoded-image path lets the Demo
+benchmark native OCR without repeatedly timing `System.Drawing` decoding.
 
 ## Native HTTP and browser Demo
 

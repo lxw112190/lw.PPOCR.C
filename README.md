@@ -38,8 +38,9 @@ returns one canonical quadrilateral per UTF-8 text line through caller-owned,
 capacity-checked buffers. Native 64-bit full OCR defaults to four independent
 CLS/REC workers after detection; x86 and WebAssembly default to one. The worker
 count is configurable without making one OCR handle reentrant.
-An optional .NET Framework 3.5 WinForms example demonstrates direct C# P/Invoke
-with local image decoding and result overlays. A separate native C++
+An optional .NET Framework 3.5 WinForms test tool demonstrates direct C# P/Invoke
+with local image decoding, result overlays, selectable OCR workers, and reusable
+mean/P95 performance history. A separate native C++
 `cpp-httplib` Demo provides the cross-platform HTTP API and browser UI; the
 browser converts selected images to P6 PPM before upload. The pure-C core
 remains dependency-free and continues to accept decoded BGR8 pixels only.

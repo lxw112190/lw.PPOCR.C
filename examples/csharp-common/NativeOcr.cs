@@ -254,7 +254,7 @@ namespace LwPpocrCSharp
         public OcrResponse RecognizeEncoded(byte[] encodedImage)
         {
             DecodedBgrImage decoded = DecodeToBgr(encodedImage);
-            return RecognizeBgr(decoded);
+            return RecognizeDecoded(decoded);
         }
 
         public OcrResponse RecognizeFile(string path)
@@ -263,8 +263,15 @@ namespace LwPpocrCSharp
             return RecognizeEncoded(File.ReadAllBytes(path));
         }
 
-        private OcrResponse RecognizeBgr(DecodedBgrImage image)
+        // The WinForms benchmark decodes an image once and repeatedly calls the
+        // native pipeline. Keeping this helper internal avoids exposing the
+        // mutable pixel container as part of the public C# example API.
+        internal OcrResponse RecognizeDecoded(DecodedBgrImage image)
         {
+            if (image == null || image.Pixels == null || image.Width <= 0 || image.Height <= 0 ||
+                image.Stride < checked(image.Width * 3) ||
+                image.Pixels.LongLength < checked((long)image.Stride * image.Height))
+                throw new ArgumentException("BGR图片数据无效", "image");
             lock (syncRoot)
             {
                 ThrowIfDisposed();
@@ -320,6 +327,18 @@ namespace LwPpocrCSharp
                     if (textPin.IsAllocated) textPin.Free();
                     if (linesPin.IsAllocated) linesPin.Free();
                     if (imagePin.IsAllocated) imagePin.Free();
+                }
+            }
+        }
+
+        public uint WorkerCount
+        {
+            get
+            {
+                lock (syncRoot)
+                {
+                    ThrowIfDisposed();
+                    return info.WorkerCount;
                 }
             }
         }
