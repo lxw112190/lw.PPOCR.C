@@ -79,6 +79,10 @@ jobs:
 
           (
             cd release-assets
+            # CPack writes the checksum beside the archive on its build host.
+            # Normalize only the text file line endings so GNU sha256sum does
+            # not treat a Windows CR as part of the archived file name.
+            sed -i 's/\r$//' "${windows}.sha256" "${linux}.sha256"
             sha256sum -c "${windows}.sha256"
             sha256sum -c "${linux}.sha256"
             mv ocr-demo.html "${wasm}"

@@ -153,8 +153,8 @@ Pushing a tag whose base version matches the CMake project version starts the
 release workflow. Stable and prerelease suffixes are accepted, for example:
 
 ```bash
-git tag -a v0.1.0 -m "lw.PPOCR.C v0.1.0"
-git push origin v0.1.0
+git tag -a v0.1.0-preview.1 -m "lw.PPOCR.C v0.1.0 preview 1"
+git push origin v0.1.0-preview.1
 ```
 
 The workflow rebuilds and tests the Windows x64, Linux x64, and standalone WASM
