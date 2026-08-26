@@ -179,7 +179,9 @@ int main(int argc, char** argv) {
         }
     }
     printf("{\"width\":%d,\"iterations\":%d,\"operators\":[", width, iterations);
-    for (index = 1u; index < LW_EXECUTION_PROFILE_OPERATOR_CAPACITY; ++index) {
+    /* REC v0 uses operator IDs 1 through 15. Keep this focused report stable
+     * even though the shared profiler also covers DET/CLS IDs through 21. */
+    for (index = 1u; index <= 15u; ++index) {
         if (index != 1u) {
             putchar(',');
         }

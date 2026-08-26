@@ -140,6 +140,8 @@ The ten-crop ONNX-versus-pure-C correctness gate is documented in
 [`docs/rec-golden-corpus.md`](docs/rec-golden-corpus.md).
 The optimization baseline and benchmark protocol are documented in
 [`docs/performance-baseline.md`](docs/performance-baseline.md).
+The full DET/CLS/REC stage, operator, Conv-class, and worker-dispatch profile is
+documented in [`docs/full-ocr-profile.md`](docs/full-ocr-profile.md).
 The profile-directed kernel optimizations and their Windows x64/x86 A/B
 results are documented in
 [`docs/kernel-optimization.md`](docs/kernel-optimization.md).

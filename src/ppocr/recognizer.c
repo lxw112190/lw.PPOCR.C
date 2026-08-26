@@ -4,6 +4,7 @@
 
 #include "error_internal.h"
 #include "executor_internal.h"
+#include "profile_internal.h"
 #include "rec_internal.h"
 
 #include <limits.h>
@@ -237,16 +238,19 @@ lw_status lw_recognizer_get_info(const lw_recognizer* recognizer, lw_recognizer_
     return LW_STATUS_OK;
 }
 
-lw_status lw_recognizer_recognize_bgr_u8(lw_recognizer* recognizer, const uint8_t* source,
-                                         uint64_t source_byte_count, uint32_t source_width,
-                                         uint32_t source_height, uint32_t source_stride,
-                                         char* text_utf8, uint64_t text_capacity,
-                                         lw_recognition_result* result, lw_error* error) {
+static lw_status recognizer_recognize_bgr_u8_impl(lw_recognizer* recognizer, const uint8_t* source,
+                                                  uint64_t source_byte_count, uint32_t source_width,
+                                                  uint32_t source_height, uint32_t source_stride,
+                                                  char* text_utf8, uint64_t text_capacity,
+                                                  lw_recognition_result* result,
+                                                  lw_pipeline_component_profile* profile,
+                                                  lw_error* error) {
     uint64_t source_pixels;
     uint32_t resized_width = 0u;
     uint64_t required_capacity = 0u;
     float score = 0.0f;
     uint32_t emitted_count = 0u;
+    uint64_t started;
     lw_status status;
     if (recognizer == NULL || source == NULL || result == NULL ||
         result->struct_size != sizeof(*result) || (text_utf8 == NULL && text_capacity != 0u)) {
@@ -264,6 +268,7 @@ lw_status lw_recognizer_recognize_bgr_u8(lw_recognizer* recognizer, const uint8_
         lw_set_error(error, LW_STATUS_MEMORY_LIMIT, "source image exceeds max_image_pixels");
         return LW_STATUS_MEMORY_LIMIT;
     }
+    started = lw_pipeline_profile_now(profile);
     status =
         lw_rec_preprocess_bgr_u8(source, source_byte_count, source_width, source_height,
                                  source_stride, recognizer->info.target_width, recognizer->input,
@@ -272,12 +277,23 @@ lw_status lw_recognizer_recognize_bgr_u8(lw_recognizer* recognizer, const uint8_
         lw_set_error(error, status, "BGR source layout is invalid");
         return status;
     }
-    status = lw_execute_session_f32(recognizer->session, recognizer->input,
-                                    recognizer->input_element_count, recognizer->probabilities,
-                                    recognizer->probability_element_count, error);
+    lw_pipeline_profile_add_elapsed(profile == NULL ? NULL : &profile->preprocess_nanoseconds,
+                                    started, profile);
+    started = lw_pipeline_profile_now(profile);
+    status = profile == NULL
+                 ? lw_execute_session_f32(
+                       recognizer->session, recognizer->input, recognizer->input_element_count,
+                       recognizer->probabilities, recognizer->probability_element_count, error)
+                 : lw_execute_session_f32_profiled(
+                       recognizer->session, recognizer->input, recognizer->input_element_count,
+                       recognizer->probabilities, recognizer->probability_element_count,
+                       &profile->execution, error);
+    lw_pipeline_profile_add_elapsed(profile == NULL ? NULL : &profile->graph_nanoseconds, started,
+                                    profile);
     if (status != LW_STATUS_OK) {
         return status;
     }
+    started = lw_pipeline_profile_now(profile);
     status = lw_rec_ctc_decode_f32(
         recognizer->dictionary, recognizer->probabilities, recognizer->probability_element_count,
         recognizer->info.time_steps, recognizer->info.class_count, text_utf8, text_capacity,
@@ -287,5 +303,35 @@ lw_status lw_recognizer_recognize_bgr_u8(lw_recognizer* recognizer, const uint8_
     result->resized_width = resized_width;
     result->time_steps = recognizer->info.time_steps;
     result->required_text_capacity = required_capacity;
+    lw_pipeline_profile_add_elapsed(profile == NULL ? NULL : &profile->postprocess_nanoseconds,
+                                    started, profile);
     return status;
+}
+
+lw_status lw_recognizer_recognize_bgr_u8(lw_recognizer* recognizer, const uint8_t* source,
+                                         uint64_t source_byte_count, uint32_t source_width,
+                                         uint32_t source_height, uint32_t source_stride,
+                                         char* text_utf8, uint64_t text_capacity,
+                                         lw_recognition_result* result, lw_error* error) {
+    return recognizer_recognize_bgr_u8_impl(recognizer, source, source_byte_count, source_width,
+                                            source_height, source_stride, text_utf8, text_capacity,
+                                            result, NULL, error);
+}
+
+lw_status lw_recognizer_recognize_bgr_u8_profiled(lw_recognizer* recognizer, const uint8_t* source,
+                                                  uint64_t source_byte_count, uint32_t source_width,
+                                                  uint32_t source_height, uint32_t source_stride,
+                                                  char* text_utf8, uint64_t text_capacity,
+                                                  lw_recognition_result* result,
+                                                  lw_pipeline_component_profile* profile,
+                                                  lw_error* error) {
+    if (profile == NULL || profile->execution.struct_size != sizeof(profile->execution) ||
+        profile->execution.clock == NULL) {
+        lw_set_error(error, LW_STATUS_INVALID_ARGUMENT,
+                     "an initialized recognizer profile and clock are required");
+        return LW_STATUS_INVALID_ARGUMENT;
+    }
+    return recognizer_recognize_bgr_u8_impl(recognizer, source, source_byte_count, source_width,
+                                            source_height, source_stride, text_utf8, text_capacity,
+                                            result, profile, error);
 }

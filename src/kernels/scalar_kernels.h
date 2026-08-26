@@ -96,6 +96,16 @@ void lw_scalar_conv1x1_unit_f32(const float* input, const float* weights, const 
 void lw_scalar_depthwise_conv3x3_unit_pad1_f32(const float* input, const float* weights,
                                                const float* bias, float* output,
                                                const int32_t dimensions[4]);
+void lw_scalar_depthwise_conv5x5_unit_pad2_f32(const float* input, const float* weights,
+                                               const float* bias, float* output,
+                                               const int32_t dimensions[4]);
+void lw_scalar_conv3x3_unit_pad1_f32(const float* input, const float* weights, const float* bias,
+                                     float* output, const int32_t input_dimensions[4],
+                                     const int32_t output_dimensions[4]);
+void lw_scalar_conv2x2_unit_pad_end1_f32(const float* input, const float* weights,
+                                         const float* bias, float* output,
+                                         const int32_t input_dimensions[4],
+                                         const int32_t output_dimensions[4]);
 void lw_scalar_conv3x3_stride2_pad1_f32(const float* input, const float* weights, const float* bias,
                                         float* output, const int32_t input_dimensions[4],
                                         const int32_t output_dimensions[4]);

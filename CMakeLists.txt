@@ -115,6 +115,7 @@ set(LW_PPOCR_C_SOURCES
     src/ppocr/det_preprocess.c
     src/ppocr/detector.c
     src/ppocr/ocr.c
+    src/ppocr/profile.c
     src/ppocr/rec_preprocess.c
     src/ppocr/recognizer.c
     src/runtime/executor.c
@@ -125,19 +126,25 @@ set(LW_PPOCR_C_SOURCES
     src/runtime/validate.c
     src/simd/avx2_binary.c
     src/simd/avx2_conv1x1.c
+    src/simd/avx2_conv2x2.c
     src/simd/avx2_conv3x3.c
     src/simd/avx2_depthwise3x3.c
+    src/simd/avx2_depthwise5x5.c
     src/simd/avx2_matmul.c
     src/simd/cpu_features.c
     src/simd/sse2_binary.c
     src/simd/sse2_conv1x1.c
+    src/simd/sse2_conv2x2.c
     src/simd/sse2_conv3x3.c
     src/simd/sse2_depthwise3x3.c
+    src/simd/sse2_depthwise5x5.c
     src/simd/sse2_matmul.c)
 
 if(MSVC AND MSVC_C_ARCHITECTURE_ID MATCHES "^(x64|X86)$")
     set_property(SOURCE src/simd/avx2_binary.c src/simd/avx2_conv1x1.c
+        src/simd/avx2_conv2x2.c
         src/simd/avx2_conv3x3.c src/simd/avx2_depthwise3x3.c
+        src/simd/avx2_depthwise5x5.c
         src/simd/avx2_matmul.c APPEND PROPERTY
         COMPILE_OPTIONS /arch:AVX2 /fp:strict)
     set_property(SOURCE src/simd/cpu_features.c APPEND PROPERTY
@@ -875,6 +882,35 @@ if(BUILD_TESTING AND NOT EMSCRIPTEN)
     set_tests_properties(rec_operator_profile PROPERTIES
         WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
         TIMEOUT 240)
+
+    add_executable(full-ocr-profile-driver tests/full_ocr_profile_driver.c)
+    target_link_libraries(full-ocr-profile-driver PRIVATE lw_ppocr_c)
+    target_include_directories(full-ocr-profile-driver PRIVATE
+        "${CMAKE_CURRENT_SOURCE_DIR}/examples"
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/runtime"
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/ppocr")
+    target_compile_features(full-ocr-profile-driver PRIVATE c_std_11)
+    add_dependencies(full-ocr-profile-driver convert_det_model convert_cls_model
+        convert_rec_model det_demo_fixture)
+    if(MSVC)
+        target_compile_options(full-ocr-profile-driver PRIVATE /W4 /WX /utf-8)
+    else()
+        target_compile_options(full-ocr-profile-driver PRIVATE
+            -Wall -Wextra -Wpedantic -Werror)
+    endif()
+    add_test(
+        NAME full_ocr_operator_profile
+        COMMAND "${Python3_EXECUTABLE}"
+                "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_full_ocr_profile.py"
+                --driver "$<TARGET_FILE:full-ocr-profile-driver>"
+                --det-model "${LW_PPOCR_C_DET_LWM}"
+                --cls-model "${LW_PPOCR_C_CLS_LWM}"
+                --rec-model "${LW_PPOCR_C_REC_LWM}"
+                --dictionary "${CMAKE_CURRENT_SOURCE_DIR}/models/ppocrv6-tiny/ppocr_keys.txt"
+                --image "${LW_PPOCR_C_DET_DEMO_PPM}")
+    set_tests_properties(full_ocr_operator_profile PROPERTIES
+        WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+        TIMEOUT 360)
 
     add_executable(rec-pipeline-driver tests/rec_pipeline_driver.c)
     target_link_libraries(rec-pipeline-driver PRIVATE lw_ppocr_c)

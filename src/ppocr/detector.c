@@ -5,6 +5,7 @@
 #include "det_internal.h"
 #include "error_internal.h"
 #include "executor_internal.h"
+#include "profile_internal.h"
 
 #include <limits.h>
 #include <math.h>
@@ -243,17 +244,17 @@ lw_status lw_detector_get_info(const lw_detector* detector, lw_detector_info* in
     return LW_STATUS_OK;
 }
 
-lw_status lw_detector_detect_bgr_u8(lw_detector* detector, const uint8_t* source,
-                                    uint64_t source_byte_count, uint32_t source_width,
-                                    uint32_t source_height, uint32_t source_stride,
-                                    lw_detection_box* boxes, uint32_t box_capacity,
-                                    lw_detection_result* result, lw_error* error) {
+static lw_status detector_detect_bgr_u8_impl(
+    lw_detector* detector, const uint8_t* source, uint64_t source_byte_count, uint32_t source_width,
+    uint32_t source_height, uint32_t source_stride, lw_detection_box* boxes, uint32_t box_capacity,
+    lw_detection_result* result, lw_pipeline_component_profile* profile, lw_error* error) {
     uint64_t source_pixels;
     uint32_t resized_width;
     uint32_t resized_height;
     uint32_t box_count = 0u;
     float width_ratio;
     float height_ratio;
+    uint64_t started;
     lw_status status;
     if (detector == NULL || source == NULL || result == NULL ||
         result->struct_size != sizeof(*result) || (boxes == NULL && box_capacity != 0u)) {
@@ -271,6 +272,7 @@ lw_status lw_detector_detect_bgr_u8(lw_detector* detector, const uint8_t* source
         lw_set_error(error, LW_STATUS_MEMORY_LIMIT, "source image exceeds max_image_pixels");
         return LW_STATUS_MEMORY_LIMIT;
     }
+    started = lw_pipeline_profile_now(profile);
     status = lw_det_compute_size(source_width, source_height, detector->info.limit_side_length,
                                  &resized_width, &resized_height, &width_ratio, &height_ratio);
     if (status != LW_STATUS_OK) {
@@ -291,16 +293,30 @@ lw_status lw_detector_detect_bgr_u8(lw_detector* detector, const uint8_t* source
         lw_set_error(error, status, "BGR source layout is invalid");
         return status;
     }
-    status =
-        lw_execute_session_f32(detector->session, detector->input, detector->input_element_count,
-                               detector->probabilities, detector->probability_element_count, error);
-    if (status != LW_STATUS_OK)
+    lw_pipeline_profile_add_elapsed(profile == NULL ? NULL : &profile->preprocess_nanoseconds,
+                                    started, profile);
+    started = lw_pipeline_profile_now(profile);
+    status = profile == NULL
+                 ? lw_execute_session_f32(detector->session, detector->input,
+                                          detector->input_element_count, detector->probabilities,
+                                          detector->probability_element_count, error)
+                 : lw_execute_session_f32_profiled(
+                       detector->session, detector->input, detector->input_element_count,
+                       detector->probabilities, detector->probability_element_count,
+                       &profile->execution, error);
+    lw_pipeline_profile_add_elapsed(profile == NULL ? NULL : &profile->graph_nanoseconds, started,
+                                    profile);
+    if (status != LW_STATUS_OK) {
         return status;
+    }
+    started = lw_pipeline_profile_now(profile);
     status = lw_db_postprocess_f32(detector->probabilities, resized_width, resized_height,
                                    detector->info.bitmap_threshold, detector->info.box_threshold,
                                    detector->info.unclip_ratio, detector->info.use_dilation,
                                    detector->info.max_candidates, source_width, source_height,
                                    width_ratio, height_ratio, boxes, box_capacity, &box_count);
+    lw_pipeline_profile_add_elapsed(profile == NULL ? NULL : &profile->postprocess_nanoseconds,
+                                    started, profile);
     result->box_count = box_count;
     result->required_box_capacity = box_count;
     if (status != LW_STATUS_OK) {
@@ -311,4 +327,29 @@ lw_status lw_detector_detect_bgr_u8(lw_detector* detector, const uint8_t* source
     }
     lw_set_error(error, LW_STATUS_OK, "");
     return LW_STATUS_OK;
+}
+
+lw_status lw_detector_detect_bgr_u8(lw_detector* detector, const uint8_t* source,
+                                    uint64_t source_byte_count, uint32_t source_width,
+                                    uint32_t source_height, uint32_t source_stride,
+                                    lw_detection_box* boxes, uint32_t box_capacity,
+                                    lw_detection_result* result, lw_error* error) {
+    return detector_detect_bgr_u8_impl(detector, source, source_byte_count, source_width,
+                                       source_height, source_stride, boxes, box_capacity, result,
+                                       NULL, error);
+}
+
+lw_status lw_detector_detect_bgr_u8_profiled(
+    lw_detector* detector, const uint8_t* source, uint64_t source_byte_count, uint32_t source_width,
+    uint32_t source_height, uint32_t source_stride, lw_detection_box* boxes, uint32_t box_capacity,
+    lw_detection_result* result, lw_pipeline_component_profile* profile, lw_error* error) {
+    if (profile == NULL || profile->execution.struct_size != sizeof(profile->execution) ||
+        profile->execution.clock == NULL) {
+        lw_set_error(error, LW_STATUS_INVALID_ARGUMENT,
+                     "an initialized detector profile and clock are required");
+        return LW_STATUS_INVALID_ARGUMENT;
+    }
+    return detector_detect_bgr_u8_impl(detector, source, source_byte_count, source_width,
+                                       source_height, source_stride, boxes, box_capacity, result,
+                                       profile, error);
 }

@@ -231,6 +231,7 @@ HTTP Demo 和正式发布包均不链接、加载或携带 OpenCV。
 - [图执行器](docs/graph-executor.md)
 - [标量算子](docs/scalar-kernels.md)
 - [性能基线与优化](docs/performance-baseline.md)
+- [完整 OCR 分阶段与算子性能分析](docs/full-ocr-profile.md)
 - [开发包说明](docs/package.md)
 - [C# 与 HTTP/Web Demo](docs/managed-demos.md)
 

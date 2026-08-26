@@ -5,6 +5,7 @@
 #include "cls_internal.h"
 #include "error_internal.h"
 #include "executor_internal.h"
+#include "profile_internal.h"
 
 #include <math.h>
 #include <stddef.h>
@@ -195,13 +196,16 @@ lw_status lw_classifier_get_info(const lw_classifier* classifier, lw_classifier_
     return LW_STATUS_OK;
 }
 
-lw_status lw_classifier_classify_bgr_u8(lw_classifier* classifier, const uint8_t* source,
-                                        uint64_t source_byte_count, uint32_t source_width,
-                                        uint32_t source_height, uint32_t source_stride,
-                                        lw_classification_result* result, lw_error* error) {
+static lw_status classifier_classify_bgr_u8_impl(lw_classifier* classifier, const uint8_t* source,
+                                                 uint64_t source_byte_count, uint32_t source_width,
+                                                 uint32_t source_height, uint32_t source_stride,
+                                                 lw_classification_result* result,
+                                                 lw_pipeline_component_profile* profile,
+                                                 lw_error* error) {
     uint64_t source_pixels;
     uint32_t resized_width = 0u;
     uint32_t label;
+    uint64_t started;
     lw_status status;
     if (classifier == NULL || source == NULL || result == NULL ||
         result->struct_size != sizeof(*result)) {
@@ -219,6 +223,7 @@ lw_status lw_classifier_classify_bgr_u8(lw_classifier* classifier, const uint8_t
         lw_set_error(error, LW_STATUS_MEMORY_LIMIT, "source image exceeds max_image_pixels");
         return LW_STATUS_MEMORY_LIMIT;
     }
+    started = lw_pipeline_profile_now(profile);
     status = lw_cls_preprocess_bgr_u8(source, source_byte_count, source_width, source_height,
                                       source_stride, classifier->input,
                                       classifier->input_element_count, &resized_width);
@@ -226,12 +231,22 @@ lw_status lw_classifier_classify_bgr_u8(lw_classifier* classifier, const uint8_t
         lw_set_error(error, status, "BGR source layout is invalid");
         return status;
     }
-    status = lw_execute_session_f32(classifier->session, classifier->input,
-                                    classifier->input_element_count, classifier->probabilities,
-                                    LW_CLS_CLASS_COUNT, error);
+    lw_pipeline_profile_add_elapsed(profile == NULL ? NULL : &profile->preprocess_nanoseconds,
+                                    started, profile);
+    started = lw_pipeline_profile_now(profile);
+    status = profile == NULL
+                 ? lw_execute_session_f32(classifier->session, classifier->input,
+                                          classifier->input_element_count,
+                                          classifier->probabilities, LW_CLS_CLASS_COUNT, error)
+                 : lw_execute_session_f32_profiled(
+                       classifier->session, classifier->input, classifier->input_element_count,
+                       classifier->probabilities, LW_CLS_CLASS_COUNT, &profile->execution, error);
+    lw_pipeline_profile_add_elapsed(profile == NULL ? NULL : &profile->graph_nanoseconds, started,
+                                    profile);
     if (status != LW_STATUS_OK) {
         return status;
     }
+    started = lw_pipeline_profile_now(profile);
     if (!isfinite(classifier->probabilities[0]) || !isfinite(classifier->probabilities[1])) {
         lw_set_error(error, LW_STATUS_INVALID_ARGUMENT,
                      "classifier output contains a non-finite value");
@@ -242,6 +257,32 @@ lw_status lw_classifier_classify_bgr_u8(lw_classifier* classifier, const uint8_t
     result->score = classifier->probabilities[label];
     result->resized_width = resized_width;
     result->orientation_degrees = label == 0u ? 0u : 180u;
+    lw_pipeline_profile_add_elapsed(profile == NULL ? NULL : &profile->postprocess_nanoseconds,
+                                    started, profile);
     lw_set_error(error, LW_STATUS_OK, "");
     return LW_STATUS_OK;
+}
+
+lw_status lw_classifier_classify_bgr_u8(lw_classifier* classifier, const uint8_t* source,
+                                        uint64_t source_byte_count, uint32_t source_width,
+                                        uint32_t source_height, uint32_t source_stride,
+                                        lw_classification_result* result, lw_error* error) {
+    return classifier_classify_bgr_u8_impl(classifier, source, source_byte_count, source_width,
+                                           source_height, source_stride, result, NULL, error);
+}
+
+lw_status lw_classifier_classify_bgr_u8_profiled(lw_classifier* classifier, const uint8_t* source,
+                                                 uint64_t source_byte_count, uint32_t source_width,
+                                                 uint32_t source_height, uint32_t source_stride,
+                                                 lw_classification_result* result,
+                                                 lw_pipeline_component_profile* profile,
+                                                 lw_error* error) {
+    if (profile == NULL || profile->execution.struct_size != sizeof(profile->execution) ||
+        profile->execution.clock == NULL) {
+        lw_set_error(error, LW_STATUS_INVALID_ARGUMENT,
+                     "an initialized classifier profile and clock are required");
+        return LW_STATUS_INVALID_ARGUMENT;
+    }
+    return classifier_classify_bgr_u8_impl(classifier, source, source_byte_count, source_width,
+                                           source_height, source_stride, result, profile, error);
 }

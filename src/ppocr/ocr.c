@@ -9,6 +9,7 @@
 
 #include "crop_internal.h"
 #include "error_internal.h"
+#include "profile_internal.h"
 
 #include <math.h>
 #include <stddef.h>
@@ -48,6 +49,10 @@ typedef struct lw_ocr_worker_task {
     uint32_t end;
     lw_status status;
     lw_error error;
+    uint32_t profile_enabled;
+    uint64_t wall_nanoseconds;
+    lw_pipeline_component_profile classifier_profile;
+    lw_pipeline_component_profile recognizer_profile;
 } lw_ocr_worker_task;
 
 struct lw_ocr {
@@ -344,9 +349,15 @@ static void process_worker_task(lw_ocr_worker_task* task) {
         memset(&classification, 0, sizeof(classification));
         if (ocr->classifiers[task->worker_index] != NULL) {
             lw_classification_result_init(&classification);
-            task->status = lw_classifier_classify_bgr_u8(
-                ocr->classifiers[task->worker_index], crop_pixels, crop->byte_count, crop->width,
-                crop->height, crop->width * 3u, &classification, &task->error);
+            task->status = task->profile_enabled == 0u
+                               ? lw_classifier_classify_bgr_u8(
+                                     ocr->classifiers[task->worker_index], crop_pixels,
+                                     crop->byte_count, crop->width, crop->height, crop->width * 3u,
+                                     &classification, &task->error)
+                               : lw_classifier_classify_bgr_u8_profiled(
+                                     ocr->classifiers[task->worker_index], crop_pixels,
+                                     crop->byte_count, crop->width, crop->height, crop->width * 3u,
+                                     &classification, &task->classifier_profile, &task->error);
             if (task->status != LW_STATUS_OK)
                 return;
             if ((classification.label & 1u) != 0u &&
@@ -356,10 +367,16 @@ static void process_worker_task(lw_ocr_worker_task* task) {
         }
 
         lw_recognition_result_init(&recognition);
-        task->status = lw_recognizer_recognize_bgr_u8(
-            ocr->recognizers[task->worker_index], crop_pixels, crop->byte_count, crop->width,
-            crop->height, crop->width * 3u, line_text, ocr->text_capacity_per_line, &recognition,
-            &task->error);
+        task->status = task->profile_enabled == 0u
+                           ? lw_recognizer_recognize_bgr_u8(
+                                 ocr->recognizers[task->worker_index], crop_pixels,
+                                 crop->byte_count, crop->width, crop->height, crop->width * 3u,
+                                 line_text, ocr->text_capacity_per_line, &recognition, &task->error)
+                           : lw_recognizer_recognize_bgr_u8_profiled(
+                                 ocr->recognizers[task->worker_index], crop_pixels,
+                                 crop->byte_count, crop->width, crop->height, crop->width * 3u,
+                                 line_text, ocr->text_capacity_per_line, &recognition,
+                                 &task->recognizer_profile, &task->error);
         if (task->status != LW_STATUS_OK)
             return;
         if (recognition.required_text_capacity == 0u ||
@@ -386,25 +403,37 @@ static void process_worker_task(lw_ocr_worker_task* task) {
     }
 }
 
+static void execute_worker_task(lw_ocr_worker_task* task) {
+    uint64_t started =
+        task->profile_enabled == 0u ? 0u : lw_pipeline_profile_now(&task->recognizer_profile);
+    process_worker_task(task);
+    if (task->profile_enabled != 0u) {
+        uint64_t finished = lw_pipeline_profile_now(&task->recognizer_profile);
+        task->wall_nanoseconds = finished >= started ? finished - started : 0u;
+    }
+}
+
 #if defined(_WIN32)
 static unsigned __stdcall worker_entry(void* context) {
-    process_worker_task((lw_ocr_worker_task*)context);
+    execute_worker_task((lw_ocr_worker_task*)context);
     return 0u;
 }
 #elif !defined(__EMSCRIPTEN__)
 static void* worker_entry(void* context) {
-    process_worker_task((lw_ocr_worker_task*)context);
+    execute_worker_task((lw_ocr_worker_task*)context);
     return NULL;
 }
 #endif
 
 static lw_status run_worker_tasks(lw_ocr* ocr, uint32_t first_crop, uint32_t crop_count,
-                                  lw_error* error) {
+                                  lw_ocr_execution_profile* profile, lw_error* error) {
     uint32_t active_workers = crop_count < ocr->worker_count ? crop_count : ocr->worker_count;
     uint32_t base_count;
     uint32_t remainder;
     uint32_t begin = first_crop;
     uint32_t worker_index;
+    uint64_t started = lw_ocr_profile_now(profile);
+    uint64_t critical_nanoseconds = 0u;
     lw_status status = LW_STATUS_OK;
     if (active_workers == 0u)
         return LW_STATUS_OK;
@@ -419,6 +448,15 @@ static lw_status run_worker_tasks(lw_ocr* ocr, uint32_t first_crop, uint32_t cro
         task->worker_index = worker_index;
         task->begin = begin;
         task->end = begin + count;
+        task->profile_enabled = 0u;
+        task->wall_nanoseconds = 0u;
+        if (profile != NULL) {
+            task->profile_enabled = 1u;
+            lw_pipeline_component_profile_reset(&task->classifier_profile, profile->clock,
+                                                profile->clock_context);
+            lw_pipeline_component_profile_reset(&task->recognizer_profile, profile->clock,
+                                                profile->clock_context);
+        }
         begin += count;
     }
 
@@ -432,20 +470,20 @@ static lw_status run_worker_tasks(lw_ocr* ocr, uint32_t first_crop, uint32_t cro
         if (ocr->worker_threads[worker_index] != NULL) {
             ocr->worker_started[worker_index] = 1u;
         } else {
-            process_worker_task(&ocr->worker_tasks[worker_index]);
+            execute_worker_task(&ocr->worker_tasks[worker_index]);
         }
 #elif !defined(__EMSCRIPTEN__)
         if (pthread_create(&ocr->worker_threads[worker_index], NULL, worker_entry,
                            &ocr->worker_tasks[worker_index]) == 0) {
             ocr->worker_started[worker_index] = 1u;
         } else {
-            process_worker_task(&ocr->worker_tasks[worker_index]);
+            execute_worker_task(&ocr->worker_tasks[worker_index]);
         }
 #else
-        process_worker_task(&ocr->worker_tasks[worker_index]);
+        execute_worker_task(&ocr->worker_tasks[worker_index]);
 #endif
     }
-    process_worker_task(&ocr->worker_tasks[0]);
+    execute_worker_task(&ocr->worker_tasks[0]);
     for (worker_index = 1u; worker_index < active_workers; ++worker_index) {
         if (ocr->worker_started[worker_index] == 0u)
             continue;
@@ -457,7 +495,28 @@ static lw_status run_worker_tasks(lw_ocr* ocr, uint32_t first_crop, uint32_t cro
         (void)pthread_join(ocr->worker_threads[worker_index], NULL);
 #endif
     }
+    if (profile != NULL) {
+        uint64_t finished = lw_ocr_profile_now(profile);
+        uint64_t batch_nanoseconds = finished >= started ? finished - started : 0u;
+        for (worker_index = 0u; worker_index < active_workers; ++worker_index) {
+            if (ocr->worker_tasks[worker_index].wall_nanoseconds > critical_nanoseconds) {
+                critical_nanoseconds = ocr->worker_tasks[worker_index].wall_nanoseconds;
+            }
+        }
+        lw_profile_add_value(&profile->line_workers_nanoseconds, batch_nanoseconds);
+        lw_profile_add_value(&profile->line_worker_critical_nanoseconds, critical_nanoseconds);
+        if (batch_nanoseconds > critical_nanoseconds) {
+            lw_profile_add_value(&profile->line_dispatch_overhead_nanoseconds,
+                                 batch_nanoseconds - critical_nanoseconds);
+        }
+    }
     for (worker_index = 0u; worker_index < active_workers; ++worker_index) {
+        if (profile != NULL) {
+            lw_pipeline_component_profile_accumulate(
+                &profile->classifier, &ocr->worker_tasks[worker_index].classifier_profile);
+            lw_pipeline_component_profile_accumulate(
+                &profile->recognizer, &ocr->worker_tasks[worker_index].recognizer_profile);
+        }
         if (ocr->worker_tasks[worker_index].status != LW_STATUS_OK) {
             status = ocr->worker_tasks[worker_index].status;
             lw_set_error(error, status, ocr->worker_tasks[worker_index].error.message);
@@ -467,15 +526,19 @@ static lw_status run_worker_tasks(lw_ocr* ocr, uint32_t first_crop, uint32_t cro
     return status;
 }
 
-lw_status lw_ocr_run_bgr_u8(lw_ocr* ocr, const uint8_t* source, uint64_t source_byte_count,
-                            uint32_t source_width, uint32_t source_height, uint32_t source_stride,
-                            lw_ocr_line* lines, uint32_t line_capacity, char* text_utf8,
-                            uint64_t text_capacity, lw_ocr_result* result, lw_error* error) {
+static lw_status ocr_run_bgr_u8_impl(lw_ocr* ocr, const uint8_t* source, uint64_t source_byte_count,
+                                     uint32_t source_width, uint32_t source_height,
+                                     uint32_t source_stride, lw_ocr_line* lines,
+                                     uint32_t line_capacity, char* text_utf8,
+                                     uint64_t text_capacity, lw_ocr_result* result,
+                                     lw_ocr_execution_profile* profile, lw_error* error) {
     lw_detection_result detection;
     uint32_t line_count = 0u;
     uint32_t batch_begin = 0u;
     uint64_t text_used = 0u;
     uint64_t crop_used = 0u;
+    uint64_t total_started;
+    uint64_t output_started;
     uint32_t index;
     int capacity_query;
     lw_status status;
@@ -487,15 +550,21 @@ lw_status lw_ocr_run_bgr_u8(lw_ocr* ocr, const uint8_t* source, uint64_t source_
         return LW_STATUS_INVALID_ARGUMENT;
     }
     clear_result(result);
+    total_started = lw_ocr_profile_now(profile);
     capacity_query =
         lines == NULL && line_capacity == 0u && text_utf8 == NULL && text_capacity == 0u;
 
     /* DET writes into handle-owned scratch space so a capacity-only call still
      * executes the exact same pipeline and reports exact output requirements. */
     lw_detection_result_init(&detection);
-    status = lw_detector_detect_bgr_u8(ocr->detector, source, source_byte_count, source_width,
-                                       source_height, source_stride, ocr->detected_boxes,
-                                       ocr->info.max_line_capacity, &detection, error);
+    status = profile == NULL
+                 ? lw_detector_detect_bgr_u8(ocr->detector, source, source_byte_count, source_width,
+                                             source_height, source_stride, ocr->detected_boxes,
+                                             ocr->info.max_line_capacity, &detection, error)
+                 : lw_detector_detect_bgr_u8_profiled(
+                       ocr->detector, source, source_byte_count, source_width, source_height,
+                       source_stride, ocr->detected_boxes, ocr->info.max_line_capacity, &detection,
+                       &profile->detector, error);
     result->detected_count = detection.box_count;
     result->detector_resized_width = detection.resized_width;
     result->detector_resized_height = detection.resized_height;
@@ -533,9 +602,14 @@ lw_status lw_ocr_run_bgr_u8(lw_ocr* ocr, const uint8_t* source, uint64_t source_
         status = ensure_crop_capacity(ocr, crop_used + crop_bytes, error);
         if (status != LW_STATUS_OK)
             return status;
-        status = lw_crop_quad_bgr_u8(source, source_byte_count, source_width, source_height,
-                                     source_stride, box, ocr->crop + (size_t)crop_used, crop_bytes,
-                                     &crop_width, &crop_height, &crop_bytes);
+        {
+            uint64_t crop_started = lw_ocr_profile_now(profile);
+            status = lw_crop_quad_bgr_u8(source, source_byte_count, source_width, source_height,
+                                         source_stride, box, ocr->crop + (size_t)crop_used,
+                                         crop_bytes, &crop_width, &crop_height, &crop_bytes);
+            lw_ocr_profile_add_elapsed(profile == NULL ? NULL : &profile->crop_nanoseconds,
+                                       crop_started, profile);
+        }
         if (status == LW_STATUS_INVALID_SHAPE)
             continue;
         if (status != LW_STATUS_OK) {
@@ -551,7 +625,7 @@ lw_status lw_ocr_run_bgr_u8(lw_ocr* ocr, const uint8_t* source, uint64_t source_
         crop_used += crop_bytes;
         ++line_count;
         if (line_count - batch_begin == ocr->worker_count) {
-            status = run_worker_tasks(ocr, batch_begin, line_count - batch_begin, error);
+            status = run_worker_tasks(ocr, batch_begin, line_count - batch_begin, profile, error);
             if (status != LW_STATUS_OK)
                 return status;
             batch_begin = line_count;
@@ -559,12 +633,13 @@ lw_status lw_ocr_run_bgr_u8(lw_ocr* ocr, const uint8_t* source, uint64_t source_
         }
     }
     if (line_count != batch_begin) {
-        status = run_worker_tasks(ocr, batch_begin, line_count - batch_begin, error);
+        status = run_worker_tasks(ocr, batch_begin, line_count - batch_begin, profile, error);
         if (status != LW_STATUS_OK)
             return status;
     }
     /* Workers write fixed-size text slots to avoid synchronization. Compact
      * those slots in reading order before publishing the public result. */
+    output_started = lw_ocr_profile_now(profile);
     for (index = 0u; index < line_count; ++index) {
         lw_ocr_line* line = &ocr->scratch_lines[index];
         uint64_t line_bytes = line->text_length + 1u;
@@ -582,6 +657,10 @@ lw_status lw_ocr_run_bgr_u8(lw_ocr* ocr, const uint8_t* source, uint64_t source_
     result->required_text_capacity = text_used;
     if (capacity_query) {
         /* The caller can now allocate exact line/text buffers and call again. */
+        lw_ocr_profile_add_elapsed(profile == NULL ? NULL : &profile->output_nanoseconds,
+                                   output_started, profile);
+        lw_ocr_profile_add_elapsed(profile == NULL ? NULL : &profile->total_nanoseconds,
+                                   total_started, profile);
         lw_set_error(error, LW_STATUS_OK, "");
         return LW_STATUS_OK;
     }
@@ -597,6 +676,39 @@ lw_status lw_ocr_run_bgr_u8(lw_ocr* ocr, const uint8_t* source, uint64_t source_
         memcpy(lines, ocr->scratch_lines, (size_t)line_count * sizeof(*lines));
     if (text_used != 0u)
         memcpy(text_utf8, ocr->scratch_text, (size_t)text_used);
+    lw_ocr_profile_add_elapsed(profile == NULL ? NULL : &profile->output_nanoseconds,
+                               output_started, profile);
+    lw_ocr_profile_add_elapsed(profile == NULL ? NULL : &profile->total_nanoseconds, total_started,
+                               profile);
     lw_set_error(error, LW_STATUS_OK, "");
     return LW_STATUS_OK;
+}
+
+lw_status lw_ocr_run_bgr_u8(lw_ocr* ocr, const uint8_t* source, uint64_t source_byte_count,
+                            uint32_t source_width, uint32_t source_height, uint32_t source_stride,
+                            lw_ocr_line* lines, uint32_t line_capacity, char* text_utf8,
+                            uint64_t text_capacity, lw_ocr_result* result, lw_error* error) {
+    return ocr_run_bgr_u8_impl(ocr, source, source_byte_count, source_width, source_height,
+                               source_stride, lines, line_capacity, text_utf8, text_capacity,
+                               result, NULL, error);
+}
+
+lw_status lw_ocr_run_bgr_u8_profiled(lw_ocr* ocr, const uint8_t* source, uint64_t source_byte_count,
+                                     uint32_t source_width, uint32_t source_height,
+                                     uint32_t source_stride, lw_ocr_line* lines,
+                                     uint32_t line_capacity, char* text_utf8,
+                                     uint64_t text_capacity, lw_ocr_result* result,
+                                     lw_ocr_execution_profile* profile, lw_error* error) {
+    if (profile == NULL || profile->struct_size != sizeof(*profile) || profile->reserved != 0u ||
+        profile->clock == NULL ||
+        profile->detector.execution.struct_size != sizeof(profile->detector.execution) ||
+        profile->classifier.execution.struct_size != sizeof(profile->classifier.execution) ||
+        profile->recognizer.execution.struct_size != sizeof(profile->recognizer.execution)) {
+        lw_set_error(error, LW_STATUS_INVALID_ARGUMENT,
+                     "an initialized full OCR profile and clock are required");
+        return LW_STATUS_INVALID_ARGUMENT;
+    }
+    return ocr_run_bgr_u8_impl(ocr, source, source_byte_count, source_width, source_height,
+                               source_stride, lines, line_capacity, text_utf8, text_capacity,
+                               result, profile, error);
 }

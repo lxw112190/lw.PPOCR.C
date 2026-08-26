@@ -299,6 +299,35 @@ static lw_status dispatch_node(lw_session* session, const uint8_t* node, uint32_
     }
 }
 
+static uint32_t profile_conv_class(const lw_session* session, const uint8_t* node) {
+    const lw_model* model = session->model;
+    uint64_t param_offset = lwm_read_u64(node + 56);
+    const uint8_t* params = model->bytes + (size_t)param_offset;
+    const lw_runtime_tensor* input = &session->tensors[lwm_read_u32(node + 8u)];
+    const lw_runtime_tensor* weights = &session->tensors[lwm_read_u32(node + 12u)];
+    int32_t kernel_height = lwm_read_i32(params + 8u);
+    int32_t kernel_width = lwm_read_i32(params + 12u);
+    int32_t stride_height = lwm_read_i32(params + 16u);
+    int32_t stride_width = lwm_read_i32(params + 20u);
+    uint32_t group = lwm_read_u32(params + 4u);
+
+    if (kernel_height == 1 && kernel_width == 1) {
+        return LW_EXECUTION_PROFILE_CONV_1X1;
+    }
+    if (kernel_height == 3 && kernel_width == 3 && input->rank == 4u && weights->rank == 4u &&
+        input->dimensions[1] > 0 && group == (uint32_t)input->dimensions[1] &&
+        weights->dimensions[0] == input->dimensions[1]) {
+        return LW_EXECUTION_PROFILE_CONV_DEPTHWISE_3X3;
+    }
+    if (kernel_height == 3 && kernel_width == 3 && stride_height == 2 && stride_width == 2) {
+        return LW_EXECUTION_PROFILE_CONV_STRIDE2_3X3;
+    }
+    if (kernel_height == 3 && kernel_width == 3) {
+        return LW_EXECUTION_PROFILE_CONV_3X3;
+    }
+    return LW_EXECUTION_PROFILE_CONV_OTHER;
+}
+
 static lw_status execute_session_f32(lw_session* session, const float* input,
                                      uint64_t input_element_count, float* output,
                                      uint64_t output_element_count, lw_execution_profile* profile,
@@ -353,6 +382,14 @@ static lw_status execute_session_f32(lw_session* session, const float* input,
                     profile->node_invocations[node_index] != UINT64_MAX) {
                     profile->node_nanoseconds[node_index] += elapsed;
                     profile->node_invocations[node_index] += 1u;
+                }
+                if (operation == LW_OP_CONV) {
+                    uint32_t conv_class = profile_conv_class(session, node);
+                    if (profile->conv_class_nanoseconds[conv_class] <= UINT64_MAX - elapsed &&
+                        profile->conv_class_invocations[conv_class] != UINT64_MAX) {
+                        profile->conv_class_nanoseconds[conv_class] += elapsed;
+                        profile->conv_class_invocations[conv_class] += 1u;
+                    }
                 }
             }
         }

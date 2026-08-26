@@ -168,6 +168,173 @@ void lw_scalar_depthwise_conv3x3_unit_pad1_f32(const float* input, const float* 
     }
 }
 
+void lw_scalar_depthwise_conv5x5_unit_pad2_f32(const float* input, const float* weights,
+                                               const float* bias, float* output,
+                                               const int32_t dimensions[4]) {
+    uint32_t height = (uint32_t)dimensions[2];
+    uint32_t width = (uint32_t)dimensions[3];
+    uint64_t channel_plane = (uint64_t)height * width;
+    uint32_t batch;
+    for (batch = 0u; batch < (uint32_t)dimensions[0]; ++batch) {
+        uint32_t channel;
+        for (channel = 0u; channel < (uint32_t)dimensions[1]; ++channel) {
+            uint64_t channel_offset =
+                ((uint64_t)batch * (uint32_t)dimensions[1] + channel) * channel_plane;
+            const float* input_channel = input + (size_t)channel_offset;
+            const float* channel_weights = weights + (size_t)channel * 25u;
+            float* output_channel = output + (size_t)channel_offset;
+            float initial = bias == NULL ? 0.0f : bias[channel];
+            uint64_t spatial;
+            uint32_t kernel_y;
+            for (spatial = 0u; spatial < channel_plane; ++spatial) {
+                output_channel[(size_t)spatial] = initial;
+            }
+            for (kernel_y = 0u; kernel_y < 5u; ++kernel_y) {
+                uint32_t output_y_begin = kernel_y < 2u ? 2u - kernel_y : 0u;
+                uint32_t output_y_trim = kernel_y > 2u ? kernel_y - 2u : 0u;
+                uint32_t output_y_end = output_y_trim < height ? height - output_y_trim : 0u;
+                uint32_t kernel_x;
+                for (kernel_x = 0u; kernel_x < 5u; ++kernel_x) {
+                    uint32_t output_x_begin = kernel_x < 2u ? 2u - kernel_x : 0u;
+                    uint32_t output_x_trim = kernel_x > 2u ? kernel_x - 2u : 0u;
+                    uint32_t output_x_end = output_x_trim < width ? width - output_x_trim : 0u;
+                    float weight = channel_weights[kernel_y * 5u + kernel_x];
+                    uint32_t output_y;
+                    for (output_y = output_y_begin; output_y < output_y_end; ++output_y) {
+                        uint32_t input_y = output_y + kernel_y - 2u;
+                        const float* input_row =
+                            input_channel + (size_t)((uint64_t)input_y * width);
+                        float* output_row = output_channel + (size_t)((uint64_t)output_y * width);
+                        uint32_t output_x;
+                        for (output_x = output_x_begin; output_x < output_x_end; ++output_x) {
+                            uint32_t input_x = output_x + kernel_x - 2u;
+                            output_row[output_x] += input_row[input_x] * weight;
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+void lw_scalar_conv3x3_unit_pad1_f32(const float* input, const float* weights, const float* bias,
+                                     float* output, const int32_t input_dimensions[4],
+                                     const int32_t output_dimensions[4]) {
+    uint32_t height = (uint32_t)input_dimensions[2];
+    uint32_t width = (uint32_t)input_dimensions[3];
+    uint64_t channel_plane = (uint64_t)height * width;
+    uint32_t batch;
+    for (batch = 0u; batch < (uint32_t)input_dimensions[0]; ++batch) {
+        const float* batch_input =
+            input + (size_t)((uint64_t)batch * (uint32_t)input_dimensions[1] * channel_plane);
+        float* batch_output =
+            output + (size_t)((uint64_t)batch * (uint32_t)output_dimensions[1] * channel_plane);
+        uint32_t output_channel;
+        for (output_channel = 0u; output_channel < (uint32_t)output_dimensions[1];
+             ++output_channel) {
+            const float* output_channel_weights =
+                weights + (size_t)((uint64_t)output_channel * (uint32_t)input_dimensions[1] * 9u);
+            float* output_channel_data =
+                batch_output + (size_t)((uint64_t)output_channel * channel_plane);
+            float initial = bias == NULL ? 0.0f : bias[output_channel];
+            uint64_t spatial;
+            uint32_t input_channel;
+            for (spatial = 0u; spatial < channel_plane; ++spatial) {
+                output_channel_data[(size_t)spatial] = initial;
+            }
+            for (input_channel = 0u; input_channel < (uint32_t)input_dimensions[1];
+                 ++input_channel) {
+                const float* input_channel_data =
+                    batch_input + (size_t)((uint64_t)input_channel * channel_plane);
+                const float* weight_channel_data =
+                    output_channel_weights + (size_t)((uint64_t)input_channel * 9u);
+                uint32_t kernel_y;
+                for (kernel_y = 0u; kernel_y < 3u; ++kernel_y) {
+                    uint32_t output_y_begin = kernel_y == 0u ? 1u : 0u;
+                    uint32_t output_y_end = kernel_y == 2u ? height - 1u : height;
+                    uint32_t kernel_x;
+                    for (kernel_x = 0u; kernel_x < 3u; ++kernel_x) {
+                        uint32_t output_x_begin = kernel_x == 0u ? 1u : 0u;
+                        uint32_t output_x_end = kernel_x == 2u ? width - 1u : width;
+                        float weight = weight_channel_data[kernel_y * 3u + kernel_x];
+                        uint32_t output_y;
+                        for (output_y = output_y_begin; output_y < output_y_end; ++output_y) {
+                            uint32_t input_y = output_y + kernel_y - 1u;
+                            const float* input_row =
+                                input_channel_data + (size_t)((uint64_t)input_y * width);
+                            float* output_row =
+                                output_channel_data + (size_t)((uint64_t)output_y * width);
+                            uint32_t output_x;
+                            for (output_x = output_x_begin; output_x < output_x_end; ++output_x) {
+                                uint32_t input_x = output_x + kernel_x - 1u;
+                                output_row[output_x] += input_row[input_x] * weight;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+void lw_scalar_conv2x2_unit_pad_end1_f32(const float* input, const float* weights,
+                                         const float* bias, float* output,
+                                         const int32_t input_dimensions[4],
+                                         const int32_t output_dimensions[4]) {
+    uint32_t height = (uint32_t)input_dimensions[2];
+    uint32_t width = (uint32_t)input_dimensions[3];
+    uint64_t channel_plane = (uint64_t)height * width;
+    uint32_t batch;
+    for (batch = 0u; batch < (uint32_t)input_dimensions[0]; ++batch) {
+        const float* batch_input =
+            input + (size_t)((uint64_t)batch * (uint32_t)input_dimensions[1] * channel_plane);
+        float* batch_output =
+            output + (size_t)((uint64_t)batch * (uint32_t)output_dimensions[1] * channel_plane);
+        uint32_t output_channel;
+        for (output_channel = 0u; output_channel < (uint32_t)output_dimensions[1];
+             ++output_channel) {
+            const float* output_channel_weights =
+                weights + (size_t)((uint64_t)output_channel * (uint32_t)input_dimensions[1] * 4u);
+            float* output_channel_data =
+                batch_output + (size_t)((uint64_t)output_channel * channel_plane);
+            float initial = bias == NULL ? 0.0f : bias[output_channel];
+            uint64_t spatial;
+            uint32_t input_channel;
+            for (spatial = 0u; spatial < channel_plane; ++spatial) {
+                output_channel_data[(size_t)spatial] = initial;
+            }
+            for (input_channel = 0u; input_channel < (uint32_t)input_dimensions[1];
+                 ++input_channel) {
+                const float* input_channel_data =
+                    batch_input + (size_t)((uint64_t)input_channel * channel_plane);
+                const float* weight_channel_data =
+                    output_channel_weights + (size_t)((uint64_t)input_channel * 4u);
+                uint32_t kernel_y;
+                for (kernel_y = 0u; kernel_y < 2u; ++kernel_y) {
+                    uint32_t output_y_end = height - kernel_y;
+                    uint32_t kernel_x;
+                    for (kernel_x = 0u; kernel_x < 2u; ++kernel_x) {
+                        uint32_t output_x_end = width - kernel_x;
+                        float weight = weight_channel_data[kernel_y * 2u + kernel_x];
+                        uint32_t output_y;
+                        for (output_y = 0u; output_y < output_y_end; ++output_y) {
+                            const float* input_row =
+                                input_channel_data +
+                                (size_t)((uint64_t)(output_y + kernel_y) * width + kernel_x);
+                            float* output_row =
+                                output_channel_data + (size_t)((uint64_t)output_y * width);
+                            uint32_t output_x;
+                            for (output_x = 0u; output_x < output_x_end; ++output_x) {
+                                output_row[output_x] += input_row[output_x] * weight;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
 void lw_scalar_conv3x3_stride2_pad1_f32(const float* input, const float* weights, const float* bias,
                                         float* output, const int32_t input_dimensions[4],
                                         const int32_t output_dimensions[4]) {
@@ -353,6 +520,56 @@ lw_status lw_scalar_conv2d_f32(const float* input, const float* weights, const f
         }
         return LW_STATUS_OK;
     }
+    if (groups == (uint32_t)input_dimensions[1] && output_dimensions[1] == input_dimensions[1] &&
+        weight_dimensions[1] == 1 && kernel[0] == 5 && kernel[1] == 5 && strides[0] == 1 &&
+        strides[1] == 1 && dilations[0] == 1 && dilations[1] == 1 && pads[0] == 2 && pads[1] == 2 &&
+        pads[2] == 2 && pads[3] == 2 && output_dimensions[2] == input_dimensions[2] &&
+        output_dimensions[3] == input_dimensions[3]) {
+        lw_simd_level simd_level = lw_detect_simd_level();
+        if (simd_level >= LW_SIMD_LEVEL_AVX2) {
+            lw_avx2_depthwise_conv5x5_unit_pad2_f32(input, weights, bias, output, input_dimensions);
+        } else if (simd_level >= LW_SIMD_LEVEL_SSE2) {
+            lw_sse2_depthwise_conv5x5_unit_pad2_f32(input, weights, bias, output, input_dimensions);
+        } else {
+            lw_scalar_depthwise_conv5x5_unit_pad2_f32(input, weights, bias, output,
+                                                      input_dimensions);
+        }
+        return LW_STATUS_OK;
+    }
+    if (groups == 1u && kernel[0] == 3 && kernel[1] == 3 && strides[0] == 1 && strides[1] == 1 &&
+        dilations[0] == 1 && dilations[1] == 1 && pads[0] == 1 && pads[1] == 1 && pads[2] == 1 &&
+        pads[3] == 1 && output_dimensions[2] == input_dimensions[2] &&
+        output_dimensions[3] == input_dimensions[3]) {
+        lw_simd_level simd_level = lw_detect_simd_level();
+        if (simd_level >= LW_SIMD_LEVEL_AVX2) {
+            lw_avx2_conv3x3_unit_pad1_f32(input, weights, bias, output, input_dimensions,
+                                          output_dimensions);
+        } else if (simd_level >= LW_SIMD_LEVEL_SSE2) {
+            lw_sse2_conv3x3_unit_pad1_f32(input, weights, bias, output, input_dimensions,
+                                          output_dimensions);
+        } else {
+            lw_scalar_conv3x3_unit_pad1_f32(input, weights, bias, output, input_dimensions,
+                                            output_dimensions);
+        }
+        return LW_STATUS_OK;
+    }
+    if (groups == 1u && kernel[0] == 2 && kernel[1] == 2 && strides[0] == 1 && strides[1] == 1 &&
+        dilations[0] == 1 && dilations[1] == 1 && pads[0] == 0 && pads[1] == 0 && pads[2] == 1 &&
+        pads[3] == 1 && output_dimensions[2] == input_dimensions[2] &&
+        output_dimensions[3] == input_dimensions[3]) {
+        lw_simd_level simd_level = lw_detect_simd_level();
+        if (simd_level >= LW_SIMD_LEVEL_AVX2) {
+            lw_avx2_conv2x2_unit_pad_end1_f32(input, weights, bias, output, input_dimensions,
+                                              output_dimensions);
+        } else if (simd_level >= LW_SIMD_LEVEL_SSE2) {
+            lw_sse2_conv2x2_unit_pad_end1_f32(input, weights, bias, output, input_dimensions,
+                                              output_dimensions);
+        } else {
+            lw_scalar_conv2x2_unit_pad_end1_f32(input, weights, bias, output, input_dimensions,
+                                                output_dimensions);
+        }
+        return LW_STATUS_OK;
+    }
     if (groups == 1u && kernel[0] == 3 && kernel[1] == 3 && strides[0] == 2 && strides[1] == 2 &&
         dilations[0] == 1 && dilations[1] == 1 && pads[0] == 1 && pads[1] == 1 && pads[2] == 1 &&
         pads[3] == 1) {
@@ -466,6 +683,59 @@ lw_status lw_scalar_conv2d_f32(const float* input, const float* weights, const f
     return LW_STATUS_OK;
 }
 
+static void conv_transpose2x2_stride2_f32(const float* input, const float* weights,
+                                          const float* bias, float* output,
+                                          const int32_t input_dimensions[4],
+                                          const int32_t output_dimensions[4]) {
+    uint32_t input_channels = (uint32_t)input_dimensions[1];
+    uint32_t output_channels = (uint32_t)output_dimensions[1];
+    uint32_t input_height = (uint32_t)input_dimensions[2];
+    uint32_t input_width = (uint32_t)input_dimensions[3];
+    uint32_t output_width = (uint32_t)output_dimensions[3];
+    uint64_t input_plane = (uint64_t)input_height * input_width;
+    uint64_t output_plane = (uint64_t)(uint32_t)output_dimensions[2] * output_width;
+    uint32_t batch;
+    for (batch = 0u; batch < (uint32_t)input_dimensions[0]; ++batch) {
+        const float* batch_input = input + (size_t)((uint64_t)batch * input_channels * input_plane);
+        float* batch_output = output + (size_t)((uint64_t)batch * output_channels * output_plane);
+        uint32_t output_channel;
+        for (output_channel = 0u; output_channel < output_channels; ++output_channel) {
+            float* output_channel_data =
+                batch_output + (size_t)((uint64_t)output_channel * output_plane);
+            float initial = bias == NULL ? 0.0f : bias[output_channel];
+            uint64_t output_index;
+            uint32_t input_channel;
+            for (output_index = 0u; output_index < output_plane; ++output_index) {
+                output_channel_data[(size_t)output_index] = initial;
+            }
+            for (input_channel = 0u; input_channel < input_channels; ++input_channel) {
+                const float* input_channel_data =
+                    batch_input + (size_t)((uint64_t)input_channel * input_plane);
+                const float* channel_weights =
+                    weights +
+                    (size_t)(((uint64_t)input_channel * output_channels + output_channel) * 4u);
+                uint32_t input_y;
+                for (input_y = 0u; input_y < input_height; ++input_y) {
+                    const float* input_row =
+                        input_channel_data + (size_t)((uint64_t)input_y * input_width);
+                    float* output_row0 =
+                        output_channel_data + (size_t)((uint64_t)(input_y * 2u) * output_width);
+                    float* output_row1 = output_row0 + output_width;
+                    uint32_t input_x;
+                    for (input_x = 0u; input_x < input_width; ++input_x) {
+                        float value = input_row[input_x];
+                        uint32_t output_x = input_x * 2u;
+                        output_row0[output_x] += value * channel_weights[0];
+                        output_row0[output_x + 1u] += value * channel_weights[1];
+                        output_row1[output_x] += value * channel_weights[2];
+                        output_row1[output_x + 1u] += value * channel_weights[3];
+                    }
+                }
+            }
+        }
+    }
+}
+
 lw_status lw_scalar_conv_transpose2d_f32(
     const float* input, const float* weights, const float* bias, uint32_t bias_count, float* output,
     const int32_t input_dimensions[4], const int32_t weight_dimensions[4],
@@ -514,6 +784,13 @@ lw_status lw_scalar_conv_transpose2d_f32(
     }
     input_channels_per_group = (uint32_t)input_dimensions[1] / groups;
     output_channels_per_group = (uint32_t)weight_dimensions[1];
+    if (groups == 1u && kernel[0] == 2 && kernel[1] == 2 && strides[0] == 2 && strides[1] == 2 &&
+        dilations[0] == 1 && dilations[1] == 1 && pads[0] == 0 && pads[1] == 0 && pads[2] == 0 &&
+        pads[3] == 0) {
+        conv_transpose2x2_stride2_f32(input, weights, bias, output, input_dimensions,
+                                      output_dimensions);
+        return LW_STATUS_OK;
+    }
     for (batch = 0u; batch < (uint32_t)output_dimensions[0]; ++batch) {
         uint32_t output_channel;
         for (output_channel = 0u; output_channel < (uint32_t)output_dimensions[1];
