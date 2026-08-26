@@ -125,6 +125,22 @@
       "purl": "pkg:pypi/sympy@1.14.0"
     },
     {
+      "name": "Emscripten",
+      "version": "4.0.15",
+      "license": "MIT AND NCSA",
+      "scope": "wasm-build-toolchain",
+      "source": "https://github.com/emscripten-core/emscripten",
+      "purl": "pkg:github/emscripten-core/emscripten@4.0.15"
+    },
+    {
+      "name": "playwright",
+      "version": "1.62.0",
+      "license": "Apache-2.0",
+      "scope": "wasm-browser-smoke-test",
+      "source": "https://github.com/microsoft/playwright-python",
+      "purl": "pkg:pypi/playwright@1.62.0"
+    },
+    {
       "name": "Microsoft.NETFramework.ReferenceAssemblies.net35",
       "version": "1.0.3",
       "license": "MIT",

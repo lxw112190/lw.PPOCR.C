@@ -16,7 +16,7 @@ Python、OpenCV、ONNX Runtime、OpenVINO、TensorRT 或 protobuf，适合将文
 - 纯 C11 核心，公共 ABI 不暴露 C++、STL 或第三方库类型；
 - 支持标量、SSE2 和 AVX2 运行时自动分派，不支持 SIMD 时自动回退；
 - 输入为调用方已经解码的 BGR8 图像，核心库不绑定具体图片解码库；
-- 提供 C 命令行示例、C# WinForms Demo 和原生 HTTP/Web Demo；
+- 提供 C 命令行示例、C# WinForms Demo、原生 HTTP/Web Demo 和单文件离线 WASM Demo；
 - 自定义 LWM v0.1 模型格式，加载时执行边界、结构和校验和检查；
 - 调用方拥有输入和输出缓冲区，内存容量不足时返回明确错误，不在 ABI 两侧交叉释放内存。
 
@@ -138,19 +138,6 @@ HTTP Demo 使用原生 C++ 和 vendored `cpp-httplib`，没有 .NET 运行时依
 .\build\bin\lw.PPOCR.C.HttpServer.exe --host 127.0.0.1 --port 8787
 ```
 
-### 单文件离线 WASM Demo
-
-安装并激活 Emscripten SDK 后（确保 `emcmake` 已在 `PATH` 中），可以用 Ninja 生成一个自包含的离线页面：
-
-```powershell
-emcmake cmake -S . -B build-wasm -G Ninja -DCMAKE_BUILD_TYPE=Release -DLW_BUILD_HTTP_DEMO=OFF -DBUILD_TESTING=OFF
-cmake --build build-wasm --target lw_ppocr_web
-```
-
-Windows 下可在 emsdk 目录运行 `emsdk_env.bat`，或按 emsdk 文档使用对应的环境初始化脚本；不同安装位置无需修改上述构建命令。
-
-生成的 `build-wasm/ocr-demo.html` 已内嵌 WASM、三个 LWM 模型和字典，可以直接双击打开并选择图片进行完整 OCR。
-
 浏览器打开 `http://127.0.0.1:8787/`，选择常见格式图片即可测试。浏览器通过 Canvas
 完成图片解码，再把像素转换成 P6 PPM 上传；服务端把 RGB 转成 BGR 后调用纯 C OCR API。
 
@@ -162,6 +149,21 @@ Windows 下可在 emsdk 目录运行 `emsdk_env.bat`，或按 emsdk 文档使用
 详细接口、请求示例和安全边界请看
 [`docs/managed-demos.md`](docs/managed-demos.md)。该 Demo 默认用于本机或可信网络；若对公网
 开放，应在前面部署带有 HTTPS、身份认证、限流和请求大小控制的反向代理。
+
+### 单文件离线 WASM Demo
+
+安装并激活 Emscripten SDK 后（确保 `emcmake` 已在 `PATH` 中），可以用 Ninja 生成一个自包含的离线页面：
+
+```powershell
+emcmake cmake -S . -B build-wasm -G Ninja -DCMAKE_BUILD_TYPE=Release -DLW_BUILD_HTTP_DEMO=OFF -DBUILD_TESTING=OFF
+cmake --build build-wasm --target lw-ocr-html
+```
+
+Windows 下可在 emsdk 目录运行 `emsdk_env.bat`，或按 emsdk 文档使用对应的环境初始化脚本；不同安装位置无需修改上述构建命令。
+
+生成的 `build-wasm/ocr-demo.html` 已内嵌 WASM、三个 LWM 模型和字典，可以直接双击打开
+并选择图片进行完整 OCR，不需要启动 HTTP 服务。页面在初始化时按照 Runtime 返回的真实
+容量分配输出缓冲区，后续识别会复用这些缓冲区；输入缓冲区只在图片变大时扩容。
 
 ### C# WinForms Demo
 

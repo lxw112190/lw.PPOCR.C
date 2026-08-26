@@ -32,6 +32,18 @@ License 2.0. See `licenses/PaddleOCR-models-APACHE-2.0.txt`.
 These packages are development/converter/test dependencies. They are not linked
 into the pure-C deployment runtime.
 
+## WASM build and browser-test dependencies
+
+- Emscripten 4.0.15 — MIT and University of Illinois/NCSA Open Source License;
+- Playwright for Python 1.62.0 — Apache-2.0;
+- Chromium downloaded by Playwright — CI smoke-test browser under its upstream
+  licenses and third-party notices.
+
+Emscripten is the build toolchain for the standalone HTML artifact. Playwright
+and Chromium run only in CI to open that artifact, execute real OCR repeatedly,
+and check that WASM memory remains stable. They are not embedded in the HTML or
+linked into the native runtime.
+
 ## Windows runtime files
 
 Windows binary archives include the Microsoft Visual C++ Runtime and Universal

@@ -186,11 +186,12 @@ if(EMSCRIPTEN)
     target_link_libraries(lw_ppocr_web PRIVATE lw_ppocr_c)
     target_include_directories(lw_ppocr_web PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/include")
     target_compile_features(lw_ppocr_web PRIVATE c_std_11)
+    target_compile_options(lw_ppocr_web PRIVATE -Wall -Wextra -Wpedantic -Werror)
     target_link_options(lw_ppocr_web PRIVATE
         "-sMODULARIZE=1" "-sEXPORT_NAME=LwPpocrModule" "-sSINGLE_FILE=1"
         "-sFORCE_FILESYSTEM=1" "-sALLOW_MEMORY_GROWTH=1" "-sNO_EXIT_RUNTIME=1"
         "-sEXPORTED_RUNTIME_METHODS=['FS','HEAPU8','HEAPU32','HEAPF32']"
-        "-sEXPORTED_FUNCTIONS=['_lw_web_init','_lw_web_shutdown','_lw_web_get_info','_lw_web_run','_lw_web_last_error','_lw_web_malloc','_lw_web_free']"
+        "-sEXPORTED_FUNCTIONS=['_lw_web_init','_lw_web_shutdown','_lw_web_info_size','_lw_web_get_info','_lw_web_run','_lw_web_last_error','_lw_web_malloc','_lw_web_free']"
         "--no-entry")
     set_target_properties(lw_ppocr_web PROPERTIES OUTPUT_NAME "lw_ppocr_web")
     set_property(TARGET lw_ppocr_web APPEND PROPERTY LINK_DEPENDS

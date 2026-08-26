@@ -85,9 +85,17 @@
     const statsNode = document.getElementById("stats");
     const canvas = document.getElementById("canvas");
     const resultsNode = document.getElementById("results");
+    const WEB_ABI_VERSION = 1;
     let moduleInstance;
     let loadMilliseconds = 0;
     let runCount = 0;
+    let running = false;
+    let maxLineCapacity = 0;
+    let maxTextCapacity = 0;
+    let lineSize = 0;
+    let resultSize = 0;
+    let sourceCapacity = 0;
+    const buffers = {source: 0, lines: 0, text: 0, result: 0};
 
     function decodeBase64(value) {
       const raw = atob(value);
@@ -97,24 +105,106 @@
     }
     function readU32(pointer) { return moduleInstance.HEAPU32[pointer >> 2] >>> 0; }
     function readF32(pointer) { return moduleInstance.HEAPF32[pointer >> 2]; }
-    function readU64(pointer) { return Number(moduleInstance.HEAPU32[pointer >> 2]) + Number(moduleInstance.HEAPU32[(pointer + 4) >> 2]) * 4294967296; }
     function readUtf8(pointer, length) { return new TextDecoder().decode(moduleInstance.HEAPU8.subarray(pointer, pointer + length)); }
     function escapeHtml(value) { return value.replace(/[&<>]/g, c => ({"&":"&amp;", "<":"&lt;", ">":"&gt;"}[c])); }
     function makeFactory() { return eval("(function(){" + RUNTIME_JS + ";return LwPpocrModule;})()"); }
 
+    function allocate(size, label) {
+      const pointer = moduleInstance._lw_web_malloc(size);
+      if (!pointer) throw new Error(`无法分配 ${label}（${size} 字节）`);
+      return pointer;
+    }
+
+    function releaseBuffers() {
+      if (!moduleInstance) return;
+      for (const name of ["source", "lines", "text", "result"]) {
+        if (buffers[name]) moduleInstance._lw_web_free(buffers[name]);
+        buffers[name] = 0;
+      }
+      sourceCapacity = 0;
+      maxLineCapacity = 0;
+      maxTextCapacity = 0;
+      lineSize = 0;
+      resultSize = 0;
+    }
+
+    function shutdownEngine() {
+      if (!moduleInstance) return;
+      releaseBuffers();
+      moduleInstance._lw_web_shutdown();
+    }
+
+    function ensureSourceCapacity(required) {
+      if (required <= sourceCapacity) return buffers.source;
+      const replacement = allocate(required, "输入图像缓冲区");
+      if (buffers.source) moduleInstance._lw_web_free(buffers.source);
+      buffers.source = replacement;
+      sourceCapacity = required;
+      return buffers.source;
+    }
+
+    function allocateOutputBuffers() {
+      const infoSize = moduleInstance._lw_web_info_size();
+      if (infoSize !== 20) throw new Error(`不支持的 Web ABI 信息大小：${infoSize}`);
+      const infoPointer = allocate(infoSize, "Web ABI 信息");
+      try {
+        const status = moduleInstance._lw_web_get_info(infoPointer);
+        if (status !== 0) throw new Error("读取引擎容量失败：" + status);
+        const abiVersion = readU32(infoPointer);
+        if (abiVersion !== WEB_ABI_VERSION) throw new Error(`不支持的 Web ABI：${abiVersion}`);
+        maxLineCapacity = readU32(infoPointer + 4);
+        maxTextCapacity = readU32(infoPointer + 8);
+        lineSize = readU32(infoPointer + 12);
+        resultSize = readU32(infoPointer + 16);
+        if (!maxLineCapacity || !maxTextCapacity || lineSize !== 60 || resultSize !== 16) {
+          throw new Error("引擎返回了无效的输出容量");
+        }
+      } finally {
+        moduleInstance._lw_web_free(infoPointer);
+      }
+      buffers.lines = allocate(maxLineCapacity * lineSize, "识别行缓冲区");
+      buffers.text = allocate(maxTextCapacity, "文本缓冲区");
+      buffers.result = allocate(resultSize, "结果缓冲区");
+    }
+
+    function runtimeSnapshot() {
+      return {
+        ready: Boolean(moduleInstance && buffers.lines && buffers.text && buffers.result),
+        runCount,
+        heapBytes: moduleInstance ? moduleInstance.HEAPU8.buffer.byteLength : 0,
+        sourceCapacity,
+        maxLineCapacity,
+        maxTextCapacity,
+        lineSize,
+        resultSize
+      };
+    }
+    window.__lwOcrTest = {snapshot: runtimeSnapshot};
+
     async function boot() {
       const started = performance.now();
       try {
-        moduleInstance = await makeFactory()({});
-        moduleInstance.FS.mkdir("/models");
-        for (const [name, key] of [["det.lwm", "det"], ["cls.lwm", "cls"], ["rec.lwm", "rec"], ["ppocr_keys.txt", "dict"]]) moduleInstance.FS.writeFile("/models/" + name, decodeBase64(MODEL_B64[key]));
+        runButton.disabled = true;
+        clsInput.disabled = true;
+        if (!moduleInstance) {
+          moduleInstance = await makeFactory()({});
+          moduleInstance.FS.mkdir("/models");
+          for (const [name, key] of [["det.lwm", "det"], ["cls.lwm", "cls"], ["rec.lwm", "rec"], ["ppocr_keys.txt", "dict"]]) moduleInstance.FS.writeFile("/models/" + name, decodeBase64(MODEL_B64[key]));
+        }
         const status = moduleInstance._lw_web_init(clsInput.checked ? 1 : 0);
         if (status !== 0) throw new Error("初始化失败：" + status);
+        allocateOutputBuffers();
         loadMilliseconds = performance.now() - started;
-        runButton.disabled = false;
-        statsNode.textContent = `引擎已就绪 · 加载 ${(loadMilliseconds / 1000).toFixed(2)} s · CLS ${clsInput.checked ? "开启" : "关闭"}`;
+        runButton.disabled = !fileInput.files.length;
+        clsInput.disabled = false;
+        statsNode.textContent = `引擎已就绪 · 加载 ${(loadMilliseconds / 1000).toFixed(2)} s · 输出 ${maxLineCapacity} 行/${maxTextCapacity} 字节 · CLS ${clsInput.checked ? "开启" : "关闭"}`;
         statusNode.textContent = "就绪，请选择图片。";
-      } catch (error) { statusNode.textContent = "WASM 初始化失败：" + error; console.error(error); }
+      } catch (error) {
+        shutdownEngine();
+        clsInput.disabled = false;
+        statusNode.textContent = "WASM 初始化失败：" + error;
+        console.error(error);
+      }
     }
 
     function drawResults(image, lines, width, height) {
@@ -125,39 +215,43 @@
     }
 
     async function runOcr() {
-      const file = fileInput.files[0]; if (!file || !moduleInstance) return;
+      const file = fileInput.files[0]; if (!file || !moduleInstance || running) return;
       const totalStarted = performance.now();
-      runButton.disabled = true; statusNode.textContent = "识别中…";
+      let image;
+      running = true; runButton.disabled = true; clsInput.disabled = true; statusNode.textContent = "识别中…";
       try {
         const decodeStarted = performance.now();
-        const image = await createImageBitmap(file); const scale = Math.min(1, 1600 / Math.max(image.width, image.height));
+        image = await createImageBitmap(file); const scale = Math.min(1, 1600 / Math.max(image.width, image.height));
         const width = Math.max(1, Math.round(image.width * scale)); const height = Math.max(1, Math.round(image.height * scale));
         canvas.width = width; canvas.height = height; const context = canvas.getContext("2d"); context.drawImage(image, 0, 0, width, height);
         const rgba = context.getImageData(0, 0, width, height).data; const bgr = new Uint8Array(width * height * 3);
         for (let i = 0, j = 0; i < rgba.length; i += 4) { bgr[j++] = rgba[i + 2]; bgr[j++] = rgba[i + 1]; bgr[j++] = rgba[i]; }
-        const sourcePointer = moduleInstance._lw_web_malloc(bgr.length), linesPointer = moduleInstance._lw_web_malloc(1000 * 80), textPointer = moduleInstance._lw_web_malloc(1000 * 4096), resultPointer = moduleInstance._lw_web_malloc(40);
+        const sourcePointer = ensureSourceCapacity(bgr.length);
         moduleInstance.HEAPU8.set(bgr, sourcePointer);
         const decodeMilliseconds = performance.now() - decodeStarted;
         const inferenceStarted = performance.now();
-        const status = moduleInstance._lw_web_run(sourcePointer, bgr.length, width, height, width * 3, linesPointer, 1000, textPointer, 1000 * 4096, resultPointer);
+        const status = moduleInstance._lw_web_run(sourcePointer, bgr.length, width, height, width * 3, buffers.lines, maxLineCapacity, buffers.text, maxTextCapacity, buffers.result);
         if (status !== 0) throw new Error("推理失败：" + status);
-        const lineCount = readU32(resultPointer + 4), lines = [];
-        for (let i = 0; i < lineCount; ++i) { const p = linesPointer + i * 80, box = []; for (let k = 0; k < 8; ++k) box.push(readF32(p + k * 4)); const offset = readU64(p + 64), length = readU64(p + 72); lines.push({box, text: readUtf8(textPointer + offset, length), recognition: readF32(p + 40), classification: readF32(p + 44), rotation: readU32(p + 52)}); }
+        const lineCount = readU32(buffers.result), lines = [];
+        if (lineCount > maxLineCapacity) throw new Error("引擎返回的文字行数量超出容量");
+        for (let i = 0; i < lineCount; ++i) { const p = buffers.lines + i * lineSize, box = []; for (let k = 0; k < 8; ++k) box.push(readF32(p + k * 4)); const offset = readU32(p + 52), length = readU32(p + 56); if (offset > maxTextCapacity || length > maxTextCapacity - offset) throw new Error("引擎返回的文本范围无效"); lines.push({box, text: readUtf8(buffers.text + offset, length), detection: readF32(p + 32), recognition: readF32(p + 36), classification: readF32(p + 40), rotation: readU32(p + 48)}); }
         drawResults(image, lines, width, height);
-        resultsNode.innerHTML = lines.length ? lines.map((line, index) => `<div class="line"><div class="index">${String(index + 1).padStart(2, "0")}</div><div class="text"><b>${escapeHtml(line.text)}</b><div class="score">识别 ${(line.recognition * 100).toFixed(1)}% · 分类 ${(line.classification * 100).toFixed(1)}% · 旋转 ${line.rotation}°</div></div></div>`).join("") : '<div class="empty">未检测到文本。</div>';
+        resultsNode.innerHTML = lines.length ? lines.map((line, index) => `<div class="line"><div class="index">${String(index + 1).padStart(2, "0")}</div><div class="text"><b>${escapeHtml(line.text)}</b><div class="score">检测 ${(line.detection * 100).toFixed(1)}% · 识别 ${(line.recognition * 100).toFixed(1)}% · 分类 ${(line.classification * 100).toFixed(1)}% · 旋转 ${line.rotation}°</div></div></div>`).join("") : '<div class="empty">未检测到文本。</div>';
         const inferenceMilliseconds = performance.now() - inferenceStarted;
         const totalMilliseconds = performance.now() - totalStarted;
         runCount += 1;
         statsNode.textContent = `第 ${runCount} 次 · 引擎加载 ${(loadMilliseconds / 1000).toFixed(2)} s · 图像处理 ${decodeMilliseconds.toFixed(0)} ms · 推理 ${inferenceMilliseconds.toFixed(0)} ms · 总计 ${totalMilliseconds.toFixed(0)} ms · CLS ${clsInput.checked ? "开启" : "关闭"}`;
         statusNode.textContent = `完成：${lineCount} 行`;
-      } catch (error) { statusNode.textContent = "识别失败：" + error; console.error(error); } finally { runButton.disabled = false; }
+      } catch (error) { statusNode.textContent = "识别失败：" + error; console.error(error); } finally { if (image && image.close) image.close(); running = false; runButton.disabled = !fileInput.files.length; clsInput.disabled = false; }
     }
     fileInput.addEventListener("change", () => { runButton.disabled = !fileInput.files.length || !moduleInstance; if (fileInput.files.length) { statusNode.textContent = "已选择：" + fileInput.files[0].name + "，自动识别中…"; runOcr(); } });
-    clsInput.addEventListener("change", async () => { if (!moduleInstance) return; moduleInstance._lw_web_shutdown(); runButton.disabled = true; statusNode.textContent = "正在切换 CLS 并重新加载引擎…"; await boot(); if (fileInput.files.length) runOcr(); });
+    clsInput.addEventListener("change", async () => { if (!moduleInstance || running) return; shutdownEngine(); runButton.disabled = true; statusNode.textContent = "正在切换 CLS 并重新加载引擎…"; await boot(); if (fileInput.files.length) runOcr(); });
     ["dragenter", "dragover"].forEach(event => dropzone.addEventListener(event, e => { e.preventDefault(); dropzone.classList.add("drag"); }));
     ["dragleave", "drop"].forEach(event => dropzone.addEventListener(event, e => { e.preventDefault(); dropzone.classList.remove("drag"); }));
     dropzone.addEventListener("drop", event => { if (event.dataTransfer.files.length) { fileInput.files = event.dataTransfer.files; fileInput.dispatchEvent(new Event("change")); } });
-    runButton.addEventListener("click", runOcr); boot();
+    runButton.addEventListener("click", runOcr);
+    window.addEventListener("beforeunload", shutdownEngine);
+    boot();
   </script>
 </body>
 </html>

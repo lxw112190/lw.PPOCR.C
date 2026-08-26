@@ -41,6 +41,9 @@ with local image decoding and result overlays. A separate native C++
 `cpp-httplib` Demo provides the cross-platform HTTP API and browser UI; the
 browser converts selected images to P6 PPM before upload. The pure-C core
 remains dependency-free and continues to accept decoded BGR8 pixels only.
+An Emscripten build also packages the runtime, DET/CLS/REC models, dictionary,
+and browser workbench into one offline HTML file for full local OCR without a
+server.
 
 Current scope:
 
@@ -88,6 +91,25 @@ public-API Demos, the machine-readable
 
 With a single-configuration generator such as Ninja, omit the `Release`
 subdirectory.
+
+## Standalone browser OCR
+
+Full PP-OCR can run entirely in the browser without a server. After activating
+the Emscripten SDK, build one self-contained HTML file with:
+
+```bash
+emcmake cmake -S . -B build-wasm -G Ninja \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DLW_BUILD_HTTP_DEMO=OFF \
+  -DLW_BUILD_CSHARP_DEMOS=OFF \
+  -DBUILD_TESTING=OFF
+cmake --build build-wasm --target lw-ocr-html
+```
+
+`build-wasm/ocr-demo.html` embeds the WASM runtime, all three LWM models, the
+dictionary, and the page assets. It can be opened directly without the native
+HTTP Demo. The page queries the Web ABI for the actual output capacities and
+reuses its input/output buffers across repeated OCR runs.
 
 The human-readable result is in
 [`docs/SUPPORTED_OPS_V0.md`](docs/SUPPORTED_OPS_V0.md). The JSON report is the
