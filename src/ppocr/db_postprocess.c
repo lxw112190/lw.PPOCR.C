@@ -352,7 +352,10 @@ lw_status lw_db_postprocess_f32(const float* prediction, uint32_t map_width, uin
         uint32_t tail = 0u;
         uint32_t point_count = 0u;
         uint32_t hull_count;
-        det_rectangle rectangle;
+        /* GCC cannot infer that minimum_rectangle() initializes every field
+         * before returning success. Zero-initialize the value so strict
+         * -Wmaybe-uninitialized builds remain valid on every compiler. */
+        det_rectangle rectangle = {0};
         float rectangle_width;
         float rectangle_height;
         float shortest_side;
