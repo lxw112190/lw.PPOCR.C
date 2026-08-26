@@ -1,0 +1,57 @@
+name: offline-wasm-html
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build standalone OCR HTML
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements-converter.txt
+
+      - name: Install converter dependencies
+        run: python -m pip install -r requirements-converter.txt
+
+      - name: Set up Emscripten
+        uses: mymindstorm/setup-emsdk@v16
+        with:
+          version: 4.0.15
+          actions-cache-folder: emsdk-cache
+
+      - name: Configure WASM build
+        run: >-
+          emcmake cmake -S . -B build-wasm -G Ninja
+          -DCMAKE_BUILD_TYPE=Release
+          -DLW_BUILD_HTTP_DEMO=OFF
+          -DLW_BUILD_CSHARP_DEMOS=OFF
+          -DBUILD_TESTING=OFF
+
+      - name: Build standalone HTML
+        run: cmake --build build-wasm --target lw-ocr-html --parallel
+
+      - name: Verify standalone HTML
+        shell: bash
+        run: |
+          test -s build-wasm/ocr-demo.html
+          ! grep -a -q '__LW_' build-wasm/ocr-demo.html
+
+      - name: Upload standalone HTML
+        uses: actions/upload-artifact@v7
+        with:
+          name: lw.PPOCR.C-ocr-demo-html-${{ github.sha }}
+          path: build-wasm/ocr-demo.html
+          if-no-files-found: error
+          retention-days: 14
