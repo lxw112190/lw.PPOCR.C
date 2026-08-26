@@ -14,7 +14,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-latest, ubuntu-22.04]
+        # Pin the Windows image because windows-latest can move to a newer
+        # Visual Studio generation while this job intentionally targets VS 2022.
+        os: [windows-2022, ubuntu-22.04]
     runs-on: ${{ matrix.os }}
     env:
       SCCACHE_GHA_ENABLED: "true"
