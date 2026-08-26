@@ -17,6 +17,13 @@ typedef struct det_point {
     float y;
 } det_point;
 
+/* Keep allocation overflow checks meaningful on both 32-bit and 64-bit
+ * targets. Passing the count through uint64_t avoids comparisons that GCC can
+ * prove are always false when the original count is only uint32_t. */
+static int allocation_fits(uint64_t count, size_t element_size) {
+    return element_size != 0u && count <= (uint64_t)(SIZE_MAX / element_size);
+}
+
 typedef struct det_rectangle {
     float ux;
     float uy;
@@ -292,7 +299,7 @@ lw_status lw_db_postprocess_f32(const float* prediction, uint32_t map_width, uin
     pixel_count = (uint64_t)map_width * map_height;
     if (pixel_count > UINT32_MAX || pixel_count > SIZE_MAX / sizeof(*queue) ||
         pixel_count > SIZE_MAX / sizeof(*points) || pixel_count > SIZE_MAX / (2u * sizeof(*hull)) ||
-        max_candidates > SIZE_MAX / sizeof(*results)) {
+        !allocation_fits(max_candidates, sizeof(*results))) {
         return LW_STATUS_OUT_OF_BOUNDS;
     }
     bitmap = (uint8_t*)malloc((size_t)pixel_count);

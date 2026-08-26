@@ -127,6 +127,10 @@ The `converter/` tool is allowed to use Python, ONNX, NumPy, and protobuf in a
 development environment. The deployment loader under `src/` is C11 only and
 does not link or import any of them.
 
+`opencv-python-headless` is used only as an independent perspective-crop oracle
+by the full-OCR reference test. It is not linked, imported, or packaged by the
+runtime.
+
 ## Project direction
 
 ```text

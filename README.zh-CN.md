@@ -197,6 +197,9 @@ python -m unittest -v tests.test_analyze_onnx
 模型、字典和第三方组件版本记录在 `dependencies.lock.json`，软件物料清单位于
 `sbom.cdx.json`。请不要绕过转换器和加载器的格式、尺寸或校验和检查。
 
+`opencv-python-headless` 只在完整 OCR 的透视裁剪测试中充当独立参考实现；纯 C 核心、
+HTTP Demo 和正式发布包均不链接、加载或携带 OpenCV。
+
 ## 进一步阅读
 
 - [项目设计](docs/PROJECT_DESIGN.md)

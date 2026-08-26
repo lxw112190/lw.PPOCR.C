@@ -45,6 +45,14 @@
       "purl": "pkg:pypi/pillow@10.4.0"
     },
     {
+      "name": "opencv-python-headless",
+      "version": "4.11.0.86",
+      "license": "Apache-2.0",
+      "scope": "perspective-crop-reference-tests-only",
+      "source": "https://github.com/opencv/opencv-python",
+      "purl": "pkg:pypi/opencv-python-headless@4.11.0.86"
+    },
+    {
       "name": "protobuf",
       "version": "4.25.3",
       "license": "BSD-3-Clause",

@@ -33,6 +33,12 @@ struct lw_ocr {
     lw_ocr_info info;
 };
 
+/* Use a width-neutral allocation check so GCC does not reject valid 64-bit
+ * builds when a bounded uint32_t count is compared directly with SIZE_MAX. */
+static int allocation_fits(uint64_t count, size_t element_size) {
+    return element_size != 0u && count <= (uint64_t)(SIZE_MAX / element_size);
+}
+
 static void clear_result(lw_ocr_result* result) {
     memset(result, 0, sizeof(*result));
     result->struct_size = (uint32_t)sizeof(*result);
@@ -152,8 +158,8 @@ lw_status lw_ocr_create(const char* detector_model_path_utf8,
     }
     maximum_text_capacity =
         (uint64_t)detector_info.max_candidates * recognizer_info.max_text_capacity;
-    if (detector_info.max_candidates > SIZE_MAX / sizeof(*ocr->detected_boxes) ||
-        detector_info.max_candidates > SIZE_MAX / sizeof(*ocr->scratch_lines) ||
+    if (!allocation_fits(detector_info.max_candidates, sizeof(*ocr->detected_boxes)) ||
+        !allocation_fits(detector_info.max_candidates, sizeof(*ocr->scratch_lines)) ||
         maximum_text_capacity > SIZE_MAX) {
         lw_set_error(error, LW_STATUS_OUT_OF_BOUNDS,
                      "OCR output scratch capacity exceeds the platform");
