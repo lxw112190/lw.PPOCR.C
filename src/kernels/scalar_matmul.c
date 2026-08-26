@@ -45,7 +45,6 @@ static void scalar_matmul_shared_f32(const float* input, const float* weights, f
                                      uint32_t columns) {
     uint32_t batch;
     uint32_t row;
-    uint32_t column;
     /* Four output rows share each sequential scan of the weight matrix. This
      * improves cache locality while remaining the scalar correctness path. */
     for (batch = 0u; batch < batch_count; ++batch) {
@@ -55,17 +54,14 @@ static void scalar_matmul_shared_f32(const float* input, const float* weights, f
             uint32_t current_row;
             for (current_row = row; current_row < row_end; ++current_row) {
                 uint64_t output_base = ((uint64_t)batch * rows + current_row) * columns;
-                for (column = 0u; column < columns; ++column) {
+                uint64_t input_base = ((uint64_t)batch * rows + current_row) * inner_dimension;
+                for (uint32_t column = 0u; column < columns; ++column) {
                     output[(size_t)(output_base + column)] = 0.0f;
                 }
-            }
-            for (inner = 0u; inner < inner_dimension; ++inner) {
-                uint64_t weight_base = (uint64_t)inner * columns;
-                for (current_row = row; current_row < row_end; ++current_row) {
-                    uint64_t input_base = ((uint64_t)batch * rows + current_row) * inner_dimension;
-                    uint64_t output_base = ((uint64_t)batch * rows + current_row) * columns;
+                for (inner = 0u; inner < inner_dimension; ++inner) {
+                    uint64_t weight_base = (uint64_t)inner * columns;
                     float input_value = input[(size_t)(input_base + inner)];
-                    for (column = 0u; column < columns; ++column) {
+                    for (uint32_t column = 0u; column < columns; ++column) {
                         output[(size_t)(output_base + column)] +=
                             input_value * weights[(size_t)(weight_base + column)];
                     }
