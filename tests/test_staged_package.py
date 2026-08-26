@@ -137,11 +137,44 @@ class StagedPackageTest(unittest.TestCase):
         )
         self.assertEqual(recognized.returncode, 0, recognized.stdout + recognized.stderr)
         self.assertIn("text=纯臻营养护发素", recognized.stdout)
+        http_server = root / "bin" / (
+            "lw.PPOCR.C.HttpServer.exe"
+            if sys.platform == "win32"
+            else "lw.PPOCR.C.HttpServer"
+        )
+        if http_server.is_file():
+            http_required = [root / "www" / "index.html"]
+            http_missing = [str(path) for path in http_required if not path.is_file()]
+            self.assertFalse(http_missing, f"missing HTTP Demo files: {http_missing}")
+            http_test = subprocess.run(
+                [
+                    sys.executable,
+                    str(ARGUMENTS.http_script),
+                    "--server", str(http_server),
+                    "--models", str(root / "models"),
+                    "--www", str(root / "www"),
+                    "--sample", str(root / "models" / "sample.ppm"),
+                ],
+                cwd=root,
+                check=False,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=120,
+            )
+            self.assertEqual(
+                http_test.returncode, 0, http_test.stdout + http_test.stderr
+            )
+        winforms = root / "bin" / "lw.PPOCR.C.WinForms.exe"
+        if sys.platform == "win32" and winforms.is_file():
+            self.assertTrue((root / "models" / "sample.jpg").is_file())
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--root", type=Path, required=True)
+    parser.add_argument("--http-script", type=Path, required=True)
     return parser.parse_args()
 
 

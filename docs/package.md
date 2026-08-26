@@ -6,17 +6,19 @@ releases. Windows x64 and x86 archives are separate and must not be mixed.
 ## Contents
 
 ```text
-bin/                         PPM demo, benchmark, shared runtime, Windows CRT
+bin/                         native Demos/runtime/HTTP server; optional WinForms
 include/lw_infer.h           public C header
 lib/                         static library and shared-library import library
 lib/cmake/lw.PPOCR.C/        CMake package configuration
-examples/                    standalone REC/CLS/DET/full-OCR CMake consumers
+examples/                    native HTTP/C consumers and C# WinForms source
 models/rec.lwm               converted PP-OCRv6 tiny REC model
 models/cls.lwm               converted PP-OCRv6 tiny CLS model
 models/det.lwm               converted DET model for the public detector
 models/ppocr_keys.txt        UTF-8 recognition dictionary
 models/sample-crop.ppm       dependency-free demo input
 models/sample.ppm            full-image DET demo input
+models/sample.jpg            C# WinForms image-decoding demo input
+www/index.html               native HTTP OCR browser page
 docs/                        API and implementation documentation
 LICENSE
 README.md
@@ -85,6 +87,23 @@ It runs DET, pure-C perspective crop, CLS direction correction, and REC, then
 prints UTF-8 text, all stage scores, applied rotation, and one original-image
 quadrilateral per line. The staged-package smoke test builds the installed
 consumer and requires the expected sample title from this installed binary.
+
+The default package contains the cross-platform native
+`lw.PPOCR.C.HttpServer` executable and `www/`. Its installed-package test
+validates health, HTML, binary P6 PPM OCR, JSON/Base64 PPM OCR, and stable
+400/415 error responses. On Windows, `-DLW_BUILD_CSHARP_DEMOS=ON` additionally
+packages `lw.PPOCR.C.WinForms.exe` and the native DLL beside it.
+See `managed-demos.md` for commands and security boundaries.
+
+Start the native HTTP Demo from the extracted package root:
+
+```powershell
+.\bin\lw.PPOCR.C.HttpServer.exe
+```
+
+It resolves `models/` and `www/` relative to the executable and listens on
+`http://127.0.0.1:8787/` by default. Linux/macOS packages use the same layout
+and the executable name without `.exe`.
 
 ## Run the scalar benchmark
 

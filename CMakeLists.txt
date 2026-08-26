@@ -2,6 +2,15 @@ cmake_minimum_required(VERSION 3.20)
 
 project(lw.PPOCR.C VERSION 0.1.0 LANGUAGES C)
 
+option(LW_BUILD_HTTP_DEMO
+    "Build the cross-platform cpp-httplib HTTP OCR Demo" ON)
+option(LW_BUILD_CSHARP_DEMOS
+    "Build the .NET Framework 3.5 WinForms Demo on Windows" OFF)
+
+if(LW_BUILD_HTTP_DEMO)
+    enable_language(CXX)
+endif()
+
 include(CTest)
 include(GNUInstallDirs)
 include(CMakePackageConfigHelpers)
@@ -306,6 +315,110 @@ if(MSVC)
     target_compile_options(lwm-inspect PRIVATE /W4 /WX /utf-8)
 else()
     target_compile_options(lwm-inspect PRIVATE -Wall -Wextra -Wpedantic -Werror)
+endif()
+
+if(LW_BUILD_HTTP_DEMO)
+    set(LW_HTTPLIB_HEADER
+        "${CMAKE_CURRENT_SOURCE_DIR}/examples/http-server/third_party/httplib.h")
+    file(SHA256 "${LW_HTTPLIB_HEADER}" LW_HTTPLIB_SHA256)
+    if(NOT LW_HTTPLIB_SHA256 STREQUAL
+       "1c8b44c8ab0498322c08840dbdfcd5006bc28c5a3b140b0c2cf30777b7232fc6")
+        message(FATAL_ERROR "vendored cpp-httplib checksum mismatch")
+    endif()
+    configure_file(
+        examples/http-server/www/index.html
+        "${CMAKE_CURRENT_BINARY_DIR}/www/index.html"
+        COPYONLY)
+    add_executable(lw-http-ocr examples/http-server/main.cpp)
+    set_target_properties(lw-http-ocr PROPERTIES
+        OUTPUT_NAME "lw.PPOCR.C.HttpServer"
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/bin")
+    foreach(lw_config Debug Release RelWithDebInfo MinSizeRel)
+        string(TOUPPER "${lw_config}" lw_config_upper)
+        set_target_properties(lw-http-ocr PROPERTIES
+            "RUNTIME_OUTPUT_DIRECTORY_${lw_config_upper}"
+            "${CMAKE_CURRENT_BINARY_DIR}/bin")
+    endforeach()
+    target_include_directories(lw-http-ocr PRIVATE
+        "${CMAKE_CURRENT_SOURCE_DIR}/include")
+    target_include_directories(lw-http-ocr SYSTEM PRIVATE
+        "${CMAKE_CURRENT_SOURCE_DIR}/examples/http-server/third_party")
+    target_link_libraries(lw-http-ocr PRIVATE lw_ppocr_c)
+    target_compile_features(lw-http-ocr PRIVATE cxx_std_11)
+    add_dependencies(lw-http-ocr convert_det_model convert_cls_model
+        convert_rec_model)
+    if(WIN32)
+        target_compile_definitions(lw-http-ocr PRIVATE
+            WINVER=0x0601 _WIN32_WINNT=0x0601
+            WIN32_LEAN_AND_MEAN NOMINMAX)
+        target_link_libraries(lw-http-ocr PRIVATE ws2_32)
+    elseif(UNIX AND NOT APPLE)
+        target_link_libraries(lw-http-ocr PRIVATE pthread)
+    endif()
+    if(CMAKE_SIZEOF_VOID_P EQUAL 4)
+        target_compile_definitions(lw-http-ocr PRIVATE
+            LW_HTTP_THREAD_POOL_COUNT=2)
+    endif()
+    if(MSVC)
+        target_compile_options(lw-http-ocr PRIVATE /W4 /WX /utf-8)
+        target_link_options(lw-http-ocr PRIVATE
+            /SUBSYSTEM:CONSOLE,6.01
+            $<$<EQUAL:${CMAKE_SIZEOF_VOID_P},4>:/LARGEADDRESSAWARE>)
+    else()
+        target_compile_options(lw-http-ocr PRIVATE
+            -Wall -Wextra -Wpedantic -Werror)
+    endif()
+    add_custom_command(TARGET lw-http-ocr POST_BUILD
+        COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+                "${CMAKE_CURRENT_SOURCE_DIR}/models/ppocrv6-tiny/ppocr_keys.txt"
+                "${CMAKE_CURRENT_BINARY_DIR}/models/ppocr_keys.txt"
+        VERBATIM)
+endif()
+
+if(LW_BUILD_CSHARP_DEMOS)
+    if(NOT WIN32)
+        message(FATAL_ERROR "LW_BUILD_CSHARP_DEMOS is supported only on Windows")
+    endif()
+    find_program(LW_MSBUILD_EXECUTABLE NAMES MSBuild.exe msbuild REQUIRED)
+    if(CMAKE_SIZEOF_VOID_P EQUAL 8)
+        set(LW_MANAGED_PLATFORM x64)
+    else()
+        set(LW_MANAGED_PLATFORM x86)
+    endif()
+    set(LW_MANAGED_ROOT "${CMAKE_CURRENT_BINARY_DIR}/managed")
+    set(LW_MANAGED_WINFORMS_DIR "${LW_MANAGED_ROOT}/winforms")
+    set(LW_MANAGED_MODELS_DIR "${LW_MANAGED_ROOT}/models")
+    set(LW_MANAGED_WINFORMS_EXE
+        "${LW_MANAGED_WINFORMS_DIR}/lw.PPOCR.C.WinForms.exe")
+    add_custom_target(lw-csharp-demos ALL
+        COMMAND "${CMAKE_COMMAND}" -E make_directory
+                "${LW_MANAGED_WINFORMS_DIR}" "${LW_MANAGED_MODELS_DIR}"
+        COMMAND "${LW_MSBUILD_EXECUTABLE}"
+                "${CMAKE_CURRENT_SOURCE_DIR}/examples/csharp-winforms/LwPpocrWinForms.csproj"
+                -t:Restore -p:RestorePackagesConfig=true
+                -p:RestoreIgnoreFailedSources=true -p:NuGetAudit=false -v:minimal
+        COMMAND "${LW_MSBUILD_EXECUTABLE}"
+                "${CMAKE_CURRENT_SOURCE_DIR}/examples/csharp-winforms/LwPpocrWinForms.csproj"
+                -t:Rebuild -p:Configuration=Release
+                -p:Platform=${LW_MANAGED_PLATFORM}
+                "-p:OutputPath=${LW_MANAGED_WINFORMS_DIR}/" -v:minimal
+        COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+                "$<TARGET_FILE:lw_ppocr_c_shared>"
+                "${LW_MANAGED_WINFORMS_DIR}/"
+        COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+                "${LW_PPOCR_C_DET_LWM}" "${LW_PPOCR_C_CLS_LWM}"
+                "${LW_PPOCR_C_REC_LWM}"
+                "${CMAKE_CURRENT_SOURCE_DIR}/models/ppocrv6-tiny/ppocr_keys.txt"
+                "${CMAKE_CURRENT_SOURCE_DIR}/models/ppocrv6-tiny/sample.jpg"
+                "${LW_MANAGED_MODELS_DIR}/"
+        DEPENDS
+            lw_ppocr_c_shared
+            convert_det_model convert_cls_model convert_rec_model
+            "${CMAKE_CURRENT_SOURCE_DIR}/examples/csharp-common/NativeOcr.cs"
+            "${CMAKE_CURRENT_SOURCE_DIR}/examples/csharp-common/OcrModels.cs"
+            "${CMAKE_CURRENT_SOURCE_DIR}/examples/csharp-winforms/MainForm.cs"
+        COMMENT "Building .NET Framework 3.5 WinForms OCR Demo"
+        VERBATIM)
 endif()
 
 if(BUILD_TESTING)
@@ -739,6 +852,18 @@ if(BUILD_TESTING)
                 --model "${LW_PPOCR_C_REC_LWM}")
     set_tests_properties(lwm_corruption PROPERTIES
         WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
+
+    if(LW_BUILD_HTTP_DEMO)
+        add_test(
+            NAME http_demo_smoke
+            COMMAND "${Python3_EXECUTABLE}"
+                    "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_http_demo.py"
+                    --server "$<TARGET_FILE:lw-http-ocr>"
+                    --models "${CMAKE_CURRENT_BINARY_DIR}/models"
+                    --www "${CMAKE_CURRENT_BINARY_DIR}/www"
+                    --sample "${LW_PPOCR_C_DET_DEMO_PPM}")
+        set_tests_properties(http_demo_smoke PROPERTIES TIMEOUT 120)
+    endif()
 endif()
 
 if(MSVC)
@@ -765,6 +890,13 @@ install(FILES
     examples/ppm_image.h
     examples/recognize_ppm.c
     DESTINATION examples)
+install(DIRECTORY
+    examples/csharp-common
+    examples/csharp-winforms
+    examples/http-server
+    DESTINATION examples
+    PATTERN "bin" EXCLUDE
+    PATTERN "obj" EXCLUDE)
 install(FILES
     "${LW_PPOCR_C_REC_LWM}"
     "${LW_PPOCR_C_CLS_LWM}"
@@ -772,7 +904,20 @@ install(FILES
     "${CMAKE_CURRENT_SOURCE_DIR}/models/ppocrv6-tiny/ppocr_keys.txt"
     "${LW_PPOCR_C_REC_DEMO_PPM}"
     "${LW_PPOCR_C_DET_DEMO_PPM}"
+    "${CMAKE_CURRENT_SOURCE_DIR}/models/ppocrv6-tiny/sample.jpg"
     DESTINATION models)
+if(LW_BUILD_CSHARP_DEMOS)
+    install(FILES
+        "${LW_MANAGED_WINFORMS_EXE}"
+        "${LW_MANAGED_WINFORMS_EXE}.config"
+        DESTINATION "${CMAKE_INSTALL_BINDIR}")
+endif()
+if(LW_BUILD_HTTP_DEMO)
+    install(TARGETS lw-http-ocr
+        RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}")
+    install(DIRECTORY examples/http-server/www/
+        DESTINATION www)
+endif()
 install(DIRECTORY docs/
     DESTINATION docs
     FILES_MATCHING PATTERN "*.md")
@@ -783,7 +928,9 @@ install(FILES
     dependencies.lock.json
     sbom.cdx.json
     DESTINATION .)
-install(FILES licenses/PaddleOCR-models-APACHE-2.0.txt
+install(FILES
+    licenses/PaddleOCR-models-APACHE-2.0.txt
+    licenses/cpp-httplib-MIT.txt
     DESTINATION licenses)
 
 set(LW_CMAKE_PACKAGE_DIR "${CMAKE_INSTALL_LIBDIR}/cmake/lw.PPOCR.C")
@@ -818,6 +965,7 @@ if(BUILD_TESTING)
                 -DLW_MT=${CMAKE_MT}
                 -DLW_PYTHON=${Python3_EXECUTABLE}
                 -DLW_TEST_SCRIPT=${CMAKE_CURRENT_SOURCE_DIR}/tests/test_staged_package.py
+                -DLW_HTTP_TEST_SCRIPT=${CMAKE_CURRENT_SOURCE_DIR}/tests/test_http_demo.py
                 -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/run_staged_package_test.cmake")
     set_tests_properties(staged_package PROPERTIES TIMEOUT 240)
 endif()

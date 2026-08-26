@@ -1,8 +1,16 @@
 # Third-party notices
 
-The deployment runtime is intended to have no large third-party runtime
-dependency. The current repository nevertheless contains development tools and
-model inputs with their own licenses.
+The pure-C OCR libraries have no large third-party runtime dependency. The
+repository also contains an optional HTTP Demo, development tools, and model
+inputs with their own licenses.
+
+## Optional HTTP Demo
+
+The cross-platform native HTTP OCR Demo embeds `cpp-httplib` 0.48.0 under the
+MIT license. Its vendored header is the Windows 7-compatible copy from the
+referenced `lw.OpenCVDNN.PPOCR` repository. See
+`licenses/cpp-httplib-MIT.txt`. This dependency belongs to the optional C++
+HTTP executable; it is not linked into the pure-C OCR libraries.
 
 ## PP-OCRv6 tiny model assets
 

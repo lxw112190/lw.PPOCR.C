@@ -34,6 +34,11 @@ A public full-OCR C API now composes detection, pure-C perspective cropping,
 optional direction classification/180-degree correction, and recognition. It
 returns one canonical quadrilateral per UTF-8 text line through caller-owned,
 capacity-checked buffers.
+An optional .NET Framework 3.5 WinForms example demonstrates direct C# P/Invoke
+with local image decoding and result overlays. A separate native C++
+`cpp-httplib` Demo provides the cross-platform HTTP API and browser UI; the
+browser converts selected images to P6 PPM before upload. The pure-C core
+remains dependency-free and continues to accept decoded BGR8 pixels only.
 
 Current scope:
 
@@ -49,6 +54,7 @@ Current scope:
 Requirements:
 
 - Python 3.9 or newer;
+- a C11 compiler and, for the default HTTP Demo, a C++11 compiler;
 - packages pinned in `requirements-converter.txt`.
 
 ```powershell
@@ -71,7 +77,8 @@ The normal build creates `build/models/rec.lwm`, `build/models/cls.lwm`,
 `build/models/det.lwm`, static and shared pure-C
 libraries, the `lw-recognize-ppm`, `lw-detect-ppm`, and `lw-ocr-ppm`
 public-API Demos, the machine-readable
-`lw-rec-benchmark`, and `lwm-inspect`. Inspect the converted model with:
+`lw-rec-benchmark`, the native `lw.PPOCR.C.HttpServer` plus browser page, and
+`lwm-inspect`. Inspect the converted model with:
 
 ```powershell
 .\build\Release\lwm-inspect.exe .\build\models\rec.lwm
@@ -108,6 +115,9 @@ results are documented in
 [`docs/kernel-optimization.md`](docs/kernel-optimization.md).
 Development package contents and Demo commands are documented in
 [`docs/package.md`](docs/package.md).
+The C# WinForms and native HTTP/web integration, REST contract, build commands, and
+compatibility boundary are documented in
+[`docs/managed-demos.md`](docs/managed-demos.md).
 
 ## Runtime dependency boundary
 
@@ -128,8 +138,9 @@ PP-OCR ONNX
 The full, non-frozen design is recorded in
 [`docs/PROJECT_DESIGN.md`](docs/PROJECT_DESIGN.md).
 
-Direct converter/model dependencies are recorded in `dependencies.lock.json`;
-the intended deployment runtime dependency list is currently empty.
+Direct converter/model dependencies are recorded in `dependencies.lock.json`.
+The pure-C libraries have no third-party deployment runtime dependency; the
+optional native HTTP executable embeds the vendored header-only cpp-httplib.
 
 ## License
 

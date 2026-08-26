@@ -1,7 +1,7 @@
 if(NOT DEFINED LW_BUILD_DIR OR NOT DEFINED LW_STAGE_DIR OR
    NOT DEFINED LW_GENERATOR OR NOT DEFINED LW_MAKE_PROGRAM OR
    NOT DEFINED LW_C_COMPILER OR NOT DEFINED LW_PYTHON OR
-   NOT DEFINED LW_TEST_SCRIPT)
+   NOT DEFINED LW_TEST_SCRIPT OR NOT DEFINED LW_HTTP_TEST_SCRIPT)
     message(FATAL_ERROR "staged package test arguments are required")
 endif()
 
@@ -54,6 +54,7 @@ endif()
 
 execute_process(
     COMMAND "${LW_PYTHON}" "${LW_TEST_SCRIPT}" --root "${LW_STAGE_DIR}"
+            --http-script "${LW_HTTP_TEST_SCRIPT}"
     RESULT_VARIABLE test_result
     OUTPUT_VARIABLE test_output
     ERROR_VARIABLE test_error)

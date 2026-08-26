@@ -1,6 +1,16 @@
 {
   "lock_version": 1,
-  "runtime_dependencies": [],
+  "runtime_dependencies": [
+    {
+      "name": "cpp-httplib",
+      "version": "0.48.0-win7-patched",
+      "license": "MIT",
+      "scope": "optional-cross-platform-http-demo",
+      "source": "https://github.com/lxw112190/lw.OpenCVDNN.PPOCR/blob/2408e3f9ab4dbfe2a2a2da6580af2255d20d915c/server/third_party/httplib.h",
+      "purl": "pkg:github/yhirose/cpp-httplib@v0.48.0",
+      "sha256": "1c8b44c8ab0498322c08840dbdfcd5006bc28c5a3b140b0c2cf30777b7232fc6"
+    }
+  ],
   "development_dependencies": [
     {
       "name": "numpy",
@@ -105,6 +115,14 @@
       "scope": "onnxruntime-transitive",
       "source": "https://github.com/sympy/sympy",
       "purl": "pkg:pypi/sympy@1.14.0"
+    },
+    {
+      "name": "Microsoft.NETFramework.ReferenceAssemblies.net35",
+      "version": "1.0.3",
+      "license": "MIT",
+      "scope": "managed-demo-build",
+      "source": "https://github.com/microsoft/dotnet/tree/main/releases/reference-assemblies",
+      "purl": "pkg:nuget/Microsoft.NETFramework.ReferenceAssemblies.net35@1.0.3"
     }
   ],
   "model_assets": [

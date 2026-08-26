@@ -60,6 +60,32 @@
     },
     {
       "type": "library",
+      "bom-ref": "pkg:github/yhirose/cpp-httplib@v0.48.0",
+      "name": "cpp-httplib",
+      "version": "0.48.0-win7-patched",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "1c8b44c8ab0498322c08840dbdfcd5006bc28c5a3b140b0c2cf30777b7232fc6"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "purl": "pkg:github/yhirose/cpp-httplib@v0.48.0",
+      "properties": [
+        {
+          "name": "lw.package.scope",
+          "value": "optional-cross-platform-http-demo"
+        }
+      ]
+    },
+    {
+      "type": "library",
       "bom-ref": "pkg:generic/microsoft-vc-runtime@14.40.33807",
       "name": "Microsoft Visual C++ Runtime",
       "version": "14.40.33807",
@@ -88,7 +114,8 @@
       "ref": "pkg:generic/lw.PPOCR.C@0.1.0",
       "dependsOn": [
         "lw-model:ppocrv6-tiny-rec:lwm-v0.1",
-        "lw-file:ppocrv6-tiny-dictionary"
+        "lw-file:ppocrv6-tiny-dictionary",
+        "pkg:github/yhirose/cpp-httplib@v0.48.0"
       ]
     }
   ]

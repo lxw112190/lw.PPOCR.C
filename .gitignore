@@ -1,5 +1,7 @@
 /build/
 /build-*/
+/examples/csharp-*/bin/
+/examples/csharp-*/obj/
 /dist/
 /.venv/
 /.vs/

@@ -125,10 +125,19 @@ and architecture-specific kernels are isolated under `src/simd`.
 27. Next: broaden the full-OCR Golden corpus and harden invalid-input,
     sanitizer, repeated-run memory, and cross-platform CI coverage before any
     ABI freeze.
+28. Client integration Demos — complete locally; an ABI-size-checked .NET
+    Framework 3.5 P/Invoke wrapper powers the Windows WinForms image/overlay
+    client, while a separate C++ `cpp-httplib` executable provides the
+    cross-platform HTTP API, browser-side image-to-PPM conversion, stable
+    request IDs, quadrilateral drawing, and staged-package live tests.
 
 ## Compatibility claims
 
 The design preserves Windows 7 x86 compatibility, but no such runtime claim is
 made until a 32-bit binary is tested on a physical Windows 7 SP1 machine.
+The WinForms Demo targets .NET Framework 3.5 and follows the referenced
+project's Win7-tested interop patterns. The HTTP Demo uses its vendored
+Win7-compatible cpp-httplib header. These new binaries are not themselves
+claimed as Win7-verified until the same physical-machine checks are repeated.
 Windows x64 and Linux x64 are the first implementation targets. Linux ARM64 is
 a planned primary target, not yet CI-verified.
