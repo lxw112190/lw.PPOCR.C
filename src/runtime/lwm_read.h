@@ -1,6 +1,8 @@
 #ifndef LW_LWM_READ_H
 #define LW_LWM_READ_H
 
+/* Unaligned little-endian readers used instead of casting on-disk bytes. */
+
 #include <stdint.h>
 
 static inline uint16_t lwm_read_u16(const uint8_t* p) {

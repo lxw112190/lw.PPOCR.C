@@ -1,6 +1,12 @@
 #ifndef LW_EXAMPLE_PPM_IMAGE_H
 #define LW_EXAMPLE_PPM_IMAGE_H
 
+/*
+ * Minimal P6 PPM loader shared by the C examples. PPM keeps image decoding out
+ * of the core library; real applications may use any decoder that can produce
+ * packed BGR8 pixels.
+ */
+
 #include <ctype.h>
 #include <errno.h>
 #include <stdint.h>
@@ -27,8 +33,7 @@ static FILE* lw_example_open_read_utf8(const char* path_utf8) {
     int wide_count;
     wchar_t* wide_path;
     FILE* file = NULL;
-    wide_count = MultiByteToWideChar(
-        CP_UTF8, MB_ERR_INVALID_CHARS, path_utf8, -1, NULL, 0);
+    wide_count = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, path_utf8, -1, NULL, 0);
     if (wide_count <= 0) {
         return NULL;
     }
@@ -36,9 +41,8 @@ static FILE* lw_example_open_read_utf8(const char* path_utf8) {
     if (wide_path == NULL) {
         return NULL;
     }
-    if (MultiByteToWideChar(
-            CP_UTF8, MB_ERR_INVALID_CHARS, path_utf8, -1,
-            wide_path, wide_count) > 0 &&
+    if (MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, path_utf8, -1, wide_path, wide_count) >
+            0 &&
         _wfopen_s(&file, wide_path, L"rb") != 0) {
         file = NULL;
     }
@@ -51,10 +55,7 @@ static FILE* lw_example_open_read_utf8(const char* path_utf8) {
 }
 #endif
 
-static int lw_example_read_ppm_token(
-    FILE* file,
-    char* token,
-    size_t capacity) {
+static int lw_example_read_ppm_token(FILE* file, char* token, size_t capacity) {
     int character;
     size_t length = 0u;
     do {
@@ -85,15 +86,12 @@ static int lw_example_read_ppm_token(
     return length != 0u;
 }
 
-static int lw_example_parse_positive_u32(
-    const char* text,
-    uint32_t* value) {
+static int lw_example_parse_positive_u32(const char* text, uint32_t* value) {
     char* end = NULL;
     unsigned long parsed;
     errno = 0;
     parsed = strtoul(text, &end, 10);
-    if (errno != 0 || end == text || *end != '\0' ||
-        parsed == 0u || parsed > UINT32_MAX) {
+    if (errno != 0 || end == text || *end != '\0' || parsed == 0u || parsed > UINT32_MAX) {
         return 0;
     }
     *value = (uint32_t)parsed;
@@ -108,9 +106,7 @@ static void lw_example_ppm_image_free(lw_example_ppm_image* image) {
     memset(image, 0, sizeof(*image));
 }
 
-static int lw_example_ppm_image_load_bgr(
-    const char* path_utf8,
-    lw_example_ppm_image* image) {
+static int lw_example_ppm_image_load_bgr(const char* path_utf8, lw_example_ppm_image* image) {
     FILE* file = NULL;
     char token[64];
     uint32_t max_value;
@@ -123,8 +119,7 @@ static int lw_example_ppm_image_load_bgr(
     memset(image, 0, sizeof(*image));
     file = lw_example_open_read_utf8(path_utf8);
     if (file == NULL || !lw_example_read_ppm_token(file, token, sizeof(token)) ||
-        strcmp(token, "P6") != 0 ||
-        !lw_example_read_ppm_token(file, token, sizeof(token)) ||
+        strcmp(token, "P6") != 0 || !lw_example_read_ppm_token(file, token, sizeof(token)) ||
         !lw_example_parse_positive_u32(token, &image->width) ||
         !lw_example_read_ppm_token(file, token, sizeof(token)) ||
         !lw_example_parse_positive_u32(token, &image->height) ||
@@ -133,15 +128,13 @@ static int lw_example_ppm_image_load_bgr(
         goto cleanup;
     }
     pixel_count = (uint64_t)image->width * image->height;
-    if (pixel_count > LW_EXAMPLE_MAX_IMAGE_PIXELS ||
-        pixel_count > SIZE_MAX / 3u) {
+    if (pixel_count > LW_EXAMPLE_MAX_IMAGE_PIXELS || pixel_count > SIZE_MAX / 3u) {
         goto cleanup;
     }
     image->byte_count = pixel_count * 3u;
     image->pixels = (uint8_t*)malloc((size_t)image->byte_count);
     if (image->pixels == NULL ||
-        fread(image->pixels, 1u, (size_t)image->byte_count, file) !=
-            (size_t)image->byte_count) {
+        fread(image->pixels, 1u, (size_t)image->byte_count, file) != (size_t)image->byte_count) {
         goto cleanup;
     }
     for (index = 0u; index < image->byte_count; index += 3u) {

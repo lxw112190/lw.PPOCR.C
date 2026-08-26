@@ -920,9 +920,12 @@ if(LW_BUILD_HTTP_DEMO)
 endif()
 install(DIRECTORY docs/
     DESTINATION docs
-    FILES_MATCHING PATTERN "*.md")
+    FILES_MATCHING
+    PATTERN "*.md"
+    PATTERN "*.jpg")
 install(FILES
     README.md
+    README.zh-CN.md
     LICENSE
     THIRD-PARTY-NOTICES.md
     dependencies.lock.json

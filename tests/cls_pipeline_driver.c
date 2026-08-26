@@ -32,8 +32,8 @@ static int read_file(const char* path, uint8_t** bytes, size_t* byte_count) {
     size_t count;
     *bytes = NULL;
     *byte_count = 0u;
-    if (file == NULL || fseek(file, 0, SEEK_END) != 0 ||
-        (length = ftell(file)) < 0 || fseek(file, 0, SEEK_SET) != 0) {
+    if (file == NULL || fseek(file, 0, SEEK_END) != 0 || (length = ftell(file)) < 0 ||
+        fseek(file, 0, SEEK_SET) != 0) {
         if (file != NULL) {
             fclose(file);
         }
@@ -75,9 +75,8 @@ static int run_preprocess(int argc, char** argv) {
     float* output = NULL;
     lw_status status;
     int result = 1;
-    if (argc != 7 || !parse_u32(argv[3], &width) ||
-        !parse_u32(argv[4], &height) || !parse_u32(argv[5], &stride) ||
-        !read_file(argv[2], &source, &source_bytes)) {
+    if (argc != 7 || !parse_u32(argv[3], &width) || !parse_u32(argv[4], &height) ||
+        !parse_u32(argv[5], &stride) || !read_file(argv[2], &source, &source_bytes)) {
         fprintf(stderr, "invalid preprocess arguments or source file\n");
         return 2;
     }
@@ -86,23 +85,20 @@ static int run_preprocess(int argc, char** argv) {
         fprintf(stderr, "preprocess output allocation failed\n");
         goto cleanup;
     }
-    status = lw_cls_preprocess_bgr_u8(
-        source, source_bytes, width, height, stride,
-        output, output_count - 1u, &resized_width);
+    status = lw_cls_preprocess_bgr_u8(source, source_bytes, width, height, stride, output,
+                                      output_count - 1u, &resized_width);
     if (status != LW_STATUS_INVALID_SHAPE) {
         fprintf(stderr, "preprocessor accepted an incorrect output element count\n");
         goto cleanup;
     }
-    status = lw_cls_preprocess_bgr_u8(
-        source, source_bytes, width, height, stride,
-        output, output_count, &resized_width);
+    status = lw_cls_preprocess_bgr_u8(source, source_bytes, width, height, stride, output,
+                                      output_count, &resized_width);
     if (status != LW_STATUS_OK ||
         !write_file(argv[6], output, (size_t)output_count * sizeof(*output))) {
         fprintf(stderr, "preprocess failed: %s\n", lw_status_string(status));
         goto cleanup;
     }
-    printf("resized_width=%u elements=%llu\n", resized_width,
-           (unsigned long long)output_count);
+    printf("resized_width=%u elements=%llu\n", resized_width, (unsigned long long)output_count);
     result = 0;
 
 cleanup:
@@ -122,32 +118,29 @@ static int run_pipeline(int argc, char** argv) {
     uint32_t stride;
     lw_status status;
     int result = 1;
-    if (argc != 7 || !parse_u32(argv[4], &width) ||
-        !parse_u32(argv[5], &height) || !parse_u32(argv[6], &stride) ||
-        !read_file(argv[3], &source, &source_bytes)) {
+    if (argc != 7 || !parse_u32(argv[4], &width) || !parse_u32(argv[5], &height) ||
+        !parse_u32(argv[6], &stride) || !read_file(argv[3], &source, &source_bytes)) {
         fprintf(stderr, "invalid pipeline arguments or source file\n");
         return 2;
     }
     lw_error_init(&error);
     status = lw_classifier_create(argv[2], NULL, &classifier, &error);
     if (status != LW_STATUS_OK) {
-        fprintf(stderr, "classifier create failed: %s: %s\n",
-                lw_status_string(status), error.message);
+        fprintf(stderr, "classifier create failed: %s: %s\n", lw_status_string(status),
+                error.message);
         goto cleanup;
     }
     lw_classification_result_init(&classification);
     lw_error_init(&error);
-    status = lw_classifier_classify_bgr_u8(
-        classifier, source, source_bytes, width, height, stride,
-        &classification, &error);
+    status = lw_classifier_classify_bgr_u8(classifier, source, source_bytes, width, height, stride,
+                                           &classification, &error);
     if (status != LW_STATUS_OK) {
-        fprintf(stderr, "classification failed: %s: %s\n",
-                lw_status_string(status), error.message);
+        fprintf(stderr, "classification failed: %s: %s\n", lw_status_string(status), error.message);
         goto cleanup;
     }
-    printf("label=%u score=%.9g orientation=%u resized_width=%u\n",
-           classification.label, (double)classification.score,
-           classification.orientation_degrees, classification.resized_width);
+    printf("label=%u score=%.9g orientation=%u resized_width=%u\n", classification.label,
+           (double)classification.score, classification.orientation_degrees,
+           classification.resized_width);
     result = 0;
 
 cleanup:
@@ -187,17 +180,15 @@ int main(void) {
         return 2;
     }
     for (index = 0; index < argc; ++index) {
-        int byte_count = WideCharToMultiByte(
-            CP_UTF8, WC_ERR_INVALID_CHARS, wide_argv[index], -1,
-            NULL, 0, NULL, NULL);
+        int byte_count = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, wide_argv[index], -1,
+                                             NULL, 0, NULL, NULL);
         if (byte_count <= 0) {
             goto cleanup;
         }
         utf8_argv[index] = (char*)malloc((size_t)byte_count);
         if (utf8_argv[index] == NULL ||
-            WideCharToMultiByte(
-                CP_UTF8, WC_ERR_INVALID_CHARS, wide_argv[index], -1,
-                utf8_argv[index], byte_count, NULL, NULL) <= 0) {
+            WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, wide_argv[index], -1,
+                                utf8_argv[index], byte_count, NULL, NULL) <= 0) {
             goto cleanup;
         }
     }

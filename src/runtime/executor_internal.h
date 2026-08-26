@@ -21,21 +21,13 @@ typedef struct lw_execution_profile {
     uint64_t node_invocations[LW_EXECUTION_PROFILE_NODE_CAPACITY];
 } lw_execution_profile;
 
-lw_status lw_execute_session_f32(
-    lw_session* session,
-    const float* input,
-    uint64_t input_element_count,
-    float* output,
-    uint64_t output_element_count,
-    lw_error* error);
+lw_status lw_execute_session_f32(lw_session* session, const float* input,
+                                 uint64_t input_element_count, float* output,
+                                 uint64_t output_element_count, lw_error* error);
 
-lw_status lw_execute_session_f32_profiled(
-    lw_session* session,
-    const float* input,
-    uint64_t input_element_count,
-    float* output,
-    uint64_t output_element_count,
-    lw_execution_profile* profile,
-    lw_error* error);
+lw_status lw_execute_session_f32_profiled(lw_session* session, const float* input,
+                                          uint64_t input_element_count, float* output,
+                                          uint64_t output_element_count,
+                                          lw_execution_profile* profile, lw_error* error);
 
 #endif

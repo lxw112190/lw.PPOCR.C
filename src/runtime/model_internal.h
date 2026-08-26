@@ -1,6 +1,8 @@
 #ifndef LW_MODEL_INTERNAL_H
 #define LW_MODEL_INTERNAL_H
 
+/* Private in-memory representation of a validated LWM model. */
+
 #include "error_internal.h"
 #include "lw_infer.h"
 

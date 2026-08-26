@@ -43,45 +43,39 @@ int main(int argc, char** argv) {
     }
     lw_classifier_info_init(&info);
     if (!expect_status(lw_classifier_get_info(classifier, &info), LW_STATUS_OK) ||
-        info.input_width != 160u || info.input_height != 80u ||
-        info.class_count != 2u || info.workspace_size == 0u) {
+        info.input_width != 160u || info.input_height != 80u || info.class_count != 2u ||
+        info.workspace_size == 0u) {
         goto cleanup;
     }
 
     lw_classification_result_init(&result);
     lw_error_init(&error);
-    status = lw_classifier_classify_bgr_u8(
-        classifier, source, sizeof(source) - 4u, 7u, 5u, 24u,
-        &result, &error);
+    status = lw_classifier_classify_bgr_u8(classifier, source, sizeof(source) - 4u, 7u, 5u, 24u,
+                                           &result, &error);
     if (!expect_status(status, LW_STATUS_INVALID_SHAPE)) {
         goto cleanup;
     }
 
     lw_classification_result_init(&result);
     lw_error_init(&error);
-    status = lw_classifier_classify_bgr_u8(
-        classifier, source, sizeof(source), 7u, 5u, 24u,
-        &result, &error);
-    if (!expect_status(status, LW_STATUS_OK) || result.label > 1u ||
-        !isfinite(result.score) || result.score < 0.5f || result.score > 1.0f ||
-        result.resized_width != 112u ||
+    status = lw_classifier_classify_bgr_u8(classifier, source, sizeof(source), 7u, 5u, 24u, &result,
+                                           &error);
+    if (!expect_status(status, LW_STATUS_OK) || result.label > 1u || !isfinite(result.score) ||
+        result.score < 0.5f || result.score > 1.0f || result.resized_width != 112u ||
         result.orientation_degrees != result.label * 180u || result.reserved != 0u) {
         goto cleanup;
     }
     lw_classification_result_init(&repeated);
     lw_error_init(&error);
-    status = lw_classifier_classify_bgr_u8(
-        classifier, source, sizeof(source), 7u, 5u, 24u,
-        &repeated, &error);
-    if (!expect_status(status, LW_STATUS_OK) ||
-        memcmp(&result, &repeated, sizeof(result)) != 0) {
+    status = lw_classifier_classify_bgr_u8(classifier, source, sizeof(source), 7u, 5u, 24u,
+                                           &repeated, &error);
+    if (!expect_status(status, LW_STATUS_OK) || memcmp(&result, &repeated, sizeof(result)) != 0) {
         goto cleanup;
     }
     memset(&result, 0, sizeof(result));
     lw_error_init(&error);
-    status = lw_classifier_classify_bgr_u8(
-        classifier, source, sizeof(source), 7u, 5u, 24u,
-        &result, &error);
+    status = lw_classifier_classify_bgr_u8(classifier, source, sizeof(source), 7u, 5u, 24u, &result,
+                                           &error);
     if (!expect_status(status, LW_STATUS_INVALID_ARGUMENT)) {
         goto cleanup;
     }
@@ -95,9 +89,8 @@ int main(int argc, char** argv) {
     }
     lw_classification_result_init(&result);
     lw_error_init(&error);
-    status = lw_classifier_classify_bgr_u8(
-        limited, source, sizeof(source), 7u, 5u, 24u,
-        &result, &error);
+    status = lw_classifier_classify_bgr_u8(limited, source, sizeof(source), 7u, 5u, 24u, &result,
+                                           &error);
     if (!expect_status(status, LW_STATUS_MEMORY_LIMIT)) {
         goto cleanup;
     }

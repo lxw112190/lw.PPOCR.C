@@ -1,5 +1,7 @@
 #include "rec_internal.h"
 
+/* UTF-8 dictionary loading and greedy CTC collapse for REC probabilities. */
+
 #include "error_internal.h"
 
 #include <math.h>
@@ -35,8 +37,8 @@ static FILE* open_read_utf8(const char* path_utf8) {
     if (wide_path == NULL) {
         return NULL;
     }
-    if (MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS,
-                            path_utf8, -1, wide_path, wide_count) > 0 &&
+    if (MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, path_utf8, -1, wide_path, wide_count) >
+            0 &&
         _wfopen_s(&file, wide_path, L"rb") != 0) {
         file = NULL;
     }
@@ -126,10 +128,8 @@ static int count_entries(const uint8_t* bytes, uint32_t count, uint32_t start, u
     return 1;
 }
 
-lw_status lw_rec_dictionary_load(
-    const char* path_utf8,
-    lw_rec_dictionary** out_dictionary,
-    lw_error* error) {
+lw_status lw_rec_dictionary_load(const char* path_utf8, lw_rec_dictionary** out_dictionary,
+                                 lw_error* error) {
     FILE* file;
     long length;
     lw_rec_dictionary* dictionary;
@@ -141,7 +141,8 @@ lw_status lw_rec_dictionary_load(
         *out_dictionary = NULL;
     }
     if (path_utf8 == NULL || path_utf8[0] == '\0' || out_dictionary == NULL) {
-        lw_set_error(error, LW_STATUS_INVALID_ARGUMENT, "dictionary path and output handle are required");
+        lw_set_error(error, LW_STATUS_INVALID_ARGUMENT,
+                     "dictionary path and output handle are required");
         return LW_STATUS_INVALID_ARGUMENT;
     }
     file = open_read_utf8(path_utf8);
@@ -162,7 +163,8 @@ lw_status lw_rec_dictionary_load(
         return LW_STATUS_OUT_OF_MEMORY;
     }
     dictionary->byte_count = (uint32_t)length;
-    dictionary->bytes = (uint8_t*)malloc(dictionary->byte_count == 0u ? 1u : dictionary->byte_count);
+    dictionary->bytes =
+        (uint8_t*)malloc(dictionary->byte_count == 0u ? 1u : dictionary->byte_count);
     if (dictionary->bytes == NULL) {
         fclose(file);
         lw_rec_dictionary_free(dictionary);
@@ -177,14 +179,20 @@ lw_status lw_rec_dictionary_load(
         return LW_STATUS_IO_ERROR;
     }
     start = dictionary->byte_count >= 3u && dictionary->bytes[0] == 0xefu &&
-        dictionary->bytes[1] == 0xbbu && dictionary->bytes[2] == 0xbfu ? 3u : 0u;
-    if (!count_entries(dictionary->bytes, dictionary->byte_count, start, &dictionary->entry_count)) {
+                    dictionary->bytes[1] == 0xbbu && dictionary->bytes[2] == 0xbfu
+                ? 3u
+                : 0u;
+    if (!count_entries(dictionary->bytes, dictionary->byte_count, start,
+                       &dictionary->entry_count)) {
         lw_rec_dictionary_free(dictionary);
-        lw_set_error(error, LW_STATUS_INVALID_FORMAT, "recognition dictionary is empty or contains invalid UTF-8");
+        lw_set_error(error, LW_STATUS_INVALID_FORMAT,
+                     "recognition dictionary is empty or contains invalid UTF-8");
         return LW_STATUS_INVALID_FORMAT;
     }
-    dictionary->offsets = (uint32_t*)malloc((size_t)dictionary->entry_count * sizeof(*dictionary->offsets));
-    dictionary->lengths = (uint32_t*)malloc((size_t)dictionary->entry_count * sizeof(*dictionary->lengths));
+    dictionary->offsets =
+        (uint32_t*)malloc((size_t)dictionary->entry_count * sizeof(*dictionary->offsets));
+    dictionary->lengths =
+        (uint32_t*)malloc((size_t)dictionary->entry_count * sizeof(*dictionary->lengths));
     if (dictionary->offsets == NULL || dictionary->lengths == NULL) {
         lw_rec_dictionary_free(dictionary);
         lw_set_error(error, LW_STATUS_OUT_OF_MEMORY, "unable to allocate dictionary index");
@@ -239,20 +247,16 @@ uint32_t lw_rec_dictionary_max_label_byte_count(const lw_rec_dictionary* diction
     return maximum;
 }
 
-static lw_status decode_pass(
-    const lw_rec_dictionary* dictionary,
-    const float* probabilities,
-    uint32_t time_steps,
-    uint32_t class_count,
-    char* text_utf8,
-    uint64_t* text_bytes,
-    float* score,
-    uint32_t* emitted_count) {
+static lw_status decode_pass(const lw_rec_dictionary* dictionary, const float* probabilities,
+                             uint32_t time_steps, uint32_t class_count, char* text_utf8,
+                             uint64_t* text_bytes, float* score, uint32_t* emitted_count) {
     uint64_t bytes = 0u;
     double score_sum = 0.0;
     uint32_t emitted = 0u;
     uint32_t previous = 0u;
     uint32_t step;
+    /* Greedy CTC decoding chooses the best class at each time step. Class 0 is
+     * blank; consecutive repeats collapse unless a blank separates them. */
     for (step = 0u; step < time_steps; ++step) {
         const float* row = probabilities + (size_t)((uint64_t)step * class_count);
         uint32_t best_index = 0u;
@@ -304,18 +308,11 @@ static lw_status decode_pass(
     return LW_STATUS_OK;
 }
 
-lw_status lw_rec_ctc_decode_f32(
-    const lw_rec_dictionary* dictionary,
-    const float* probabilities,
-    uint64_t probability_element_count,
-    uint32_t time_steps,
-    uint32_t class_count,
-    char* text_utf8,
-    uint64_t text_capacity,
-    uint64_t* required_capacity,
-    float* score,
-    uint32_t* emitted_count,
-    lw_error* error) {
+lw_status lw_rec_ctc_decode_f32(const lw_rec_dictionary* dictionary, const float* probabilities,
+                                uint64_t probability_element_count, uint32_t time_steps,
+                                uint32_t class_count, char* text_utf8, uint64_t text_capacity,
+                                uint64_t* required_capacity, float* score, uint32_t* emitted_count,
+                                lw_error* error) {
     uint64_t expected_elements;
     uint64_t text_bytes;
     float decoded_score;
@@ -330,21 +327,24 @@ lw_status lw_rec_ctc_decode_f32(
     if (emitted_count != NULL) {
         *emitted_count = 0u;
     }
-    if (dictionary == NULL || probabilities == NULL || required_capacity == NULL ||
-        score == NULL || emitted_count == NULL || time_steps == 0u || class_count == 0u ||
+    if (dictionary == NULL || probabilities == NULL || required_capacity == NULL || score == NULL ||
+        emitted_count == NULL || time_steps == 0u || class_count == 0u ||
         (text_utf8 == NULL && text_capacity != 0u)) {
-        lw_set_error(error, LW_STATUS_INVALID_ARGUMENT, "dictionary, probabilities, and decode outputs are required");
+        lw_set_error(error, LW_STATUS_INVALID_ARGUMENT,
+                     "dictionary, probabilities, and decode outputs are required");
         return LW_STATUS_INVALID_ARGUMENT;
     }
     expected_elements = (uint64_t)time_steps * class_count;
     if (probability_element_count != expected_elements ||
         class_count != dictionary->entry_count + 2u ||
         expected_elements > SIZE_MAX / sizeof(float)) {
-        lw_set_error(error, LW_STATUS_INVALID_SHAPE, "CTC probability shape or dictionary class count is invalid");
+        lw_set_error(error, LW_STATUS_INVALID_SHAPE,
+                     "CTC probability shape or dictionary class count is invalid");
         return LW_STATUS_INVALID_SHAPE;
     }
-    status = decode_pass(dictionary, probabilities, time_steps, class_count,
-                         NULL, &text_bytes, &decoded_score, &decoded_count);
+    /* First pass computes exact UTF-8 capacity without touching caller memory. */
+    status = decode_pass(dictionary, probabilities, time_steps, class_count, NULL, &text_bytes,
+                         &decoded_score, &decoded_count);
     if (status != LW_STATUS_OK) {
         lw_set_error(error, status, "CTC probabilities contain invalid values");
         return status;
@@ -364,8 +364,8 @@ lw_status lw_rec_ctc_decode_f32(
         lw_set_error(error, LW_STATUS_OUT_OF_BOUNDS, "CTC text buffer is too small");
         return LW_STATUS_OUT_OF_BOUNDS;
     }
-    status = decode_pass(dictionary, probabilities, time_steps, class_count,
-                         text_utf8, &text_bytes, &decoded_score, &decoded_count);
+    status = decode_pass(dictionary, probabilities, time_steps, class_count, text_utf8, &text_bytes,
+                         &decoded_score, &decoded_count);
     if (status != LW_STATUS_OK) {
         lw_set_error(error, status, "CTC decoding failed");
         return status;

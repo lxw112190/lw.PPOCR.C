@@ -45,28 +45,25 @@ int main(int argc, char** argv) {
     }
     lw_recognizer_info_init(&info);
     if (!expect_status(lw_recognizer_get_info(recognizer, &info), LW_STATUS_OK) ||
-        info.target_width != 80u || info.input_height != 48u ||
-        info.time_steps == 0u || info.class_count != 6906u ||
-        info.max_text_capacity == 0u || info.workspace_size == 0u) {
+        info.target_width != 80u || info.input_height != 48u || info.time_steps == 0u ||
+        info.class_count != 6906u || info.max_text_capacity == 0u || info.workspace_size == 0u) {
         goto cleanup;
     }
 
     lw_recognition_result_init(&result);
     lw_error_init(&error);
-    status = lw_recognizer_recognize_bgr_u8(
-        recognizer, source, 5u * 24u - 4u, 7u, 5u, 24u,
-        NULL, 0u, &result, &error);
+    status = lw_recognizer_recognize_bgr_u8(recognizer, source, 5u * 24u - 4u, 7u, 5u, 24u, NULL,
+                                            0u, &result, &error);
     if (!expect_status(status, LW_STATUS_INVALID_SHAPE)) {
         goto cleanup;
     }
 
     lw_recognition_result_init(&result);
     lw_error_init(&error);
-    status = lw_recognizer_recognize_bgr_u8(
-        recognizer, source, sizeof(source), 7u, 5u, 24u,
-        NULL, 0u, &result, &error);
-    if (!expect_status(status, LW_STATUS_OK) ||
-        result.required_text_capacity == 0u || result.time_steps != info.time_steps) {
+    status = lw_recognizer_recognize_bgr_u8(recognizer, source, sizeof(source), 7u, 5u, 24u, NULL,
+                                            0u, &result, &error);
+    if (!expect_status(status, LW_STATUS_OK) || result.required_text_capacity == 0u ||
+        result.time_steps != info.time_steps) {
         goto cleanup;
     }
     required = result.required_text_capacity;
@@ -75,27 +72,24 @@ int main(int argc, char** argv) {
     }
     lw_recognition_result_init(&result);
     lw_error_init(&error);
-    status = lw_recognizer_recognize_bgr_u8(
-        recognizer, source, sizeof(source), 7u, 5u, 24u,
-        text, required - 1u, &result, &error);
+    status = lw_recognizer_recognize_bgr_u8(recognizer, source, sizeof(source), 7u, 5u, 24u, text,
+                                            required - 1u, &result, &error);
     if (!expect_status(status, LW_STATUS_OUT_OF_BOUNDS) ||
         result.required_text_capacity != required) {
         goto cleanup;
     }
     lw_recognition_result_init(&result);
     lw_error_init(&error);
-    status = lw_recognizer_recognize_bgr_u8(
-        recognizer, source, sizeof(source), 7u, 5u, 24u,
-        text, required, &result, &error);
-    if (!expect_status(status, LW_STATUS_OK) ||
-        result.required_text_capacity != required || text[required - 1u] != '\0') {
+    status = lw_recognizer_recognize_bgr_u8(recognizer, source, sizeof(source), 7u, 5u, 24u, text,
+                                            required, &result, &error);
+    if (!expect_status(status, LW_STATUS_OK) || result.required_text_capacity != required ||
+        text[required - 1u] != '\0') {
         goto cleanup;
     }
     memset(&result, 0, sizeof(result));
     lw_error_init(&error);
-    status = lw_recognizer_recognize_bgr_u8(
-        recognizer, source, sizeof(source), 7u, 5u, 24u,
-        text, required, &result, &error);
+    status = lw_recognizer_recognize_bgr_u8(recognizer, source, sizeof(source), 7u, 5u, 24u, text,
+                                            required, &result, &error);
     if (!expect_status(status, LW_STATUS_INVALID_ARGUMENT)) {
         goto cleanup;
     }
@@ -110,9 +104,8 @@ int main(int argc, char** argv) {
     }
     lw_recognition_result_init(&result);
     lw_error_init(&error);
-    status = lw_recognizer_recognize_bgr_u8(
-        limited, source, sizeof(source), 7u, 5u, 24u,
-        NULL, 0u, &result, &error);
+    status = lw_recognizer_recognize_bgr_u8(limited, source, sizeof(source), 7u, 5u, 24u, NULL, 0u,
+                                            &result, &error);
     if (!expect_status(status, LW_STATUS_MEMORY_LIMIT)) {
         goto cleanup;
     }

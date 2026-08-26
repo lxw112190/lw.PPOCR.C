@@ -1,5 +1,7 @@
 #include "scalar_kernels.h"
 
+/* Reduction and pooling kernels with explicit shape and bounds validation. */
+
 #include <limits.h>
 #include <math.h>
 #include <stddef.h>
@@ -17,18 +19,14 @@ static int normalize_axis(int32_t axis, uint32_t rank, uint32_t* normalized) {
     return 1;
 }
 
-static lw_status tensor_element_count(
-    uint32_t rank,
-    const int32_t* dimensions,
-    uint64_t* count) {
+static lw_status tensor_element_count(uint32_t rank, const int32_t* dimensions, uint64_t* count) {
     uint64_t value = 1u;
     uint32_t index;
     if (rank > LW_MAX_DIMS || (rank != 0u && dimensions == NULL)) {
         return LW_STATUS_INVALID_SHAPE;
     }
     for (index = 0u; index < rank; ++index) {
-        if (dimensions[index] <= 0 ||
-            value > UINT64_MAX / (uint32_t)dimensions[index]) {
+        if (dimensions[index] <= 0 || value > UINT64_MAX / (uint32_t)dimensions[index]) {
             return LW_STATUS_INVALID_SHAPE;
         }
         value *= (uint32_t)dimensions[index];
@@ -40,17 +38,11 @@ static lw_status tensor_element_count(
     return LW_STATUS_OK;
 }
 
-lw_status lw_scalar_reduce_mean_f32(
-    const float* input,
-    float* output,
-    uint32_t input_rank,
-    const int32_t* input_dimensions,
-    uint32_t axes_count,
-    const int32_t* axes,
-    uint32_t keep_dimensions,
-    uint32_t no_op_with_empty_axes,
-    uint32_t output_rank,
-    const int32_t* output_dimensions) {
+lw_status lw_scalar_reduce_mean_f32(const float* input, float* output, uint32_t input_rank,
+                                    const int32_t* input_dimensions, uint32_t axes_count,
+                                    const int32_t* axes, uint32_t keep_dimensions,
+                                    uint32_t no_op_with_empty_axes, uint32_t output_rank,
+                                    const int32_t* output_dimensions) {
     int reduced[LW_MAX_DIMS] = {0};
     uint32_t input_to_output[LW_MAX_DIMS];
     uint32_t coordinates[LW_MAX_DIMS] = {0u};
@@ -67,8 +59,8 @@ lw_status lw_scalar_reduce_mean_f32(
     if (input == NULL || output == NULL || input == output) {
         return LW_STATUS_INVALID_ARGUMENT;
     }
-    if (axes_count > LW_MAX_DIMS || (axes_count != 0u && axes == NULL) ||
-        keep_dimensions > 1u || no_op_with_empty_axes > 1u) {
+    if (axes_count > LW_MAX_DIMS || (axes_count != 0u && axes == NULL) || keep_dimensions > 1u ||
+        no_op_with_empty_axes > 1u) {
         return LW_STATUS_INVALID_SHAPE;
     }
     status = tensor_element_count(input_rank, input_dimensions, &input_count);
@@ -138,8 +130,8 @@ lw_status lw_scalar_reduce_mean_f32(
             }
             coordinates[input_axis] = 0u;
             if (mapped_axis != UINT32_MAX) {
-                output_offset -= output_strides[mapped_axis] *
-                    ((uint32_t)input_dimensions[input_axis] - 1u);
+                output_offset -=
+                    output_strides[mapped_axis] * ((uint32_t)input_dimensions[input_axis] - 1u);
             }
         }
     }
@@ -149,18 +141,11 @@ lw_status lw_scalar_reduce_mean_f32(
     return LW_STATUS_OK;
 }
 
-static int spatial_output(
-    int32_t input,
-    int32_t kernel,
-    int32_t stride,
-    int32_t pad_before,
-    int32_t pad_after,
-    uint32_t ceil_mode,
-    int32_t* output) {
+static int spatial_output(int32_t input, int32_t kernel, int32_t stride, int32_t pad_before,
+                          int32_t pad_after, uint32_t ceil_mode, int32_t* output) {
     int64_t numerator;
     int64_t value;
-    if (input <= 0 || kernel <= 0 || stride <= 0 ||
-        pad_before < 0 || pad_after < 0) {
+    if (input <= 0 || kernel <= 0 || stride <= 0 || pad_before < 0 || pad_after < 0) {
         return 0;
     }
     numerator = (int64_t)input + pad_before + pad_after - kernel;
@@ -178,16 +163,11 @@ static int spatial_output(
     return 1;
 }
 
-lw_status lw_scalar_average_pool2d_f32(
-    const float* input,
-    float* output,
-    const int32_t input_dimensions[4],
-    const int32_t output_dimensions[4],
-    const int32_t kernel[2],
-    const int32_t strides[2],
-    const int32_t pads[4],
-    uint32_t ceil_mode,
-    uint32_t count_include_pad) {
+lw_status lw_scalar_average_pool2d_f32(const float* input, float* output,
+                                       const int32_t input_dimensions[4],
+                                       const int32_t output_dimensions[4], const int32_t kernel[2],
+                                       const int32_t strides[2], const int32_t pads[4],
+                                       uint32_t ceil_mode, uint32_t count_include_pad) {
     uint64_t input_count;
     uint64_t output_count;
     int32_t expected_height;
@@ -197,9 +177,8 @@ lw_status lw_scalar_average_pool2d_f32(
     uint32_t output_y;
     uint32_t output_x;
     lw_status status;
-    if (input == NULL || output == NULL || input == output ||
-        input_dimensions == NULL || output_dimensions == NULL ||
-        kernel == NULL || strides == NULL || pads == NULL) {
+    if (input == NULL || output == NULL || input == output || input_dimensions == NULL ||
+        output_dimensions == NULL || kernel == NULL || strides == NULL || pads == NULL) {
         return LW_STATUS_INVALID_ARGUMENT;
     }
     if (ceil_mode > 1u || count_include_pad > 1u) {
@@ -215,13 +194,12 @@ lw_status lw_scalar_average_pool2d_f32(
     }
     (void)input_count;
     (void)output_count;
-    if (!spatial_output(input_dimensions[2], kernel[0], strides[0],
-                        pads[0], pads[2], ceil_mode, &expected_height) ||
-        !spatial_output(input_dimensions[3], kernel[1], strides[1],
-                        pads[1], pads[3], ceil_mode, &expected_width) ||
+    if (!spatial_output(input_dimensions[2], kernel[0], strides[0], pads[0], pads[2], ceil_mode,
+                        &expected_height) ||
+        !spatial_output(input_dimensions[3], kernel[1], strides[1], pads[1], pads[3], ceil_mode,
+                        &expected_width) ||
         output_dimensions[0] != input_dimensions[0] ||
-        output_dimensions[1] != input_dimensions[1] ||
-        output_dimensions[2] != expected_height ||
+        output_dimensions[1] != input_dimensions[1] || output_dimensions[2] != expected_height ||
         output_dimensions[3] != expected_width) {
         return LW_STATUS_INVALID_SHAPE;
     }
@@ -237,26 +215,29 @@ lw_status lw_scalar_average_pool2d_f32(
                     int32_t kernel_x;
                     uint64_t output_offset =
                         (((uint64_t)batch * (uint32_t)input_dimensions[1] + channel) *
-                         (uint32_t)expected_height + output_y) *
-                         (uint32_t)expected_width + output_x;
+                             (uint32_t)expected_height +
+                         output_y) *
+                            (uint32_t)expected_width +
+                        output_x;
                     for (kernel_y = 0; kernel_y < kernel[0]; ++kernel_y) {
                         int64_t input_y = input_y_start + kernel_y;
                         for (kernel_x = 0; kernel_x < kernel[1]; ++kernel_x) {
                             int64_t input_x = input_x_start + kernel_x;
-                            if (input_y >= 0 && input_y < input_dimensions[2] &&
-                                input_x >= 0 && input_x < input_dimensions[3]) {
+                            if (input_y >= 0 && input_y < input_dimensions[2] && input_x >= 0 &&
+                                input_x < input_dimensions[3]) {
                                 uint64_t input_offset =
                                     (((uint64_t)batch * (uint32_t)input_dimensions[1] + channel) *
-                                     (uint32_t)input_dimensions[2] + (uint32_t)input_y) *
-                                     (uint32_t)input_dimensions[3] + (uint32_t)input_x;
+                                         (uint32_t)input_dimensions[2] +
+                                     (uint32_t)input_y) *
+                                        (uint32_t)input_dimensions[3] +
+                                    (uint32_t)input_x;
                                 sum += input[(size_t)input_offset];
                                 ++valid_count;
                             }
                         }
                     }
                     if (count_include_pad != 0u) {
-                        valid_count = (uint64_t)(uint32_t)kernel[0] *
-                                      (uint32_t)kernel[1];
+                        valid_count = (uint64_t)(uint32_t)kernel[0] * (uint32_t)kernel[1];
                     }
                     if (valid_count == 0u) {
                         return LW_STATUS_INVALID_SHAPE;
@@ -269,15 +250,11 @@ lw_status lw_scalar_average_pool2d_f32(
     return LW_STATUS_OK;
 }
 
-lw_status lw_scalar_max_pool2d_f32(
-    const float* input,
-    float* output,
-    const int32_t input_dimensions[4],
-    const int32_t output_dimensions[4],
-    const int32_t kernel[2],
-    const int32_t strides[2],
-    const int32_t pads[4],
-    uint32_t ceil_mode) {
+lw_status lw_scalar_max_pool2d_f32(const float* input, float* output,
+                                   const int32_t input_dimensions[4],
+                                   const int32_t output_dimensions[4], const int32_t kernel[2],
+                                   const int32_t strides[2], const int32_t pads[4],
+                                   uint32_t ceil_mode) {
     uint64_t element_count;
     int32_t expected_height;
     int32_t expected_width;
@@ -286,9 +263,8 @@ lw_status lw_scalar_max_pool2d_f32(
     uint32_t output_y;
     uint32_t output_x;
     lw_status status;
-    if (input == NULL || output == NULL || input == output ||
-        input_dimensions == NULL || output_dimensions == NULL ||
-        kernel == NULL || strides == NULL || pads == NULL) {
+    if (input == NULL || output == NULL || input == output || input_dimensions == NULL ||
+        output_dimensions == NULL || kernel == NULL || strides == NULL || pads == NULL) {
         return LW_STATUS_INVALID_ARGUMENT;
     }
     if (ceil_mode > 1u) {
@@ -302,13 +278,12 @@ lw_status lw_scalar_max_pool2d_f32(
     if (status != LW_STATUS_OK) {
         return status;
     }
-    if (!spatial_output(input_dimensions[2], kernel[0], strides[0],
-                        pads[0], pads[2], ceil_mode, &expected_height) ||
-        !spatial_output(input_dimensions[3], kernel[1], strides[1],
-                        pads[1], pads[3], ceil_mode, &expected_width) ||
+    if (!spatial_output(input_dimensions[2], kernel[0], strides[0], pads[0], pads[2], ceil_mode,
+                        &expected_height) ||
+        !spatial_output(input_dimensions[3], kernel[1], strides[1], pads[1], pads[3], ceil_mode,
+                        &expected_width) ||
         output_dimensions[0] != input_dimensions[0] ||
-        output_dimensions[1] != input_dimensions[1] ||
-        output_dimensions[2] != expected_height ||
+        output_dimensions[1] != input_dimensions[1] || output_dimensions[2] != expected_height ||
         output_dimensions[3] != expected_width) {
         return LW_STATUS_INVALID_SHAPE;
     }
@@ -324,18 +299,22 @@ lw_status lw_scalar_max_pool2d_f32(
                     int32_t kernel_x;
                     uint64_t output_offset =
                         (((uint64_t)batch * (uint32_t)input_dimensions[1] + channel) *
-                         (uint32_t)expected_height + output_y) *
-                         (uint32_t)expected_width + output_x;
+                             (uint32_t)expected_height +
+                         output_y) *
+                            (uint32_t)expected_width +
+                        output_x;
                     for (kernel_y = 0; kernel_y < kernel[0]; ++kernel_y) {
                         int64_t input_y = input_y_start + kernel_y;
                         for (kernel_x = 0; kernel_x < kernel[1]; ++kernel_x) {
                             int64_t input_x = input_x_start + kernel_x;
-                            if (input_y >= 0 && input_y < input_dimensions[2] &&
-                                input_x >= 0 && input_x < input_dimensions[3]) {
+                            if (input_y >= 0 && input_y < input_dimensions[2] && input_x >= 0 &&
+                                input_x < input_dimensions[3]) {
                                 uint64_t input_offset =
                                     (((uint64_t)batch * (uint32_t)input_dimensions[1] + channel) *
-                                     (uint32_t)input_dimensions[2] + (uint32_t)input_y) *
-                                     (uint32_t)input_dimensions[3] + (uint32_t)input_x;
+                                         (uint32_t)input_dimensions[2] +
+                                     (uint32_t)input_y) *
+                                        (uint32_t)input_dimensions[3] +
+                                    (uint32_t)input_x;
                                 float value = input[(size_t)input_offset];
                                 if (!found || value > maximum) {
                                     maximum = value;

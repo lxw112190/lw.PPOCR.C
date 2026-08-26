@@ -1,5 +1,11 @@
 #include "model_internal.h"
 
+/*
+ * Model handle lifecycle and platform-specific UTF-8 file opening.
+ * A model is not published to the caller until the entire untrusted LWM byte
+ * stream has passed validate.c, so later runtime code may rely on its bounds.
+ */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -66,7 +72,8 @@ static FILE* lw_open_read_utf8(const char* path_utf8) {
     if (wide_path == NULL) {
         return NULL;
     }
-    if (MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, path_utf8, -1, wide_path, wide_count) > 0) {
+    if (MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, path_utf8, -1, wide_path, wide_count) >
+        0) {
         if (_wfopen_s(&file, wide_path, L"rb") != 0) {
             file = NULL;
         }
@@ -80,11 +87,8 @@ static FILE* lw_open_read_utf8(const char* path_utf8) {
 }
 #endif
 
-lw_status lw_model_load(
-    const char* path_utf8,
-    const lw_model_options* options,
-    lw_model** out_model,
-    lw_error* error) {
+lw_status lw_model_load(const char* path_utf8, const lw_model_options* options,
+                        lw_model** out_model, lw_error* error) {
     FILE* file;
     long length;
     uint64_t limit = LW_DEFAULT_MAX_FILE_SIZE;
@@ -113,7 +117,8 @@ lw_status lw_model_load(
         lw_set_error(error, LW_STATUS_IO_ERROR, "unable to open model file");
         return LW_STATUS_IO_ERROR;
     }
-    if (fseek(file, 0, SEEK_END) != 0 || (length = ftell(file)) < 0 || fseek(file, 0, SEEK_SET) != 0) {
+    if (fseek(file, 0, SEEK_END) != 0 || (length = ftell(file)) < 0 ||
+        fseek(file, 0, SEEK_SET) != 0) {
         fclose(file);
         lw_set_error(error, LW_STATUS_IO_ERROR, "unable to determine model file size");
         return LW_STATUS_IO_ERROR;
@@ -149,6 +154,8 @@ lw_status lw_model_load(
         lw_set_error(error, LW_STATUS_IO_ERROR, "unable to read complete model file");
         return LW_STATUS_IO_ERROR;
     }
+    /* Do not expose even a successfully read file until its complete binary
+     * structure, operator subset, checksums and table ranges are trusted. */
     status = lw_validate_lwm_v0(model, error);
     if (status != LW_STATUS_OK) {
         lw_model_free(model);
@@ -178,17 +185,29 @@ lw_status lw_model_get_info(const lw_model* model, lw_model_info* info) {
 
 const char* lw_status_string(lw_status status) {
     switch (status) {
-        case LW_STATUS_OK: return "ok";
-        case LW_STATUS_INVALID_ARGUMENT: return "invalid_argument";
-        case LW_STATUS_IO_ERROR: return "io_error";
-        case LW_STATUS_OUT_OF_MEMORY: return "out_of_memory";
-        case LW_STATUS_INVALID_FORMAT: return "invalid_format";
-        case LW_STATUS_UNSUPPORTED_VERSION: return "unsupported_version";
-        case LW_STATUS_OUT_OF_BOUNDS: return "out_of_bounds";
-        case LW_STATUS_CHECKSUM_MISMATCH: return "checksum_mismatch";
-        case LW_STATUS_UNSUPPORTED: return "unsupported";
-        case LW_STATUS_INVALID_SHAPE: return "invalid_shape";
-        case LW_STATUS_MEMORY_LIMIT: return "memory_limit";
-        default: return "unknown";
+    case LW_STATUS_OK:
+        return "ok";
+    case LW_STATUS_INVALID_ARGUMENT:
+        return "invalid_argument";
+    case LW_STATUS_IO_ERROR:
+        return "io_error";
+    case LW_STATUS_OUT_OF_MEMORY:
+        return "out_of_memory";
+    case LW_STATUS_INVALID_FORMAT:
+        return "invalid_format";
+    case LW_STATUS_UNSUPPORTED_VERSION:
+        return "unsupported_version";
+    case LW_STATUS_OUT_OF_BOUNDS:
+        return "out_of_bounds";
+    case LW_STATUS_CHECKSUM_MISMATCH:
+        return "checksum_mismatch";
+    case LW_STATUS_UNSUPPORTED:
+        return "unsupported";
+    case LW_STATUS_INVALID_SHAPE:
+        return "invalid_shape";
+    case LW_STATUS_MEMORY_LIMIT:
+        return "memory_limit";
+    default:
+        return "unknown";
     }
 }

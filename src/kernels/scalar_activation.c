@@ -1,13 +1,12 @@
 #include "scalar_kernels.h"
 
+/* Portable activation functions used as the reference implementation. */
+
 #include <math.h>
 #include <stddef.h>
 #include <stdint.h>
 
-static lw_status validate_elementwise(
-    const float* input,
-    float* output,
-    uint64_t element_count) {
+static lw_status validate_elementwise(const float* input, float* output, uint64_t element_count) {
     if (element_count > (uint64_t)(SIZE_MAX / sizeof(float))) {
         return LW_STATUS_OUT_OF_BOUNDS;
     }
@@ -42,12 +41,8 @@ lw_status lw_scalar_erf_f32(const float* input, float* output, uint64_t element_
     return LW_STATUS_OK;
 }
 
-lw_status lw_scalar_hard_sigmoid_f32(
-    const float* input,
-    float* output,
-    uint64_t element_count,
-    float alpha,
-    float beta) {
+lw_status lw_scalar_hard_sigmoid_f32(const float* input, float* output, uint64_t element_count,
+                                     float alpha, float beta) {
     uint64_t index;
     lw_status status = validate_elementwise(input, output, element_count);
     if (status != LW_STATUS_OK) {
@@ -68,10 +63,7 @@ lw_status lw_scalar_hard_sigmoid_f32(
     return LW_STATUS_OK;
 }
 
-lw_status lw_scalar_sigmoid_f32(
-    const float* input,
-    float* output,
-    uint64_t element_count) {
+lw_status lw_scalar_sigmoid_f32(const float* input, float* output, uint64_t element_count) {
     uint64_t index;
     lw_status status = validate_elementwise(input, output, element_count);
     if (status != LW_STATUS_OK) {

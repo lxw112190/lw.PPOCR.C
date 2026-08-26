@@ -45,7 +45,8 @@ int main(int argc, char** argv) {
     }
     errno = 0;
     width_value = strtol(argv[2], &end, 10);
-    if (errno != 0 || end == argv[2] || *end != '\0' || width_value < 7 || width_value > INT32_MAX) {
+    if (errno != 0 || end == argv[2] || *end != '\0' || width_value < 7 ||
+        width_value > INT32_MAX) {
         fprintf(stderr, "invalid REC width\n");
         return 2;
     }
@@ -102,12 +103,14 @@ int main(int argc, char** argv) {
     lw_error_init(&error);
     status = lw_execute_session_f32(session, input, input_count, output, output_count, &error);
     if (status != LW_STATUS_OK) {
-        fprintf(stderr, "graph execution failed: %s: %s\n", lw_status_string(status), error.message);
+        fprintf(stderr, "graph execution failed: %s: %s\n", lw_status_string(status),
+                error.message);
         goto cleanup;
     }
     lw_error_init(&error);
     status = lw_execute_session_f32(session, input, input_count, repeated, output_count, &error);
-    if (status != LW_STATUS_OK || memcmp(output, repeated, (size_t)output_count * sizeof(*output)) != 0) {
+    if (status != LW_STATUS_OK ||
+        memcmp(output, repeated, (size_t)output_count * sizeof(*output)) != 0) {
         fprintf(stderr, "repeated graph execution is not deterministic\n");
         goto cleanup;
     }

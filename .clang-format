@@ -1,0 +1,27 @@
+---
+BasedOnStyle: LLVM
+Language: Cpp
+Standard: Latest
+IndentWidth: 4
+ContinuationIndentWidth: 4
+ColumnLimit: 100
+BreakBeforeBraces: Attach
+PointerAlignment: Left
+DerivePointerAlignment: false
+AllowShortBlocksOnASingleLine: Never
+AllowShortFunctionsOnASingleLine: None
+AllowShortIfStatementsOnASingleLine: Never
+AllowShortLoopsOnASingleLine: false
+AlignAfterOpenBracket: Align
+AlignConsecutiveAssignments: false
+AlignConsecutiveDeclarations: false
+BinPackArguments: true
+BinPackParameters: true
+SortIncludes: Never
+IndentPPDirectives: AfterHash
+PPIndentWidth: 2
+SpaceBeforeParens: ControlStatements
+SpacesInParentheses: false
+KeepEmptyLinesAtTheStartOfBlocks: false
+InsertNewlineAtEOF: true
+...

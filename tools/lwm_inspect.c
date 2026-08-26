@@ -1,5 +1,7 @@
 #include "lw_infer.h"
 
+/* Load an LWM through the public validator and print its deployment metadata. */
+
 #include <inttypes.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -30,21 +32,13 @@ static int inspect_model(const char* path_utf8) {
         lw_model_free(model);
         return 1;
     }
-    printf(
-        "{\"format\":\"LWM\",\"version\":\"%u.%u\",\"tensors\":%" PRIu32
-        ",\"nodes\":%" PRIu32 ",\"inputs\":%" PRIu32 ",\"outputs\":%" PRIu32
-        ",\"file_size\":%" PRIu64 ",\"weight_size\":%" PRIu64
-        ",\"workspace_size\":%" PRIu64 ",\"checksum\":\"0x%016" PRIx64 "\"}\n",
-        (unsigned)info.format_major,
-        (unsigned)info.format_minor,
-        info.tensor_count,
-        info.node_count,
-        info.input_count,
-        info.output_count,
-        info.file_size,
-        info.weight_size,
-        info.workspace_size,
-        info.content_checksum);
+    printf("{\"format\":\"LWM\",\"version\":\"%u.%u\",\"tensors\":%" PRIu32 ",\"nodes\":%" PRIu32
+           ",\"inputs\":%" PRIu32 ",\"outputs\":%" PRIu32 ",\"file_size\":%" PRIu64
+           ",\"weight_size\":%" PRIu64 ",\"workspace_size\":%" PRIu64
+           ",\"checksum\":\"0x%016" PRIx64 "\"}\n",
+           (unsigned)info.format_major, (unsigned)info.format_minor, info.tensor_count,
+           info.node_count, info.input_count, info.output_count, info.file_size, info.weight_size,
+           info.workspace_size, info.content_checksum);
     lw_model_free(model);
     return 0;
 }
@@ -63,7 +57,8 @@ int main(void) {
         }
         return 2;
     }
-    utf8_count = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, argv[1], -1, NULL, 0, NULL, NULL);
+    utf8_count =
+        WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, argv[1], -1, NULL, 0, NULL, NULL);
     if (utf8_count <= 0) {
         LocalFree(argv);
         fprintf(stderr, "invalid UTF-16 model path\n");
@@ -75,7 +70,8 @@ int main(void) {
         fprintf(stderr, "out of memory\n");
         return 1;
     }
-    if (WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, argv[1], -1, path_utf8, utf8_count, NULL, NULL) <= 0) {
+    if (WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, argv[1], -1, path_utf8, utf8_count, NULL,
+                            NULL) <= 0) {
         free(path_utf8);
         LocalFree(argv);
         fprintf(stderr, "unable to encode model path\n");

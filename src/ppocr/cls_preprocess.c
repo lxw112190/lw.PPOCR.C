@@ -1,5 +1,7 @@
 #include "cls_internal.h"
 
+/* Resize/pad a text crop and normalize it for the direction classifier. */
+
 #include <math.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -14,15 +16,10 @@ static uint32_t clamp_coordinate(int64_t coordinate, uint32_t limit) {
     return (uint32_t)coordinate;
 }
 
-lw_status lw_cls_preprocess_bgr_u8(
-    const uint8_t* source,
-    uint64_t source_byte_count,
-    uint32_t source_width,
-    uint32_t source_height,
-    uint32_t source_stride,
-    float* output,
-    uint64_t output_element_count,
-    uint32_t* resized_width) {
+lw_status lw_cls_preprocess_bgr_u8(const uint8_t* source, uint64_t source_byte_count,
+                                   uint32_t source_width, uint32_t source_height,
+                                   uint32_t source_stride, float* output,
+                                   uint64_t output_element_count, uint32_t* resized_width) {
     const uint64_t required_output_elements =
         (uint64_t)3u * LW_CLS_INPUT_HEIGHT * LW_CLS_INPUT_WIDTH;
     const double normalize_scale = 2.0 / 255.0;
@@ -38,8 +35,7 @@ lw_status lw_cls_preprocess_bgr_u8(
     if (resized_width != NULL) {
         *resized_width = 0u;
     }
-    if (source == NULL || output == NULL || source_width == 0u ||
-        source_height == 0u) {
+    if (source == NULL || output == NULL || source_width == 0u || source_height == 0u) {
         return LW_STATUS_INVALID_ARGUMENT;
     }
     row_bytes = (uint64_t)source_width * 3u;
@@ -53,15 +49,17 @@ lw_status lw_cls_preprocess_bgr_u8(
         required_output_elements > SIZE_MAX / sizeof(float)) {
         return LW_STATUS_INVALID_SHAPE;
     }
-    if ((uint64_t)source_width >
-        (UINT64_MAX - (source_height - 1u)) / LW_CLS_INPUT_HEIGHT) {
+    if ((uint64_t)source_width > (UINT64_MAX - (source_height - 1u)) / LW_CLS_INPUT_HEIGHT) {
         return LW_STATUS_OUT_OF_BOUNDS;
     }
     scaled_width_numerator = (uint64_t)LW_CLS_INPUT_HEIGHT * source_width;
     computed_width = (scaled_width_numerator + source_height - 1u) / source_height;
-    actual_width = computed_width > LW_CLS_INPUT_WIDTH ?
-        LW_CLS_INPUT_WIDTH : (uint32_t)computed_width;
+    actual_width =
+        computed_width > LW_CLS_INPUT_WIDTH ? LW_CLS_INPUT_WIDTH : (uint32_t)computed_width;
     channel_plane = (uint64_t)LW_CLS_INPUT_HEIGHT * LW_CLS_INPUT_WIDTH;
+
+    /* -1 is normalized black padding. Only actual_width columns are replaced
+     * by bilinearly resized pixels, preserving the crop aspect ratio. */
     for (channel = 0u; channel < 3u; ++channel) {
         uint64_t index;
         for (index = 0u; index < channel_plane; ++index) {
@@ -69,8 +67,7 @@ lw_status lw_cls_preprocess_bgr_u8(
         }
     }
     for (output_y = 0u; output_y < LW_CLS_INPUT_HEIGHT; ++output_y) {
-        double source_y = ((double)output_y + 0.5) * source_height /
-            LW_CLS_INPUT_HEIGHT - 0.5;
+        double source_y = ((double)output_y + 0.5) * source_height / LW_CLS_INPUT_HEIGHT - 0.5;
         int64_t source_y0_raw = (int64_t)floor(source_y);
         int64_t source_y1_raw = source_y0_raw + 1;
         uint32_t source_y0 = clamp_coordinate(source_y0_raw, source_height);
@@ -78,8 +75,7 @@ lw_status lw_cls_preprocess_bgr_u8(
         double weight_y = source_y - (double)source_y0_raw;
         uint32_t output_x;
         for (output_x = 0u; output_x < actual_width; ++output_x) {
-            double source_x = ((double)output_x + 0.5) * source_width /
-                actual_width - 0.5;
+            double source_x = ((double)output_x + 0.5) * source_width / actual_width - 0.5;
             int64_t source_x0_raw = (int64_t)floor(source_x);
             int64_t source_x1_raw = source_x0_raw + 1;
             uint32_t source_x0 = clamp_coordinate(source_x0_raw, source_width);
@@ -87,18 +83,18 @@ lw_status lw_cls_preprocess_bgr_u8(
             double weight_x = source_x - (double)source_x0_raw;
             for (channel = 0u; channel < 3u; ++channel) {
                 double top_left = source[(size_t)((uint64_t)source_y0 * source_stride +
-                    (uint64_t)source_x0 * 3u + channel)];
+                                                  (uint64_t)source_x0 * 3u + channel)];
                 double top_right = source[(size_t)((uint64_t)source_y0 * source_stride +
-                    (uint64_t)source_x1 * 3u + channel)];
+                                                   (uint64_t)source_x1 * 3u + channel)];
                 double bottom_left = source[(size_t)((uint64_t)source_y1 * source_stride +
-                    (uint64_t)source_x0 * 3u + channel)];
+                                                     (uint64_t)source_x0 * 3u + channel)];
                 double bottom_right = source[(size_t)((uint64_t)source_y1 * source_stride +
-                    (uint64_t)source_x1 * 3u + channel)];
+                                                      (uint64_t)source_x1 * 3u + channel)];
                 double top = top_left + (top_right - top_left) * weight_x;
                 double bottom = bottom_left + (bottom_right - bottom_left) * weight_x;
                 double value = top + (bottom - top) * weight_y;
                 uint64_t output_index = (uint64_t)channel * channel_plane +
-                    (uint64_t)output_y * LW_CLS_INPUT_WIDTH + output_x;
+                                        (uint64_t)output_y * LW_CLS_INPUT_WIDTH + output_x;
                 output[(size_t)output_index] = (float)(value * normalize_scale - 1.0);
             }
         }

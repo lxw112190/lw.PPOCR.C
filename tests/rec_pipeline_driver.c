@@ -32,8 +32,8 @@ static int read_file(const char* path, uint8_t** bytes, size_t* byte_count) {
     uint8_t* data;
     *bytes = NULL;
     *byte_count = 0u;
-    if (file == NULL || fseek(file, 0, SEEK_END) != 0 ||
-        (length = ftell(file)) < 0 || fseek(file, 0, SEEK_SET) != 0) {
+    if (file == NULL || fseek(file, 0, SEEK_END) != 0 || (length = ftell(file)) < 0 ||
+        fseek(file, 0, SEEK_SET) != 0) {
         if (file != NULL) {
             fclose(file);
         }
@@ -88,23 +88,20 @@ static int run_preprocess(int argc, char** argv) {
         fprintf(stderr, "preprocess output allocation failed\n");
         goto cleanup;
     }
-    status = lw_rec_preprocess_bgr_u8(
-        source, source_bytes, width, height, stride, target_width,
-        output, output_count - 1u, &resized_width);
+    status = lw_rec_preprocess_bgr_u8(source, source_bytes, width, height, stride, target_width,
+                                      output, output_count - 1u, &resized_width);
     if (status != LW_STATUS_INVALID_SHAPE) {
         fprintf(stderr, "preprocessor accepted an incorrect output element count\n");
         goto cleanup;
     }
-    status = lw_rec_preprocess_bgr_u8(
-        source, source_bytes, width, height, stride, target_width,
-        output, output_count, &resized_width);
+    status = lw_rec_preprocess_bgr_u8(source, source_bytes, width, height, stride, target_width,
+                                      output, output_count, &resized_width);
     if (status != LW_STATUS_OK ||
         !write_file(argv[7], output, (size_t)output_count * sizeof(*output))) {
         fprintf(stderr, "preprocess failed: %s\n", lw_status_string(status));
         goto cleanup;
     }
-    printf("resized_width=%u elements=%llu\n", resized_width,
-           (unsigned long long)output_count);
+    printf("resized_width=%u elements=%llu\n", resized_width, (unsigned long long)output_count);
     result = 0;
 cleanup:
     free(output);
@@ -112,13 +109,9 @@ cleanup:
     return result;
 }
 
-static int decode_to_file(
-    const char* dictionary_path,
-    const float* probabilities,
-    uint64_t probability_count,
-    uint32_t time_steps,
-    uint32_t class_count,
-    const char* output_path) {
+static int decode_to_file(const char* dictionary_path, const float* probabilities,
+                          uint64_t probability_count, uint32_t time_steps, uint32_t class_count,
+                          const char* output_path) {
     lw_rec_dictionary* dictionary = NULL;
     lw_error error;
     lw_status status;
@@ -130,8 +123,8 @@ static int decode_to_file(
     lw_error_init(&error);
     status = lw_rec_dictionary_load(dictionary_path, &dictionary, &error);
     if (status != LW_STATUS_OK) {
-        fprintf(stderr, "dictionary load failed: %s: %s\n",
-                lw_status_string(status), error.message);
+        fprintf(stderr, "dictionary load failed: %s: %s\n", lw_status_string(status),
+                error.message);
         goto cleanup;
     }
     if (lw_rec_dictionary_class_count(dictionary) != class_count) {
@@ -139,12 +132,10 @@ static int decode_to_file(
         goto cleanup;
     }
     lw_error_init(&error);
-    status = lw_rec_ctc_decode_f32(
-        dictionary, probabilities, probability_count, time_steps, class_count,
-        NULL, 0u, &required, &score, &emitted, &error);
+    status = lw_rec_ctc_decode_f32(dictionary, probabilities, probability_count, time_steps,
+                                   class_count, NULL, 0u, &required, &score, &emitted, &error);
     if (status != LW_STATUS_OK || required == 0u || required > SIZE_MAX) {
-        fprintf(stderr, "CTC size query failed: %s: %s\n",
-                lw_status_string(status), error.message);
+        fprintf(stderr, "CTC size query failed: %s: %s\n", lw_status_string(status), error.message);
         goto cleanup;
     }
     text = (char*)malloc((size_t)required);
@@ -153,24 +144,22 @@ static int decode_to_file(
         goto cleanup;
     }
     lw_error_init(&error);
-    status = lw_rec_ctc_decode_f32(
-        dictionary, probabilities, probability_count, time_steps, class_count,
-        text, required - 1u, &required, &score, &emitted, &error);
+    status =
+        lw_rec_ctc_decode_f32(dictionary, probabilities, probability_count, time_steps, class_count,
+                              text, required - 1u, &required, &score, &emitted, &error);
     if (status != LW_STATUS_OUT_OF_BOUNDS) {
         fprintf(stderr, "CTC decoder accepted an undersized text buffer\n");
         goto cleanup;
     }
     lw_error_init(&error);
-    status = lw_rec_ctc_decode_f32(
-        dictionary, probabilities, probability_count, time_steps, class_count,
-        text, required, &required, &score, &emitted, &error);
+    status =
+        lw_rec_ctc_decode_f32(dictionary, probabilities, probability_count, time_steps, class_count,
+                              text, required, &required, &score, &emitted, &error);
     if (status != LW_STATUS_OK || !write_file(output_path, text, (size_t)required - 1u)) {
-        fprintf(stderr, "CTC decode failed: %s: %s\n",
-                lw_status_string(status), error.message);
+        fprintf(stderr, "CTC decode failed: %s: %s\n", lw_status_string(status), error.message);
         goto cleanup;
     }
-    printf("score=%.9g chars=%u bytes=%llu\n", score, emitted,
-           (unsigned long long)(required - 1u));
+    printf("score=%.9g chars=%u bytes=%llu\n", score, emitted, (unsigned long long)(required - 1u));
     result = 0;
 cleanup:
     free(text);
@@ -184,16 +173,14 @@ static int run_decode(int argc, char** argv) {
     uint32_t time_steps;
     uint32_t class_count;
     int result;
-    if (argc != 7 || !parse_u32(argv[4], &time_steps) ||
-        !parse_u32(argv[5], &class_count) || !read_file(argv[3], &bytes, &byte_count) ||
-        byte_count % sizeof(float) != 0u) {
+    if (argc != 7 || !parse_u32(argv[4], &time_steps) || !parse_u32(argv[5], &class_count) ||
+        !read_file(argv[3], &bytes, &byte_count) || byte_count % sizeof(float) != 0u) {
         fprintf(stderr, "invalid decode arguments or probability file\n");
         free(bytes);
         return 2;
     }
-    result = decode_to_file(
-        argv[2], (const float*)(const void*)bytes, byte_count / sizeof(float),
-        time_steps, class_count, argv[6]);
+    result = decode_to_file(argv[2], (const float*)(const void*)bytes, byte_count / sizeof(float),
+                            time_steps, class_count, argv[6]);
     free(bytes);
     return result;
 }
@@ -222,16 +209,15 @@ static int run_pipeline(int argc, char** argv) {
     lw_recognizer_options_init(&options);
     options.target_width = target_width;
     lw_error_init(&error);
-    status = lw_recognizer_create(
-        argv[2], argv[3], &options, &recognizer, &error);
+    status = lw_recognizer_create(argv[2], argv[3], &options, &recognizer, &error);
     if (status != LW_STATUS_OK) {
-        fprintf(stderr, "pipeline recognizer create failed: %s: %s\n",
-                lw_status_string(status), error.message);
+        fprintf(stderr, "pipeline recognizer create failed: %s: %s\n", lw_status_string(status),
+                error.message);
         goto cleanup;
     }
     lw_recognizer_info_init(&info);
-    if (lw_recognizer_get_info(recognizer, &info) != LW_STATUS_OK ||
-        info.max_text_capacity == 0u || info.max_text_capacity > SIZE_MAX) {
+    if (lw_recognizer_get_info(recognizer, &info) != LW_STATUS_OK || info.max_text_capacity == 0u ||
+        info.max_text_capacity > SIZE_MAX) {
         fprintf(stderr, "pipeline recognizer info failed\n");
         goto cleanup;
     }
@@ -242,23 +228,21 @@ static int run_pipeline(int argc, char** argv) {
     }
     lw_recognition_result_init(&recognition);
     lw_error_init(&error);
-    status = lw_recognizer_recognize_bgr_u8(
-        recognizer, source, source_bytes, width, height, stride,
-        text, info.max_text_capacity, &recognition, &error);
+    status = lw_recognizer_recognize_bgr_u8(recognizer, source, source_bytes, width, height, stride,
+                                            text, info.max_text_capacity, &recognition, &error);
     if (status != LW_STATUS_OK) {
-        fprintf(stderr, "pipeline recognition failed: %s: %s\n",
-                lw_status_string(status), error.message);
+        fprintf(stderr, "pipeline recognition failed: %s: %s\n", lw_status_string(status),
+                error.message);
         goto cleanup;
     }
     if (!write_file(argv[9], text, (size_t)recognition.required_text_capacity - 1u)) {
         fprintf(stderr, "pipeline text write failed\n");
         goto cleanup;
     }
-    printf("score=%.9g chars=%u bytes=%llu\n", recognition.score,
-           recognition.emitted_count,
+    printf("score=%.9g chars=%u bytes=%llu\n", recognition.score, recognition.emitted_count,
            (unsigned long long)(recognition.required_text_capacity - 1u));
-    fprintf(stderr, "resized_width=%u output_steps=%u\n",
-            recognition.resized_width, recognition.time_steps);
+    fprintf(stderr, "resized_width=%u output_steps=%u\n", recognition.resized_width,
+            recognition.time_steps);
     result = 0;
 cleanup:
     free(text);
@@ -302,17 +286,15 @@ int main(void) {
         return 2;
     }
     for (index = 0; index < argc; ++index) {
-        int byte_count = WideCharToMultiByte(
-            CP_UTF8, WC_ERR_INVALID_CHARS, wide_argv[index], -1,
-            NULL, 0, NULL, NULL);
+        int byte_count = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, wide_argv[index], -1,
+                                             NULL, 0, NULL, NULL);
         if (byte_count <= 0) {
             goto cleanup;
         }
         utf8_argv[index] = (char*)malloc((size_t)byte_count);
         if (utf8_argv[index] == NULL ||
-            WideCharToMultiByte(
-                CP_UTF8, WC_ERR_INVALID_CHARS, wide_argv[index], -1,
-                utf8_argv[index], byte_count, NULL, NULL) <= 0) {
+            WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, wide_argv[index], -1,
+                                utf8_argv[index], byte_count, NULL, NULL) <= 0) {
             goto cleanup;
         }
     }

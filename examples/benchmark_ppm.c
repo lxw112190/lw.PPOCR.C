@@ -3,6 +3,8 @@
 #endif
 
 #include "lw_infer.h"
+
+/* Repeatable REC benchmark with warm-up, percentile timing and JSON output. */
 #include "cpu_features.h"
 #include "ppm_image.h"
 
@@ -35,8 +37,8 @@ static double monotonic_seconds(void) {
 #if defined(_WIN32)
     LARGE_INTEGER frequency;
     LARGE_INTEGER counter;
-    if (!QueryPerformanceFrequency(&frequency) ||
-        !QueryPerformanceCounter(&counter) || frequency.QuadPart <= 0) {
+    if (!QueryPerformanceFrequency(&frequency) || !QueryPerformanceCounter(&counter) ||
+        frequency.QuadPart <= 0) {
         return 0.0;
     }
     return (double)counter.QuadPart / (double)frequency.QuadPart;
@@ -46,8 +48,7 @@ static double monotonic_seconds(void) {
     if (mach_timebase_info(&timebase) != KERN_SUCCESS || timebase.denom == 0u) {
         return 0.0;
     }
-    return (double)ticks * (double)timebase.numer /
-        (double)timebase.denom / 1000000000.0;
+    return (double)ticks * (double)timebase.numer / (double)timebase.denom / 1000000000.0;
 #else
     struct timespec value;
     if (clock_gettime(CLOCK_MONOTONIC, &value) != 0) {
@@ -64,8 +65,7 @@ static lw_process_memory process_memory(void) {
     PROCESS_MEMORY_COUNTERS counters;
     memset(&counters, 0, sizeof(counters));
     counters.cb = sizeof(counters);
-    if (GetProcessMemoryInfo(
-            GetCurrentProcess(), &counters, sizeof(counters))) {
+    if (GetProcessMemoryInfo(GetCurrentProcess(), &counters, sizeof(counters))) {
         result.current_rss_bytes = (uint64_t)counters.WorkingSetSize;
         result.peak_rss_bytes = (uint64_t)counters.PeakWorkingSetSize;
     }
@@ -87,8 +87,7 @@ static lw_process_memory process_memory(void) {
         if (statm != NULL && page_size > 0 &&
             fscanf(statm, "%llu %llu", &total_pages, &resident_pages) == 2) {
             (void)total_pages;
-            result.current_rss_bytes =
-                (uint64_t)resident_pages * (uint64_t)page_size;
+            result.current_rss_bytes = (uint64_t)resident_pages * (uint64_t)page_size;
         }
         if (statm != NULL) {
             fclose(statm);
@@ -136,23 +135,17 @@ static void print_json_string(const char* text) {
     putchar('"');
 }
 
-static int recognize_once(
-    lw_recognizer* recognizer,
-    const lw_example_ppm_image* image,
-    char* text,
-    uint64_t text_capacity,
-    lw_recognition_result* recognition) {
+static int recognize_once(lw_recognizer* recognizer, const lw_example_ppm_image* image, char* text,
+                          uint64_t text_capacity, lw_recognition_result* recognition) {
     lw_error error;
     lw_status status;
     lw_recognition_result_init(recognition);
     lw_error_init(&error);
-    status = lw_recognizer_recognize_bgr_u8(
-        recognizer, image->pixels, image->byte_count,
-        image->width, image->height, image->width * 3u,
-        text, text_capacity, recognition, &error);
+    status = lw_recognizer_recognize_bgr_u8(recognizer, image->pixels, image->byte_count,
+                                            image->width, image->height, image->width * 3u, text,
+                                            text_capacity, recognition, &error);
     if (status != LW_STATUS_OK) {
-        fprintf(stderr, "recognition failed: %s: %s\n",
-                lw_status_string(status), error.message);
+        fprintf(stderr, "recognition failed: %s: %s\n", lw_status_string(status), error.message);
         return 0;
     }
     return 1;
@@ -191,13 +184,11 @@ static int benchmark_main(int argc, char** argv) {
         (argc >= 6 && !lw_example_parse_positive_u32(argv[5], &iteration_count)) ||
         warmup_count > LW_BENCHMARK_MAX_ITERATIONS ||
         iteration_count > LW_BENCHMARK_MAX_ITERATIONS) {
-        fprintf(stderr,
-                "usage: lw-rec-benchmark <rec.lwm> <dictionary.txt> <image.ppm> "
-                "[warmup=2] [iterations=10]\n");
+        fprintf(stderr, "usage: lw-rec-benchmark <rec.lwm> <dictionary.txt> <image.ppm> "
+                        "[warmup=2] [iterations=10]\n");
         return 2;
     }
-    if (!lw_example_ppm_image_load_bgr(argv[3], &image) ||
-        image.width > UINT32_MAX / 3u) {
+    if (!lw_example_ppm_image_load_bgr(argv[3], &image) || image.width > UINT32_MAX / 3u) {
         fprintf(stderr, "invalid P6 PPM image: %s\n", argv[3]);
         goto cleanup;
     }
@@ -207,13 +198,12 @@ static int benchmark_main(int argc, char** argv) {
     status = lw_recognizer_create(argv[1], argv[2], NULL, &recognizer, &error);
     create_end = monotonic_seconds();
     if (status != LW_STATUS_OK || create_start <= 0.0 || create_end < create_start) {
-        fprintf(stderr, "create failed: %s: %s\n",
-                lw_status_string(status), error.message);
+        fprintf(stderr, "create failed: %s: %s\n", lw_status_string(status), error.message);
         goto cleanup;
     }
     lw_recognizer_info_init(&info);
-    if (lw_recognizer_get_info(recognizer, &info) != LW_STATUS_OK ||
-        info.max_text_capacity == 0u || info.max_text_capacity > SIZE_MAX) {
+    if (lw_recognizer_get_info(recognizer, &info) != LW_STATUS_OK || info.max_text_capacity == 0u ||
+        info.max_text_capacity > SIZE_MAX) {
         fprintf(stderr, "unable to query recognizer information\n");
         goto cleanup;
     }
@@ -226,8 +216,7 @@ static int benchmark_main(int argc, char** argv) {
         goto cleanup;
     }
     for (index = 0u; index < warmup_count; ++index) {
-        if (!recognize_once(
-                recognizer, &image, text, info.max_text_capacity, &recognition)) {
+        if (!recognize_once(recognizer, &image, text, info.max_text_capacity, &recognition)) {
             goto cleanup;
         }
         if (index == 0u) {
@@ -235,8 +224,7 @@ static int benchmark_main(int argc, char** argv) {
             reference_score = recognition.score;
             reference_count = recognition.emitted_count;
         } else if (strcmp(reference_text, text) != 0 ||
-                   memcmp(&reference_score, &recognition.score,
-                          sizeof(reference_score)) != 0 ||
+                   memcmp(&reference_score, &recognition.score, sizeof(reference_score)) != 0 ||
                    reference_count != recognition.emitted_count) {
             fprintf(stderr, "warm-up result is not deterministic\n");
             goto cleanup;
@@ -246,14 +234,13 @@ static int benchmark_main(int argc, char** argv) {
     for (index = 0u; index < iteration_count; ++index) {
         double start = monotonic_seconds();
         double end;
-        if (start <= 0.0 || !recognize_once(
-                recognizer, &image, text, info.max_text_capacity, &recognition)) {
+        if (start <= 0.0 ||
+            !recognize_once(recognizer, &image, text, info.max_text_capacity, &recognition)) {
             goto cleanup;
         }
         end = monotonic_seconds();
         if (end < start || strcmp(reference_text, text) != 0 ||
-            memcmp(&reference_score, &recognition.score,
-                   sizeof(reference_score)) != 0 ||
+            memcmp(&reference_score, &recognition.score, sizeof(reference_score)) != 0 ||
             reference_count != recognition.emitted_count) {
             fprintf(stderr, "timed result is invalid or non-deterministic\n");
             goto cleanup;
@@ -267,43 +254,35 @@ static int benchmark_main(int argc, char** argv) {
     if ((iteration_count & 1u) != 0u) {
         median = sorted[iteration_count / 2u];
     } else {
-        median = (sorted[iteration_count / 2u - 1u] +
-                  sorted[iteration_count / 2u]) / 2.0;
+        median = (sorted[iteration_count / 2u - 1u] + sorted[iteration_count / 2u]) / 2.0;
     }
     index = (95u * iteration_count + 99u) / 100u - 1u;
     p95 = sorted[index];
     io_bytes = ((uint64_t)3u * info.input_height * info.target_width +
-                (uint64_t)info.time_steps * info.class_count) * sizeof(float);
-    rss_growth = (int64_t)memory_final.current_rss_bytes -
-        (int64_t)memory_after_warmup.current_rss_bytes;
+                (uint64_t)info.time_steps * info.class_count) *
+               sizeof(float);
+    rss_growth =
+        (int64_t)memory_final.current_rss_bytes - (int64_t)memory_after_warmup.current_rss_bytes;
     printf("{");
-    printf("\"schema_version\":1,\"backend\":\"%s\",",
-           lw_simd_level_name(lw_detect_simd_level()));
+    printf("\"schema_version\":1,\"backend\":\"%s\",", lw_simd_level_name(lw_detect_simd_level()));
     printf("\"text\":");
     print_json_string(reference_text);
-    printf(",\"score\":%.9g,\"characters\":%u,", reference_score,
-           reference_count);
+    printf(",\"score\":%.9g,\"characters\":%u,", reference_score, reference_count);
     printf("\"image_width\":%u,\"image_height\":%u,", image.width, image.height);
-    printf("\"target_width\":%u,\"time_steps\":%u,", info.target_width,
-           info.time_steps);
-    printf("\"model_file_bytes\":%llu,\"workspace_bytes\":%llu,",
-           (unsigned long long)model_bytes,
+    printf("\"target_width\":%u,\"time_steps\":%u,", info.target_width, info.time_steps);
+    printf("\"model_file_bytes\":%llu,\"workspace_bytes\":%llu,", (unsigned long long)model_bytes,
            (unsigned long long)info.workspace_size);
-    printf("\"preallocated_io_bytes\":%llu,",
-           (unsigned long long)io_bytes);
+    printf("\"preallocated_io_bytes\":%llu,", (unsigned long long)io_bytes);
     printf("\"recognizer_create_ms\":%.6f,\"warmup\":%u,\"iterations\":%u,",
            (create_end - create_start) * 1000.0, warmup_count, iteration_count);
     printf("\"latency_ms\":{");
-    printf("\"mean\":%.6f,\"median\":%.6f,\"p95\":%.6f,",
-           sum / iteration_count, median, p95);
-    printf("\"min\":%.6f,\"max\":%.6f},", sorted[0],
-           sorted[iteration_count - 1u]);
+    printf("\"mean\":%.6f,\"median\":%.6f,\"p95\":%.6f,", sum / iteration_count, median, p95);
+    printf("\"min\":%.6f,\"max\":%.6f},", sorted[0], sorted[iteration_count - 1u]);
     printf("\"throughput_per_second\":%.6f,", 1000.0 / (sum / iteration_count));
     printf("\"rss_after_warmup_bytes\":%llu,\"rss_final_bytes\":%llu,",
            (unsigned long long)memory_after_warmup.current_rss_bytes,
            (unsigned long long)memory_final.current_rss_bytes);
-    printf("\"rss_growth_bytes\":%lld,\"peak_rss_bytes\":%llu}\n",
-           (long long)rss_growth,
+    printf("\"rss_growth_bytes\":%lld,\"peak_rss_bytes\":%llu}\n", (long long)rss_growth,
            (unsigned long long)memory_final.peak_rss_bytes);
     result = 0;
 cleanup:
@@ -334,17 +313,15 @@ int main(void) {
         return 2;
     }
     for (index = 0; index < argc; ++index) {
-        int bytes = WideCharToMultiByte(
-            CP_UTF8, WC_ERR_INVALID_CHARS, wide_argv[index], -1,
-            NULL, 0, NULL, NULL);
+        int bytes = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, wide_argv[index], -1, NULL,
+                                        0, NULL, NULL);
         if (bytes <= 0) {
             goto cleanup;
         }
         utf8_argv[index] = (char*)malloc((size_t)bytes);
         if (utf8_argv[index] == NULL ||
-            WideCharToMultiByte(
-                CP_UTF8, WC_ERR_INVALID_CHARS, wide_argv[index], -1,
-                utf8_argv[index], bytes, NULL, NULL) <= 0) {
+            WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, wide_argv[index], -1,
+                                utf8_argv[index], bytes, NULL, NULL) <= 0) {
             goto cleanup;
         }
     }

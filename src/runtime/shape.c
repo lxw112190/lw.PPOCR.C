@@ -1,4 +1,10 @@
 #include "session_internal.h"
+
+/*
+ * Static and input-dependent shape inference for the supported LWM operators.
+ * Besides dimensions, this pass computes bounded tensor byte sizes consumed by
+ * the workspace planner. It performs no numeric inference work.
+ */
 #include "lwm_read.h"
 
 #include <limits.h>
@@ -19,21 +25,22 @@ static lw_status shape_fail(lw_error* error, const char* message) {
 
 static uint32_t dtype_size(uint32_t dtype) {
     switch (dtype) {
-        case LW_DTYPE_F32: return 4u;
-        case LW_DTYPE_I32: return 4u;
-        case LW_DTYPE_I64: return 8u;
-        case LW_DTYPE_U8: return 1u;
-        default: return 0u;
+    case LW_DTYPE_F32:
+        return 4u;
+    case LW_DTYPE_I32:
+        return 4u;
+    case LW_DTYPE_I64:
+        return 8u;
+    case LW_DTYPE_U8:
+        return 1u;
+    default:
+        return 0u;
     }
 }
 
-static lw_status set_tensor_shape(
-    lw_runtime_tensor* tensor,
-    uint32_t dtype,
-    uint32_t rank,
-    const int32_t* dimensions,
-    uint64_t max_tensor_size,
-    lw_error* error) {
+static lw_status set_tensor_shape(lw_runtime_tensor* tensor, uint32_t dtype, uint32_t rank,
+                                  const int32_t* dimensions, uint64_t max_tensor_size,
+                                  lw_error* error) {
     uint64_t elements = 1u;
     uint32_t item_size = dtype_size(dtype);
     uint32_t i;
@@ -97,12 +104,9 @@ static int broadcast_dimension(int32_t left, int32_t right, int32_t* output) {
     return 0;
 }
 
-static lw_status broadcast_shape(
-    const lw_runtime_tensor* left,
-    const lw_runtime_tensor* right,
-    uint32_t* output_rank,
-    int32_t* output_dimensions,
-    lw_error* error) {
+static lw_status broadcast_shape(const lw_runtime_tensor* left, const lw_runtime_tensor* right,
+                                 uint32_t* output_rank, int32_t* output_dimensions,
+                                 lw_error* error) {
     uint32_t rank = left->rank > right->rank ? left->rank : right->rank;
     uint32_t i;
     if (left->dtype != right->dtype) {
@@ -110,7 +114,8 @@ static lw_status broadcast_shape(
     }
     for (i = 0u; i < rank; ++i) {
         int32_t left_dim = i < rank - left->rank ? 1 : left->dimensions[i - (rank - left->rank)];
-        int32_t right_dim = i < rank - right->rank ? 1 : right->dimensions[i - (rank - right->rank)];
+        int32_t right_dim =
+            i < rank - right->rank ? 1 : right->dimensions[i - (rank - right->rank)];
         if (!broadcast_dimension(left_dim, right_dim, &output_dimensions[i])) {
             return shape_fail(error, "elementwise input shapes cannot be broadcast");
         }
@@ -119,19 +124,14 @@ static lw_status broadcast_shape(
     return LW_STATUS_OK;
 }
 
-static int spatial_output(
-    int32_t input,
-    int32_t kernel,
-    int32_t stride,
-    int32_t dilation,
-    int32_t pad_before,
-    int32_t pad_after,
-    uint32_t ceil_mode,
-    int32_t* output) {
+static int spatial_output(int32_t input, int32_t kernel, int32_t stride, int32_t dilation,
+                          int32_t pad_before, int32_t pad_after, uint32_t ceil_mode,
+                          int32_t* output) {
     int64_t effective;
     int64_t numerator;
     int64_t value;
-    if (input <= 0 || kernel <= 0 || stride <= 0 || dilation <= 0 || pad_before < 0 || pad_after < 0) {
+    if (input <= 0 || kernel <= 0 || stride <= 0 || dilation <= 0 || pad_before < 0 ||
+        pad_after < 0) {
         return 0;
     }
     effective = (int64_t)(kernel - 1) * dilation + 1;
@@ -150,21 +150,16 @@ static int spatial_output(
     return 1;
 }
 
-static int transposed_spatial_output(
-    int32_t input,
-    int32_t kernel,
-    int32_t stride,
-    int32_t dilation,
-    int32_t pad_before,
-    int32_t pad_after,
-    int32_t* output) {
+static int transposed_spatial_output(int32_t input, int32_t kernel, int32_t stride,
+                                     int32_t dilation, int32_t pad_before, int32_t pad_after,
+                                     int32_t* output) {
     int64_t value;
-    if (input <= 0 || kernel <= 0 || stride <= 0 || dilation <= 0 ||
-        pad_before < 0 || pad_after < 0) {
+    if (input <= 0 || kernel <= 0 || stride <= 0 || dilation <= 0 || pad_before < 0 ||
+        pad_after < 0) {
         return 0;
     }
     value = (int64_t)(input - 1) * stride - pad_before - pad_after +
-        (int64_t)(kernel - 1) * dilation + 1;
+            (int64_t)(kernel - 1) * dilation + 1;
     if (value <= 0 || value > INT32_MAX) {
         return 0;
     }
@@ -172,11 +167,8 @@ static int transposed_spatial_output(
     return 1;
 }
 
-static lw_status resolve_node(
-    lw_session* session,
-    const uint8_t* node,
-    uint64_t max_tensor_size,
-    lw_error* error) {
+static lw_status resolve_node(lw_session* session, const uint8_t* node, uint64_t max_tensor_size,
+                              lw_error* error) {
     const lw_model* model = session->model;
     uint16_t op = lwm_read_u16(node);
     uint16_t input_count = lwm_read_u16(node + 2);
@@ -220,12 +212,13 @@ static lw_status resolve_node(
         }
     } else if (op == 1u) {
         uint32_t group;
-        if ((input_count != 2u && input_count != 3u) || inputs[0]->rank != 4u || inputs[1]->rank != 4u) {
+        if ((input_count != 2u && input_count != 3u) || inputs[0]->rank != 4u ||
+            inputs[1]->rank != 4u) {
             return shape_fail(error, "Conv requires NCHW input and OIHW weight");
         }
         if (inputs[0]->dtype != inputs[1]->dtype ||
             (input_count == 3u && (inputs[2]->dtype != inputs[0]->dtype || inputs[2]->rank != 1u ||
-                                  inputs[2]->dimensions[0] != inputs[1]->dimensions[0]))) {
+                                   inputs[2]->dimensions[0] != inputs[1]->dimensions[0]))) {
             return shape_fail(error, "Conv weight or bias type/shape is inconsistent");
         }
         group = lwm_read_u32(params + 4);
@@ -237,11 +230,13 @@ static lw_status resolve_node(
         rank = 4u;
         dimensions[0] = inputs[0]->dimensions[0];
         dimensions[1] = inputs[1]->dimensions[0];
-        if (!spatial_output(inputs[0]->dimensions[2], lwm_read_i32(params + 8), lwm_read_i32(params + 16),
-                            lwm_read_i32(params + 24), lwm_read_i32(params + 32), lwm_read_i32(params + 40), 0u,
+        if (!spatial_output(inputs[0]->dimensions[2], lwm_read_i32(params + 8),
+                            lwm_read_i32(params + 16), lwm_read_i32(params + 24),
+                            lwm_read_i32(params + 32), lwm_read_i32(params + 40), 0u,
                             &dimensions[2]) ||
-            !spatial_output(inputs[0]->dimensions[3], lwm_read_i32(params + 12), lwm_read_i32(params + 20),
-                            lwm_read_i32(params + 28), lwm_read_i32(params + 36), lwm_read_i32(params + 44), 0u,
+            !spatial_output(inputs[0]->dimensions[3], lwm_read_i32(params + 12),
+                            lwm_read_i32(params + 20), lwm_read_i32(params + 28),
+                            lwm_read_i32(params + 36), lwm_read_i32(params + 44), 0u,
                             &dimensions[3])) {
             return shape_fail(error, "Conv output shape is invalid");
         }
@@ -277,7 +272,8 @@ static lw_status resolve_node(
         } else {
             for (i = 0u; i < axes_count; ++i) {
                 uint32_t axis;
-                if (!normalize_axis(lwm_read_i32(params + 12u + i * 4u), inputs[0]->rank, &axis) || reduced[axis]) {
+                if (!normalize_axis(lwm_read_i32(params + 12u + i * 4u), inputs[0]->rank, &axis) ||
+                    reduced[axis]) {
                     return shape_fail(error, "ReduceMean axes are invalid or duplicated");
                 }
                 reduced[axis] = 1;
@@ -300,12 +296,12 @@ static lw_status resolve_node(
         rank = 4u;
         dimensions[0] = inputs[0]->dimensions[0];
         dimensions[1] = inputs[0]->dimensions[1];
-        if (!spatial_output(inputs[0]->dimensions[2], lwm_read_i32(params + 8), lwm_read_i32(params + 16), 1,
-                            lwm_read_i32(params + 24), lwm_read_i32(params + 32), lwm_read_u32(params + 40),
-                            &dimensions[2]) ||
-            !spatial_output(inputs[0]->dimensions[3], lwm_read_i32(params + 12), lwm_read_i32(params + 20), 1,
-                            lwm_read_i32(params + 28), lwm_read_i32(params + 36), lwm_read_u32(params + 40),
-                            &dimensions[3])) {
+        if (!spatial_output(inputs[0]->dimensions[2], lwm_read_i32(params + 8),
+                            lwm_read_i32(params + 16), 1, lwm_read_i32(params + 24),
+                            lwm_read_i32(params + 32), lwm_read_u32(params + 40), &dimensions[2]) ||
+            !spatial_output(inputs[0]->dimensions[3], lwm_read_i32(params + 12),
+                            lwm_read_i32(params + 20), 1, lwm_read_i32(params + 28),
+                            lwm_read_i32(params + 36), lwm_read_u32(params + 40), &dimensions[3])) {
             return shape_fail(error, "pool output shape is invalid");
         }
     } else if (op == 11u) {
@@ -325,7 +321,8 @@ static lw_status resolve_node(
                 uint32_t axis;
                 if (!normalize_axis(lwm_read_i32(params + 4u + i * 4u), inputs[0]->rank, &axis) ||
                     squeezed[axis] || inputs[0]->dimensions[axis] != 1) {
-                    return shape_fail(error, "Squeeze axes are invalid, duplicated, or not unit dimensions");
+                    return shape_fail(
+                        error, "Squeeze axes are invalid, duplicated, or not unit dimensions");
                 }
                 squeezed[axis] = 1;
             }
@@ -351,7 +348,8 @@ static lw_status resolve_node(
         }
         for (i = 0u; i < axes_count; ++i) {
             uint32_t axis;
-            if (!normalize_axis(lwm_read_i32(params + 4u + i * 4u), output_rank, &axis) || inserted[axis]) {
+            if (!normalize_axis(lwm_read_i32(params + 4u + i * 4u), output_rank, &axis) ||
+                inserted[axis]) {
                 return shape_fail(error, "Unsqueeze axes are invalid or duplicated");
             }
             inserted[axis] = 1;
@@ -383,14 +381,16 @@ static lw_status resolve_node(
         uint32_t batch_rank;
         uint32_t left_offset;
         uint32_t right_offset;
-        if (input_count != 2u || inputs[0]->dtype != inputs[1]->dtype ||
-            inputs[0]->rank < 2u || inputs[1]->rank < 2u) {
+        if (input_count != 2u || inputs[0]->dtype != inputs[1]->dtype || inputs[0]->rank < 2u ||
+            inputs[1]->rank < 2u) {
             return shape_fail(error, "MatMul currently requires inputs with rank at least two");
         }
-        if (inputs[0]->dimensions[inputs[0]->rank - 1u] != inputs[1]->dimensions[inputs[1]->rank - 2u]) {
+        if (inputs[0]->dimensions[inputs[0]->rank - 1u] !=
+            inputs[1]->dimensions[inputs[1]->rank - 2u]) {
             return shape_fail(error, "MatMul inner dimensions do not match");
         }
-        batch_rank = (inputs[0]->rank - 2u) > (inputs[1]->rank - 2u) ? inputs[0]->rank - 2u : inputs[1]->rank - 2u;
+        batch_rank = (inputs[0]->rank - 2u) > (inputs[1]->rank - 2u) ? inputs[0]->rank - 2u
+                                                                     : inputs[1]->rank - 2u;
         rank = batch_rank + 2u;
         left_offset = batch_rank - (inputs[0]->rank - 2u);
         right_offset = batch_rank - (inputs[1]->rank - 2u);
@@ -419,8 +419,7 @@ static lw_status resolve_node(
             input_elements *= (uint32_t)inputs[0]->dimensions[i];
         }
         for (i = 0u; i < rank; ++i) {
-            if (dimensions[i] <= 0 ||
-                output_elements > UINT64_MAX / (uint32_t)dimensions[i]) {
+            if (dimensions[i] <= 0 || output_elements > UINT64_MAX / (uint32_t)dimensions[i]) {
                 return shape_fail(error, "Reshape output element count is invalid");
             }
             output_elements *= (uint32_t)dimensions[i];
@@ -431,8 +430,8 @@ static lw_status resolve_node(
     } else if (op == 17u) {
         uint32_t axis;
         int64_t axis_total = 0;
-        if (input_count == 0u || !normalize_axis(lwm_read_i32(params + 4),
-                                                  inputs[0]->rank, &axis)) {
+        if (input_count == 0u ||
+            !normalize_axis(lwm_read_i32(params + 4), inputs[0]->rank, &axis)) {
             return shape_fail(error, "Concat has invalid arity or axis");
         }
         rank = inputs[0]->rank;
@@ -457,9 +456,8 @@ static lw_status resolve_node(
     } else if (op == 18u) {
         uint32_t group;
         uint64_t output_channels;
-        if ((input_count != 2u && input_count != 3u) ||
-            inputs[0]->rank != 4u || inputs[1]->rank != 4u ||
-            inputs[0]->dtype != inputs[1]->dtype) {
+        if ((input_count != 2u && input_count != 3u) || inputs[0]->rank != 4u ||
+            inputs[1]->rank != 4u || inputs[0]->dtype != inputs[1]->dtype) {
             return shape_fail(error, "ConvTranspose requires NCHW input and IOHW weight");
         }
         group = lwm_read_u32(params + 4);
@@ -467,14 +465,12 @@ static lw_status resolve_node(
         rank = 4u;
         dimensions[0] = inputs[0]->dimensions[0];
         if (group == 0u || group > (uint32_t)inputs[0]->dimensions[1] ||
-            output_channels > INT32_MAX ||
-            (uint32_t)inputs[0]->dimensions[1] % group != 0u ||
+            output_channels > INT32_MAX || (uint32_t)inputs[0]->dimensions[1] % group != 0u ||
             inputs[1]->dimensions[0] != inputs[0]->dimensions[1] ||
             inputs[1]->dimensions[2] != lwm_read_i32(params + 8) ||
             inputs[1]->dimensions[3] != lwm_read_i32(params + 12) ||
-            (input_count == 3u &&
-             (inputs[2]->dtype != inputs[0]->dtype || inputs[2]->rank != 1u ||
-              inputs[2]->dimensions[0] != (int32_t)output_channels)) ||
+            (input_count == 3u && (inputs[2]->dtype != inputs[0]->dtype || inputs[2]->rank != 1u ||
+                                   inputs[2]->dimensions[0] != (int32_t)output_channels)) ||
             !transposed_spatial_output(inputs[0]->dimensions[2], lwm_read_i32(params + 8),
                                        lwm_read_i32(params + 16), lwm_read_i32(params + 24),
                                        lwm_read_i32(params + 32), lwm_read_i32(params + 40),
@@ -501,7 +497,8 @@ static lw_status resolve_node(
             dimensions[i] = (int32_t)value;
         }
     } else {
-        lw_set_error(error, LW_STATUS_UNSUPPORTED, "shape resolver encountered an unsupported operator");
+        lw_set_error(error, LW_STATUS_UNSUPPORTED,
+                     "shape resolver encountered an unsupported operator");
         return LW_STATUS_UNSUPPORTED;
     }
     return set_tensor_shape(output, inputs[0]->dtype, rank, dimensions, max_tensor_size, error);
@@ -511,7 +508,8 @@ lw_status lw_resolve_shapes(lw_session* session, uint64_t max_tensor_size, lw_er
     const lw_model* model = session->model;
     uint32_t i;
     for (i = 0u; i < model->info.node_count; ++i) {
-        const uint8_t* node = model->bytes + (size_t)model->node_offset + (size_t)i * LWM_V0_NODE_SIZE;
+        const uint8_t* node =
+            model->bytes + (size_t)model->node_offset + (size_t)i * LWM_V0_NODE_SIZE;
         lw_status status = resolve_node(session, node, max_tensor_size, error);
         if (status != LW_STATUS_OK) {
             return status;

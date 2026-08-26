@@ -1,4 +1,6 @@
 #include "lw_infer.h"
+
+/* Minimal CLS example for querying a cropped text line's orientation. */
 #include "ppm_image.h"
 
 #include <stdint.h>
@@ -21,32 +23,27 @@ static int demo_main(int argc, char** argv) {
         fprintf(stderr, "usage: lw-classify-ppm <cls.lwm> <image.ppm>\n");
         return 2;
     }
-    if (!lw_example_ppm_image_load_bgr(argv[2], &image) ||
-        image.width > UINT32_MAX / 3u) {
+    if (!lw_example_ppm_image_load_bgr(argv[2], &image) || image.width > UINT32_MAX / 3u) {
         fprintf(stderr, "invalid P6 PPM image: %s\n", argv[2]);
         goto cleanup;
     }
     lw_error_init(&error);
     status = lw_classifier_create(argv[1], NULL, &classifier, &error);
     if (status != LW_STATUS_OK) {
-        fprintf(stderr, "create failed: %s: %s\n",
-                lw_status_string(status), error.message);
+        fprintf(stderr, "create failed: %s: %s\n", lw_status_string(status), error.message);
         goto cleanup;
     }
     lw_classification_result_init(&classification);
     lw_error_init(&error);
-    status = lw_classifier_classify_bgr_u8(
-        classifier, image.pixels, image.byte_count, image.width, image.height,
-        image.width * 3u, &classification, &error);
+    status = lw_classifier_classify_bgr_u8(classifier, image.pixels, image.byte_count, image.width,
+                                           image.height, image.width * 3u, &classification, &error);
     if (status != LW_STATUS_OK) {
-        fprintf(stderr, "classification failed: %s: %s\n",
-                lw_status_string(status), error.message);
+        fprintf(stderr, "classification failed: %s: %s\n", lw_status_string(status), error.message);
         goto cleanup;
     }
     printf("label=%u orientation=%u score=%.8f image=%ux%u resized_width=%u\n",
-           classification.label, classification.orientation_degrees,
-           classification.score, image.width, image.height,
-           classification.resized_width);
+           classification.label, classification.orientation_degrees, classification.score,
+           image.width, image.height, classification.resized_width);
     result = 0;
 
 cleanup:
@@ -73,17 +70,15 @@ int main(void) {
         return 2;
     }
     for (index = 0; index < argc; ++index) {
-        int bytes = WideCharToMultiByte(
-            CP_UTF8, WC_ERR_INVALID_CHARS, wide_argv[index], -1,
-            NULL, 0, NULL, NULL);
+        int bytes = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, wide_argv[index], -1, NULL,
+                                        0, NULL, NULL);
         if (bytes <= 0) {
             goto cleanup;
         }
         utf8_argv[index] = (char*)malloc((size_t)bytes);
         if (utf8_argv[index] == NULL ||
-            WideCharToMultiByte(
-                CP_UTF8, WC_ERR_INVALID_CHARS, wide_argv[index], -1,
-                utf8_argv[index], bytes, NULL, NULL) <= 0) {
+            WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, wide_argv[index], -1,
+                                utf8_argv[index], bytes, NULL, NULL) <= 0) {
             goto cleanup;
         }
     }

@@ -40,6 +40,8 @@ class StagedPackageTest(unittest.TestCase):
             root / "lib" / "cmake" / "lw.PPOCR.C" / "lw.PPOCR.CConfig.cmake",
             root / "LICENSE",
             root / "README.md",
+            root / "README.zh-CN.md",
+            root / "docs" / "assets" / "sponsor.jpg",
             root / "THIRD-PARTY-NOTICES.md",
             root / "sbom.cdx.json",
         ]

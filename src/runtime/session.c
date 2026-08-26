@@ -1,4 +1,10 @@
 #include "session_internal.h"
+
+/*
+ * Session construction joins model metadata, concrete input shapes and the
+ * workspace plan. The model bytes remain owned by lw_model; applications must
+ * therefore keep the model alive until every session created from it is freed.
+ */
 #include "lwm_read.h"
 
 #include <stdlib.h>
@@ -29,18 +35,21 @@ static void workspace_release(void* pointer) {
 
 static uint32_t runtime_dtype_size(uint32_t dtype) {
     switch (dtype) {
-        case LW_DTYPE_F32: return 4u;
-        case LW_DTYPE_I32: return 4u;
-        case LW_DTYPE_I64: return 8u;
-        case LW_DTYPE_U8: return 1u;
-        default: return 0u;
+    case LW_DTYPE_F32:
+        return 4u;
+    case LW_DTYPE_I32:
+        return 4u;
+    case LW_DTYPE_I64:
+        return 8u;
+    case LW_DTYPE_U8:
+        return 1u;
+    default:
+        return 0u;
     }
 }
 
-static lw_status resolve_existing_tensor_size(
-    lw_runtime_tensor* tensor,
-    uint64_t max_tensor_size,
-    lw_error* error) {
+static lw_status resolve_existing_tensor_size(lw_runtime_tensor* tensor, uint64_t max_tensor_size,
+                                              lw_error* error) {
     uint64_t elements = 1u;
     uint32_t item_size = runtime_dtype_size(tensor->dtype);
     uint32_t i;
@@ -51,18 +60,21 @@ static lw_status resolve_existing_tensor_size(
     for (i = 0u; i < tensor->rank; ++i) {
         int32_t dimension = tensor->dimensions[i];
         if (dimension <= 0 || elements > UINT64_MAX / (uint32_t)dimension) {
-            lw_set_error(error, LW_STATUS_INVALID_SHAPE, "input or constant tensor dimensions are invalid");
+            lw_set_error(error, LW_STATUS_INVALID_SHAPE,
+                         "input or constant tensor dimensions are invalid");
             return LW_STATUS_INVALID_SHAPE;
         }
         elements *= (uint32_t)dimension;
     }
     if (elements > UINT64_MAX / item_size) {
-        lw_set_error(error, LW_STATUS_INVALID_SHAPE, "input or constant tensor byte size overflows");
+        lw_set_error(error, LW_STATUS_INVALID_SHAPE,
+                     "input or constant tensor byte size overflows");
         return LW_STATUS_INVALID_SHAPE;
     }
     tensor->byte_size = elements * item_size;
     if (tensor->byte_size > max_tensor_size) {
-        lw_set_error(error, LW_STATUS_MEMORY_LIMIT, "input or constant tensor exceeds max_tensor_size");
+        lw_set_error(error, LW_STATUS_MEMORY_LIMIT,
+                     "input or constant tensor exceeds max_tensor_size");
         return LW_STATUS_MEMORY_LIMIT;
     }
     return LW_STATUS_OK;
@@ -94,13 +106,9 @@ void lw_session_info_init(lw_session_info* info) {
     info->struct_size = (uint32_t)sizeof(*info);
 }
 
-lw_status lw_session_create(
-    const lw_model* model,
-    const lw_tensor_desc* inputs,
-    uint32_t input_count,
-    const lw_session_options* options,
-    lw_session** out_session,
-    lw_error* error) {
+lw_status lw_session_create(const lw_model* model, const lw_tensor_desc* inputs,
+                            uint32_t input_count, const lw_session_options* options,
+                            lw_session** out_session, lw_error* error) {
     uint64_t max_workspace_size = LW_DEFAULT_MAX_WORKSPACE_SIZE;
     uint64_t max_tensor_size = LW_DEFAULT_MAX_TENSOR_SIZE;
     lw_session* session;
@@ -109,8 +117,10 @@ lw_status lw_session_create(
     if (out_session != NULL) {
         *out_session = NULL;
     }
-    if (model == NULL || inputs == NULL || out_session == NULL || input_count != model->info.input_count) {
-        lw_set_error(error, LW_STATUS_INVALID_ARGUMENT, "model, inputs, matching input_count, and out_session are required");
+    if (model == NULL || inputs == NULL || out_session == NULL ||
+        input_count != model->info.input_count) {
+        lw_set_error(error, LW_STATUS_INVALID_ARGUMENT,
+                     "model, inputs, matching input_count, and out_session are required");
         return LW_STATUS_INVALID_ARGUMENT;
     }
     if (options != NULL) {
@@ -131,14 +141,16 @@ lw_status lw_session_create(
         return LW_STATUS_OUT_OF_MEMORY;
     }
     session->model = model;
-    session->tensors = (lw_runtime_tensor*)calloc(model->info.tensor_count, sizeof(*session->tensors));
+    session->tensors =
+        (lw_runtime_tensor*)calloc(model->info.tensor_count, sizeof(*session->tensors));
     if (session->tensors == NULL) {
         lw_session_free(session);
         lw_set_error(error, LW_STATUS_OUT_OF_MEMORY, "unable to allocate resolved tensor table");
         return LW_STATUS_OUT_OF_MEMORY;
     }
     for (i = 0u; i < model->info.tensor_count; ++i) {
-        const uint8_t* disk = model->bytes + (size_t)model->tensor_offset + (size_t)i * LWM_V0_TENSOR_SIZE;
+        const uint8_t* disk =
+            model->bytes + (size_t)model->tensor_offset + (size_t)i * LWM_V0_TENSOR_SIZE;
         lw_runtime_tensor* tensor = &session->tensors[i];
         uint32_t j;
         tensor->dtype = lwm_read_u32(disk);
@@ -149,29 +161,35 @@ lw_status lw_session_create(
             tensor->dimensions[j] = lwm_read_i32(disk + 8u + j * 4u);
         }
     }
+    /* Replace model -1 dimensions with the caller's concrete input shape while
+     * requiring every static dimension to match exactly. */
     for (i = 0u; i < input_count; ++i) {
-        uint32_t tensor_index = lwm_read_u32(model->bytes + (size_t)model->input_offset + (size_t)i * 4u);
+        uint32_t tensor_index =
+            lwm_read_u32(model->bytes + (size_t)model->input_offset + (size_t)i * 4u);
         lw_runtime_tensor* tensor = &session->tensors[tensor_index];
         const lw_tensor_desc* input = &inputs[i];
         uint32_t j;
         if (input->struct_size != sizeof(*input) || input->reserved != 0u ||
             input->dtype != tensor->dtype || input->rank != tensor->rank) {
             lw_session_free(session);
-            lw_set_error(error, LW_STATUS_INVALID_SHAPE, "input tensor descriptor type or rank is invalid");
+            lw_set_error(error, LW_STATUS_INVALID_SHAPE,
+                         "input tensor descriptor type or rank is invalid");
             return LW_STATUS_INVALID_SHAPE;
         }
         for (j = 0u; j < input->rank; ++j) {
             if (input->dimensions[j] <= 0 ||
                 (tensor->dimensions[j] != -1 && tensor->dimensions[j] != input->dimensions[j])) {
                 lw_session_free(session);
-                lw_set_error(error, LW_STATUS_INVALID_SHAPE, "input tensor dimensions disagree with the model");
+                lw_set_error(error, LW_STATUS_INVALID_SHAPE,
+                             "input tensor dimensions disagree with the model");
                 return LW_STATUS_INVALID_SHAPE;
             }
         }
         for (j = input->rank; j < LW_MAX_DIMS; ++j) {
             if (input->dimensions[j] != 0) {
                 lw_session_free(session);
-                lw_set_error(error, LW_STATUS_INVALID_SHAPE, "unused input tensor dimensions must be zero");
+                lw_set_error(error, LW_STATUS_INVALID_SHAPE,
+                             "unused input tensor dimensions must be zero");
                 return LW_STATUS_INVALID_SHAPE;
             }
         }
@@ -187,6 +205,8 @@ lw_status lw_session_create(
             }
         }
     }
+    /* Shape resolution precedes planning because every workspace allocation
+     * needs a concrete, overflow-checked byte size. */
     status = lw_resolve_shapes(session, max_tensor_size, error);
     if (status != LW_STATUS_OK) {
         lw_session_free(session);
@@ -201,7 +221,8 @@ lw_status lw_session_create(
         session->workspace = (uint8_t*)workspace_allocate(session->workspace_bytes);
         if (session->workspace == NULL) {
             lw_session_free(session);
-            lw_set_error(error, LW_STATUS_OUT_OF_MEMORY, "unable to allocate planned session workspace");
+            lw_set_error(error, LW_STATUS_OUT_OF_MEMORY,
+                         "unable to allocate planned session workspace");
             return LW_STATUS_OUT_OF_MEMORY;
         }
     }
@@ -235,18 +256,16 @@ lw_status lw_session_get_info(const lw_session* session, lw_session_info* info) 
     return LW_STATUS_OK;
 }
 
-lw_status lw_session_get_output_desc(
-    const lw_session* session,
-    uint32_t output_index,
-    lw_tensor_desc* output) {
+lw_status lw_session_get_output_desc(const lw_session* session, uint32_t output_index,
+                                     lw_tensor_desc* output) {
     uint32_t tensor_index;
     const lw_runtime_tensor* tensor;
     if (session == NULL || output == NULL || output->struct_size != sizeof(*output) ||
         output_index >= session->model->info.output_count) {
         return LW_STATUS_INVALID_ARGUMENT;
     }
-    tensor_index = lwm_read_u32(
-        session->model->bytes + (size_t)session->model->output_offset + (size_t)output_index * 4u);
+    tensor_index = lwm_read_u32(session->model->bytes + (size_t)session->model->output_offset +
+                                (size_t)output_index * 4u);
     tensor = &session->tensors[tensor_index];
     memset(output, 0, sizeof(*output));
     output->struct_size = (uint32_t)sizeof(*output);

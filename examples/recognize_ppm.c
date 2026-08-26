@@ -1,4 +1,6 @@
 #include "lw_infer.h"
+
+/* Minimal REC example: load one P6 PPM crop, call the public ABI, print UTF-8. */
 #include "ppm_image.h"
 
 #include <stdint.h>
@@ -23,21 +25,19 @@ static int demo_main(int argc, char** argv) {
         fprintf(stderr, "usage: lw-recognize-ppm <rec.lwm> <dictionary.txt> <image.ppm>\n");
         return 2;
     }
-    if (!lw_example_ppm_image_load_bgr(argv[3], &image) ||
-        image.width > UINT32_MAX / 3u) {
+    if (!lw_example_ppm_image_load_bgr(argv[3], &image) || image.width > UINT32_MAX / 3u) {
         fprintf(stderr, "invalid P6 PPM image: %s\n", argv[3]);
         goto cleanup;
     }
     lw_error_init(&error);
     status = lw_recognizer_create(argv[1], argv[2], NULL, &recognizer, &error);
     if (status != LW_STATUS_OK) {
-        fprintf(stderr, "create failed: %s: %s\n",
-                lw_status_string(status), error.message);
+        fprintf(stderr, "create failed: %s: %s\n", lw_status_string(status), error.message);
         goto cleanup;
     }
     lw_recognizer_info_init(&info);
-    if (lw_recognizer_get_info(recognizer, &info) != LW_STATUS_OK ||
-        info.max_text_capacity == 0u || info.max_text_capacity > SIZE_MAX) {
+    if (lw_recognizer_get_info(recognizer, &info) != LW_STATUS_OK || info.max_text_capacity == 0u ||
+        info.max_text_capacity > SIZE_MAX) {
         fprintf(stderr, "unable to query recognizer information\n");
         goto cleanup;
     }
@@ -48,18 +48,17 @@ static int demo_main(int argc, char** argv) {
     }
     lw_recognition_result_init(&recognition);
     lw_error_init(&error);
-    status = lw_recognizer_recognize_bgr_u8(
-        recognizer, image.pixels, image.byte_count, image.width, image.height,
-        image.width * 3u, text, info.max_text_capacity, &recognition, &error);
+    status = lw_recognizer_recognize_bgr_u8(recognizer, image.pixels, image.byte_count, image.width,
+                                            image.height, image.width * 3u, text,
+                                            info.max_text_capacity, &recognition, &error);
     if (status != LW_STATUS_OK) {
-        fprintf(stderr, "recognition failed: %s: %s\n",
-                lw_status_string(status), error.message);
+        fprintf(stderr, "recognition failed: %s: %s\n", lw_status_string(status), error.message);
         goto cleanup;
     }
     printf("text=%s\n", text);
-    printf("score=%.8f chars=%u image=%ux%u resized_width=%u time_steps=%u\n",
-           recognition.score, recognition.emitted_count, image.width, image.height,
-           recognition.resized_width, recognition.time_steps);
+    printf("score=%.8f chars=%u image=%ux%u resized_width=%u time_steps=%u\n", recognition.score,
+           recognition.emitted_count, image.width, image.height, recognition.resized_width,
+           recognition.time_steps);
     result = 0;
 cleanup:
     free(text);
@@ -86,17 +85,15 @@ int main(void) {
         return 2;
     }
     for (index = 0; index < argc; ++index) {
-        int bytes = WideCharToMultiByte(
-            CP_UTF8, WC_ERR_INVALID_CHARS, wide_argv[index], -1,
-            NULL, 0, NULL, NULL);
+        int bytes = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, wide_argv[index], -1, NULL,
+                                        0, NULL, NULL);
         if (bytes <= 0) {
             goto cleanup;
         }
         utf8_argv[index] = (char*)malloc((size_t)bytes);
         if (utf8_argv[index] == NULL ||
-            WideCharToMultiByte(
-                CP_UTF8, WC_ERR_INVALID_CHARS, wide_argv[index], -1,
-                utf8_argv[index], bytes, NULL, NULL) <= 0) {
+            WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, wide_argv[index], -1,
+                                utf8_argv[index], bytes, NULL, NULL) <= 0) {
             goto cleanup;
         }
     }

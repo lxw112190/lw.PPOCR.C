@@ -1,5 +1,7 @@
 # lw.PPOCR.C
 
+[简体中文](README.zh-CN.md) | English
+
 Tiny pure-C inference runtime for PP-OCR.
 
 `lw.PPOCR.C` 是一个面向 PP-OCR 的轻量纯 C 推理 Runtime。部署端目标是不依赖

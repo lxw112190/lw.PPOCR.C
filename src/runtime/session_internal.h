@@ -1,6 +1,8 @@
 #ifndef LW_SESSION_INTERNAL_H
 #define LW_SESSION_INTERNAL_H
 
+/* Runtime tensor metadata shared by shape inference, planning and execution. */
+
 #include "model_internal.h"
 
 #include <stddef.h>

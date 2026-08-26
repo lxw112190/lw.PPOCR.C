@@ -1,6 +1,8 @@
 #ifndef LW_CPU_FEATURES_H
 #define LW_CPU_FEATURES_H
 
+/* SIMD levels are ordered so a simple comparison can select a safe kernel. */
+
 typedef enum lw_simd_level {
     LW_SIMD_LEVEL_SCALAR = 0,
     LW_SIMD_LEVEL_SSE2 = 1,

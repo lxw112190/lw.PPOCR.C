@@ -1,5 +1,7 @@
 #include "lw_infer.h"
 
+/* Public CLS handle for detecting whether a text crop needs 180-degree rotation. */
+
 #include "cls_internal.h"
 #include "error_internal.h"
 #include "executor_internal.h"
@@ -58,12 +60,9 @@ void lw_classification_result_init(lw_classification_result* result) {
     clear_result(result);
 }
 
-static lw_status validate_options(
-    const lw_classifier_options* options,
-    uint64_t* max_image_pixels,
-    lw_model_options* model_options,
-    lw_session_options* session_options,
-    lw_error* error) {
+static lw_status validate_options(const lw_classifier_options* options, uint64_t* max_image_pixels,
+                                  lw_model_options* model_options,
+                                  lw_session_options* session_options, lw_error* error) {
     lw_classifier_options defaults;
     lw_classifier_options_init(&defaults);
     *max_image_pixels = defaults.max_image_pixels;
@@ -73,8 +72,7 @@ static lw_status validate_options(
         return LW_STATUS_OK;
     }
     if (options->struct_size != sizeof(*options) || options->reserved != 0u) {
-        lw_set_error(error, LW_STATUS_INVALID_ARGUMENT,
-                     "invalid classifier options structure");
+        lw_set_error(error, LW_STATUS_INVALID_ARGUMENT, "invalid classifier options structure");
         return LW_STATUS_INVALID_ARGUMENT;
     }
     if (options->max_model_file_size != 0u) {
@@ -92,11 +90,8 @@ static lw_status validate_options(
     return LW_STATUS_OK;
 }
 
-lw_status lw_classifier_create(
-    const char* model_path_utf8,
-    const lw_classifier_options* options,
-    lw_classifier** out_classifier,
-    lw_error* error) {
+lw_status lw_classifier_create(const char* model_path_utf8, const lw_classifier_options* options,
+                               lw_classifier** out_classifier, lw_error* error) {
     lw_model_options model_options;
     lw_session_options session_options;
     lw_tensor_desc input_desc;
@@ -108,21 +103,18 @@ lw_status lw_classifier_create(
     if (out_classifier != NULL) {
         *out_classifier = NULL;
     }
-    if (model_path_utf8 == NULL || model_path_utf8[0] == '\0' ||
-        out_classifier == NULL) {
+    if (model_path_utf8 == NULL || model_path_utf8[0] == '\0' || out_classifier == NULL) {
         lw_set_error(error, LW_STATUS_INVALID_ARGUMENT,
                      "model path and output classifier are required");
         return LW_STATUS_INVALID_ARGUMENT;
     }
-    status = validate_options(options, &max_image_pixels, &model_options,
-                              &session_options, error);
+    status = validate_options(options, &max_image_pixels, &model_options, &session_options, error);
     if (status != LW_STATUS_OK) {
         return status;
     }
     classifier = (lw_classifier*)calloc(1u, sizeof(*classifier));
     if (classifier == NULL) {
-        lw_set_error(error, LW_STATUS_OUT_OF_MEMORY,
-                     "unable to allocate classifier handle");
+        lw_set_error(error, LW_STATUS_OUT_OF_MEMORY, "unable to allocate classifier handle");
         return LW_STATUS_OUT_OF_MEMORY;
     }
     classifier->max_image_pixels = max_image_pixels;
@@ -137,35 +129,31 @@ lw_status lw_classifier_create(
     input_desc.dimensions[1] = 3;
     input_desc.dimensions[2] = (int32_t)LW_CLS_INPUT_HEIGHT;
     input_desc.dimensions[3] = (int32_t)LW_CLS_INPUT_WIDTH;
-    status = lw_session_create(
-        classifier->model, &input_desc, 1u, &session_options,
-        &classifier->session, error);
+    status = lw_session_create(classifier->model, &input_desc, 1u, &session_options,
+                               &classifier->session, error);
     if (status != LW_STATUS_OK) {
         goto fail;
     }
     lw_tensor_desc_init(&output_desc);
     status = lw_session_get_output_desc(classifier->session, 0u, &output_desc);
-    if (status != LW_STATUS_OK || output_desc.dtype != LW_DTYPE_F32 ||
-        output_desc.rank != 2u || output_desc.dimensions[0] != 1 ||
+    if (status != LW_STATUS_OK || output_desc.dtype != LW_DTYPE_F32 || output_desc.rank != 2u ||
+        output_desc.dimensions[0] != 1 ||
         output_desc.dimensions[1] != (int32_t)LW_CLS_CLASS_COUNT) {
         lw_set_error(error, LW_STATUS_INVALID_SHAPE,
                      "classifier model output must have shape [1,2]");
         status = LW_STATUS_INVALID_SHAPE;
         goto fail;
     }
-    classifier->input_element_count =
-        (uint64_t)3u * LW_CLS_INPUT_HEIGHT * LW_CLS_INPUT_WIDTH;
+    classifier->input_element_count = (uint64_t)3u * LW_CLS_INPUT_HEIGHT * LW_CLS_INPUT_WIDTH;
     if (classifier->input_element_count > SIZE_MAX / sizeof(*classifier->input)) {
-        lw_set_error(error, LW_STATUS_OUT_OF_BOUNDS,
-                     "classifier input buffer size overflows");
+        lw_set_error(error, LW_STATUS_OUT_OF_BOUNDS, "classifier input buffer size overflows");
         status = LW_STATUS_OUT_OF_BOUNDS;
         goto fail;
     }
-    classifier->input = (float*)malloc(
-        (size_t)classifier->input_element_count * sizeof(*classifier->input));
+    classifier->input =
+        (float*)malloc((size_t)classifier->input_element_count * sizeof(*classifier->input));
     if (classifier->input == NULL) {
-        lw_set_error(error, LW_STATUS_OUT_OF_MEMORY,
-                     "unable to allocate classifier input buffer");
+        lw_set_error(error, LW_STATUS_OUT_OF_MEMORY, "unable to allocate classifier input buffer");
         status = LW_STATUS_OUT_OF_MEMORY;
         goto fail;
     }
@@ -199,9 +187,7 @@ void lw_classifier_free(lw_classifier* classifier) {
     free(classifier);
 }
 
-lw_status lw_classifier_get_info(
-    const lw_classifier* classifier,
-    lw_classifier_info* info) {
+lw_status lw_classifier_get_info(const lw_classifier* classifier, lw_classifier_info* info) {
     if (classifier == NULL || info == NULL || info->struct_size != sizeof(*info)) {
         return LW_STATUS_INVALID_ARGUMENT;
     }
@@ -209,15 +195,10 @@ lw_status lw_classifier_get_info(
     return LW_STATUS_OK;
 }
 
-lw_status lw_classifier_classify_bgr_u8(
-    lw_classifier* classifier,
-    const uint8_t* source,
-    uint64_t source_byte_count,
-    uint32_t source_width,
-    uint32_t source_height,
-    uint32_t source_stride,
-    lw_classification_result* result,
-    lw_error* error) {
+lw_status lw_classifier_classify_bgr_u8(lw_classifier* classifier, const uint8_t* source,
+                                        uint64_t source_byte_count, uint32_t source_width,
+                                        uint32_t source_height, uint32_t source_stride,
+                                        lw_classification_result* result, lw_error* error) {
     uint64_t source_pixels;
     uint32_t resized_width = 0u;
     uint32_t label;
@@ -230,31 +211,28 @@ lw_status lw_classifier_classify_bgr_u8(
     }
     clear_result(result);
     if (source_width == 0u || source_height == 0u) {
-        lw_set_error(error, LW_STATUS_INVALID_ARGUMENT,
-                     "source image dimensions must be positive");
+        lw_set_error(error, LW_STATUS_INVALID_ARGUMENT, "source image dimensions must be positive");
         return LW_STATUS_INVALID_ARGUMENT;
     }
     source_pixels = (uint64_t)source_width * source_height;
     if (source_pixels > classifier->max_image_pixels) {
-        lw_set_error(error, LW_STATUS_MEMORY_LIMIT,
-                     "source image exceeds max_image_pixels");
+        lw_set_error(error, LW_STATUS_MEMORY_LIMIT, "source image exceeds max_image_pixels");
         return LW_STATUS_MEMORY_LIMIT;
     }
-    status = lw_cls_preprocess_bgr_u8(
-        source, source_byte_count, source_width, source_height, source_stride,
-        classifier->input, classifier->input_element_count, &resized_width);
+    status = lw_cls_preprocess_bgr_u8(source, source_byte_count, source_width, source_height,
+                                      source_stride, classifier->input,
+                                      classifier->input_element_count, &resized_width);
     if (status != LW_STATUS_OK) {
         lw_set_error(error, status, "BGR source layout is invalid");
         return status;
     }
-    status = lw_execute_session_f32(
-        classifier->session, classifier->input, classifier->input_element_count,
-        classifier->probabilities, LW_CLS_CLASS_COUNT, error);
+    status = lw_execute_session_f32(classifier->session, classifier->input,
+                                    classifier->input_element_count, classifier->probabilities,
+                                    LW_CLS_CLASS_COUNT, error);
     if (status != LW_STATUS_OK) {
         return status;
     }
-    if (!isfinite(classifier->probabilities[0]) ||
-        !isfinite(classifier->probabilities[1])) {
+    if (!isfinite(classifier->probabilities[0]) || !isfinite(classifier->probabilities[1])) {
         lw_set_error(error, LW_STATUS_INVALID_ARGUMENT,
                      "classifier output contains a non-finite value");
         return LW_STATUS_INVALID_ARGUMENT;

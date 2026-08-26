@@ -1,4 +1,11 @@
 #include "session_internal.h"
+
+/*
+ * Lifetime-aware workspace planner.
+ * Intermediate tensors whose lifetimes do not overlap may reuse the same byte
+ * range. This keeps inference allocation-free after session creation while the
+ * configured workspace ceiling remains a hard limit.
+ */
 #include "lwm_read.h"
 
 #include <stdlib.h>
@@ -12,7 +19,8 @@ static uint64_t align_workspace(uint64_t value) {
     return (value + (LW_WORKSPACE_ALIGNMENT - 1u)) & ~(uint64_t)(LW_WORKSPACE_ALIGNMENT - 1u);
 }
 
-static int add_free_block(free_block* blocks, uint32_t* count, uint32_t capacity, uint64_t offset, uint64_t size) {
+static int add_free_block(free_block* blocks, uint32_t* count, uint32_t capacity, uint64_t offset,
+                          uint64_t size) {
     uint32_t position = 0u;
     uint32_t i;
     if (*count >= capacity) {
@@ -27,7 +35,8 @@ static int add_free_block(free_block* blocks, uint32_t* count, uint32_t capacity
     blocks[position].offset = offset;
     blocks[position].size = size;
     ++(*count);
-    if (position > 0u && blocks[position - 1u].offset + blocks[position - 1u].size == blocks[position].offset) {
+    if (position > 0u &&
+        blocks[position - 1u].offset + blocks[position - 1u].size == blocks[position].offset) {
         blocks[position - 1u].size += blocks[position].size;
         for (i = position; i + 1u < *count; ++i) {
             blocks[i] = blocks[i + 1u];
@@ -35,7 +44,8 @@ static int add_free_block(free_block* blocks, uint32_t* count, uint32_t capacity
         --(*count);
         --position;
     }
-    if (position + 1u < *count && blocks[position].offset + blocks[position].size == blocks[position + 1u].offset) {
+    if (position + 1u < *count &&
+        blocks[position].offset + blocks[position].size == blocks[position + 1u].offset) {
         blocks[position].size += blocks[position + 1u].size;
         for (i = position + 1u; i + 1u < *count; ++i) {
             blocks[i] = blocks[i + 1u];
@@ -85,8 +95,11 @@ lw_status lw_plan_workspace(lw_session* session, uint64_t max_workspace_size, lw
         tensor->last_use_node = -1;
         tensor->workspace_live = 0;
     }
+    /* First determine when each tensor is born and when its final consumer
+     * runs. Graph outputs stay live until execution has completely finished. */
     for (i = 0u; i < model->info.node_count; ++i) {
-        const uint8_t* node = model->bytes + (size_t)model->node_offset + (size_t)i * LWM_V0_NODE_SIZE;
+        const uint8_t* node =
+            model->bytes + (size_t)model->node_offset + (size_t)i * LWM_V0_NODE_SIZE;
         uint16_t input_count = lwm_read_u16(node + 2);
         uint16_t output_count = lwm_read_u16(node + 4);
         uint32_t j;
@@ -98,7 +111,8 @@ lw_status lw_plan_workspace(lw_session* session, uint64_t max_workspace_size, lw
             lw_runtime_tensor* tensor = &session->tensors[lwm_read_u32(node + 40u + j * 4u)];
             if (tensor->birth_node != -1) {
                 free(blocks);
-                lw_set_error(error, LW_STATUS_INVALID_FORMAT, "multiple nodes produce the same tensor");
+                lw_set_error(error, LW_STATUS_INVALID_FORMAT,
+                             "multiple nodes produce the same tensor");
                 return LW_STATUS_INVALID_FORMAT;
             }
             tensor->birth_node = (int32_t)i;
@@ -110,8 +124,11 @@ lw_status lw_plan_workspace(lw_session* session, uint64_t max_workspace_size, lw
         session->tensors[index].last_use_node = (int32_t)model->info.node_count;
     }
 
+    /* Walking nodes in execution order lets an expired input range be reused
+     * immediately by a later output instead of growing the workspace. */
     for (i = 0u; i < model->info.node_count; ++i) {
-        const uint8_t* node = model->bytes + (size_t)model->node_offset + (size_t)i * LWM_V0_NODE_SIZE;
+        const uint8_t* node =
+            model->bytes + (size_t)model->node_offset + (size_t)i * LWM_V0_NODE_SIZE;
         uint16_t output_count = lwm_read_u16(node + 4);
         uint32_t j;
         for (tensor_index = 0u; tensor_index < model->info.tensor_count; ++tensor_index) {
@@ -121,7 +138,8 @@ lw_status lw_plan_workspace(lw_session* session, uint64_t max_workspace_size, lw
                 if (!add_free_block(blocks, &free_count, model->info.tensor_count + 1u,
                                     tensor->workspace_offset, size)) {
                     free(blocks);
-                    lw_set_error(error, LW_STATUS_OUT_OF_MEMORY, "workspace free-list capacity exceeded");
+                    lw_set_error(error, LW_STATUS_OUT_OF_MEMORY,
+                                 "workspace free-list capacity exceeded");
                     return LW_STATUS_OUT_OF_MEMORY;
                 }
                 tensor->workspace_live = 0;
@@ -133,7 +151,8 @@ lw_status lw_plan_workspace(lw_session* session, uint64_t max_workspace_size, lw
             uint64_t offset;
             if (tensor->byte_size > UINT64_MAX - (LW_WORKSPACE_ALIGNMENT - 1u)) {
                 free(blocks);
-                lw_set_error(error, LW_STATUS_MEMORY_LIMIT, "aligned tensor workspace size overflows");
+                lw_set_error(error, LW_STATUS_MEMORY_LIMIT,
+                             "aligned tensor workspace size overflows");
                 return LW_STATUS_MEMORY_LIMIT;
             }
             size = align_workspace(tensor->byte_size);
@@ -148,7 +167,8 @@ lw_status lw_plan_workspace(lw_session* session, uint64_t max_workspace_size, lw
             }
             if (workspace_end > max_workspace_size || workspace_end > SIZE_MAX) {
                 free(blocks);
-                lw_set_error(error, LW_STATUS_MEMORY_LIMIT, "planned workspace exceeds max_workspace_size");
+                lw_set_error(error, LW_STATUS_MEMORY_LIMIT,
+                             "planned workspace exceeds max_workspace_size");
                 return LW_STATUS_MEMORY_LIMIT;
             }
             tensor->workspace_offset = offset;

@@ -64,10 +64,9 @@ int main(int argc, char** argv) {
     }
     lw_tensor_desc_init(&output_desc);
     status = lw_session_get_output_desc(session, 0u, &output_desc);
-    if (status != LW_STATUS_OK || output_desc.dtype != LW_DTYPE_F32 ||
-        output_desc.rank != 4u || output_desc.dimensions[0] != 1 ||
-        output_desc.dimensions[1] != 1 || output_desc.dimensions[2] != height ||
-        output_desc.dimensions[3] != width) {
+    if (status != LW_STATUS_OK || output_desc.dtype != LW_DTYPE_F32 || output_desc.rank != 4u ||
+        output_desc.dimensions[0] != 1 || output_desc.dimensions[1] != 1 ||
+        output_desc.dimensions[2] != height || output_desc.dimensions[3] != width) {
         fprintf(stderr, "unexpected detector output descriptor\n");
         goto cleanup;
     }
@@ -83,7 +82,8 @@ int main(int argc, char** argv) {
     }
     status = lw_execute_session_f32(session, input, input_count, output, output_count, &error);
     if (status != LW_STATUS_OK) {
-        fprintf(stderr, "graph execution failed: %s: %s\n", lw_status_string(status), error.message);
+        fprintf(stderr, "graph execution failed: %s: %s\n", lw_status_string(status),
+                error.message);
         goto cleanup;
     }
     status = lw_execute_session_f32(session, input, input_count, repeated, output_count, &error);

@@ -1,15 +1,13 @@
 #include "scalar_kernels.h"
 
+/* Numerically stable softmax: subtract the row maximum before exponentiation. */
+
 #include <math.h>
 #include <stddef.h>
 #include <stdint.h>
 
-lw_status lw_scalar_softmax_f32(
-    const float* input,
-    float* output,
-    uint32_t rank,
-    const int32_t* dimensions,
-    int32_t axis) {
+lw_status lw_scalar_softmax_f32(const float* input, float* output, uint32_t rank,
+                                const int32_t* dimensions, int32_t axis) {
     uint64_t outer_count = 1u;
     uint64_t inner_count = 1u;
     uint64_t axis_count;
@@ -21,8 +19,8 @@ lw_status lw_scalar_softmax_f32(
     if (input == NULL || output == NULL) {
         return LW_STATUS_INVALID_ARGUMENT;
     }
-    if (rank == 0u || rank > LW_MAX_DIMS || dimensions == NULL ||
-        axis < -(int32_t)rank || axis >= (int32_t)rank) {
+    if (rank == 0u || rank > LW_MAX_DIMS || dimensions == NULL || axis < -(int32_t)rank ||
+        axis >= (int32_t)rank) {
         return LW_STATUS_INVALID_SHAPE;
     }
     normalized_axis = axis < 0 ? (uint32_t)((int32_t)rank + axis) : (uint32_t)axis;
@@ -47,8 +45,7 @@ lw_status lw_scalar_softmax_f32(
     axis_count = (uint32_t)dimensions[normalized_axis];
     if (outer_count > UINT64_MAX / axis_count ||
         outer_count * axis_count > UINT64_MAX / inner_count ||
-        outer_count * axis_count * inner_count >
-            (uint64_t)(SIZE_MAX / sizeof(float))) {
+        outer_count * axis_count * inner_count > (uint64_t)(SIZE_MAX / sizeof(float))) {
         return LW_STATUS_OUT_OF_BOUNDS;
     }
 
@@ -56,6 +53,8 @@ lw_status lw_scalar_softmax_f32(
         for (inner = 0u; inner < inner_count; ++inner) {
             uint64_t axis_index;
             uint64_t base = outer * axis_count * inner_count + inner;
+            /* Shifting by the maximum preserves the result and prevents expf
+             * from overflowing on large logits. */
             float maximum = input[(size_t)base];
             float sum = 0.0f;
             for (axis_index = 1u; axis_index < axis_count; ++axis_index) {

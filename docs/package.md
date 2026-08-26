@@ -19,9 +19,10 @@ models/sample-crop.ppm       dependency-free demo input
 models/sample.ppm            full-image DET demo input
 models/sample.jpg            C# WinForms image-decoding demo input
 www/index.html               native HTTP OCR browser page
-docs/                        API and implementation documentation
+docs/                        API documentation and support image assets
 LICENSE
 README.md
+README.zh-CN.md
 THIRD-PARTY-NOTICES.md
 dependencies.lock.json
 sbom.cdx.json

@@ -1,5 +1,7 @@
 #include "det_internal.h"
 
+/* Resize, pad and normalize BGR8 input into the DET model's NCHW tensor. */
+
 #include <limits.h>
 #include <math.h>
 #include <stddef.h>
@@ -15,14 +17,9 @@ static uint32_t clamp_coordinate(int64_t coordinate, uint32_t limit) {
     return (uint32_t)coordinate;
 }
 
-lw_status lw_det_compute_size(
-    uint32_t source_width,
-    uint32_t source_height,
-    uint32_t limit_side_length,
-    uint32_t* resized_width,
-    uint32_t* resized_height,
-    float* width_ratio,
-    float* height_ratio) {
+lw_status lw_det_compute_size(uint32_t source_width, uint32_t source_height,
+                              uint32_t limit_side_length, uint32_t* resized_width,
+                              uint32_t* resized_height, float* width_ratio, float* height_ratio) {
     uint32_t maximum_side;
     double ratio;
     double scaled_width;
@@ -35,8 +32,10 @@ lw_status lw_det_compute_size(
         return LW_STATUS_INVALID_ARGUMENT;
     }
     maximum_side = source_width > source_height ? source_width : source_height;
-    ratio = maximum_side > limit_side_length ?
-        (double)limit_side_length / maximum_side : 1.0;
+    ratio = maximum_side > limit_side_length ? (double)limit_side_length / maximum_side : 1.0;
+
+    /* DET down-sampling stages require dimensions divisible by 32. Rounding
+     * rather than padding keeps the probability map aligned with the image. */
     scaled_width = (double)source_width * ratio / 32.0;
     scaled_height = (double)source_height * ratio / 32.0;
     rounded_width = (uint64_t)floor(scaled_width + 0.5) * 32u;
@@ -57,26 +56,20 @@ lw_status lw_det_compute_size(
     return LW_STATUS_OK;
 }
 
-lw_status lw_det_preprocess_bgr_u8(
-    const uint8_t* source,
-    uint64_t source_byte_count,
-    uint32_t source_width,
-    uint32_t source_height,
-    uint32_t source_stride,
-    uint32_t resized_width,
-    uint32_t resized_height,
-    float* output,
-    uint64_t output_element_count) {
+lw_status lw_det_preprocess_bgr_u8(const uint8_t* source, uint64_t source_byte_count,
+                                   uint32_t source_width, uint32_t source_height,
+                                   uint32_t source_stride, uint32_t resized_width,
+                                   uint32_t resized_height, float* output,
+                                   uint64_t output_element_count) {
     static const double mean[3] = {0.485, 0.456, 0.406};
-    static const double inverse_std[3] = {
-        1.0 / 0.229, 1.0 / 0.224, 1.0 / 0.225};
+    static const double inverse_std[3] = {1.0 / 0.229, 1.0 / 0.224, 1.0 / 0.225};
     uint64_t row_bytes;
     uint64_t required_source_bytes;
     uint64_t plane;
     uint64_t required_output_elements;
     uint32_t output_y;
-    if (source == NULL || output == NULL || source_width == 0u ||
-        source_height == 0u || resized_width == 0u || resized_height == 0u) {
+    if (source == NULL || output == NULL || source_width == 0u || source_height == 0u ||
+        resized_width == 0u || resized_height == 0u) {
         return LW_STATUS_INVALID_ARGUMENT;
     }
     row_bytes = (uint64_t)source_width * 3u;
@@ -95,9 +88,10 @@ lw_status lw_det_preprocess_bgr_u8(
         required_output_elements > SIZE_MAX / sizeof(float)) {
         return LW_STATUS_INVALID_SHAPE;
     }
+    /* Half-pixel coordinates match common image-resize implementations. The
+     * source remains BGR, while the channel planes are written as NCHW. */
     for (output_y = 0u; output_y < resized_height; ++output_y) {
-        double source_y = ((double)output_y + 0.5) * source_height /
-            resized_height - 0.5;
+        double source_y = ((double)output_y + 0.5) * source_height / resized_height - 0.5;
         int64_t source_y0_raw = (int64_t)floor(source_y);
         int64_t source_y1_raw = source_y0_raw + 1;
         uint32_t source_y0 = clamp_coordinate(source_y0_raw, source_height);
@@ -105,8 +99,7 @@ lw_status lw_det_preprocess_bgr_u8(
         double weight_y = source_y - source_y0_raw;
         uint32_t output_x;
         for (output_x = 0u; output_x < resized_width; ++output_x) {
-            double source_x = ((double)output_x + 0.5) * source_width /
-                resized_width - 0.5;
+            double source_x = ((double)output_x + 0.5) * source_width / resized_width - 0.5;
             int64_t source_x0_raw = (int64_t)floor(source_x);
             int64_t source_x1_raw = source_x0_raw + 1;
             uint32_t source_x0 = clamp_coordinate(source_x0_raw, source_width);
@@ -115,18 +108,18 @@ lw_status lw_det_preprocess_bgr_u8(
             uint32_t channel;
             for (channel = 0u; channel < 3u; ++channel) {
                 double top_left = source[(size_t)((uint64_t)source_y0 * source_stride +
-                    (uint64_t)source_x0 * 3u + channel)];
+                                                  (uint64_t)source_x0 * 3u + channel)];
                 double top_right = source[(size_t)((uint64_t)source_y0 * source_stride +
-                    (uint64_t)source_x1 * 3u + channel)];
+                                                   (uint64_t)source_x1 * 3u + channel)];
                 double bottom_left = source[(size_t)((uint64_t)source_y1 * source_stride +
-                    (uint64_t)source_x0 * 3u + channel)];
+                                                     (uint64_t)source_x0 * 3u + channel)];
                 double bottom_right = source[(size_t)((uint64_t)source_y1 * source_stride +
-                    (uint64_t)source_x1 * 3u + channel)];
+                                                      (uint64_t)source_x1 * 3u + channel)];
                 double top = top_left + (top_right - top_left) * weight_x;
                 double bottom = bottom_left + (bottom_right - bottom_left) * weight_x;
                 double value = (top + (bottom - top) * weight_y) / 255.0;
-                output[(size_t)((uint64_t)channel * plane +
-                    (uint64_t)output_y * resized_width + output_x)] =
+                output[(size_t)((uint64_t)channel * plane + (uint64_t)output_y * resized_width +
+                                output_x)] =
                     (float)((value - mean[channel]) * inverse_std[channel]);
             }
         }

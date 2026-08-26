@@ -1,15 +1,14 @@
 #include "scalar_kernels.h"
+
+/* Elementwise arithmetic with NumPy-style broadcasting and SIMD fast paths. */
 #include "cpu_features.h"
 #include "simd_kernels.h"
 
 #include <stddef.h>
 #include <stdint.h>
 
-static lw_status make_contiguous_strides(
-    uint32_t rank,
-    const int32_t* dimensions,
-    uint64_t* strides,
-    uint64_t* element_count) {
+static lw_status make_contiguous_strides(uint32_t rank, const int32_t* dimensions,
+                                         uint64_t* strides, uint64_t* element_count) {
     uint64_t count = 1u;
     uint32_t axis;
     if (rank > LW_MAX_DIMS || (rank != 0u && dimensions == NULL)) {
@@ -30,37 +29,26 @@ static lw_status make_contiguous_strides(
     return LW_STATUS_OK;
 }
 
-void lw_scalar_binary_contiguous_f32(
-    lw_scalar_binary_op operation,
-    const float* left,
-    const float* right,
-    float* output,
-    uint64_t element_count) {
+void lw_scalar_binary_contiguous_f32(lw_scalar_binary_op operation, const float* left,
+                                     const float* right, float* output, uint64_t element_count) {
     uint64_t index;
     if (operation == LW_SCALAR_BINARY_ADD) {
         for (index = 0u; index < element_count; ++index) {
-            output[(size_t)index] =
-                left[(size_t)index] + right[(size_t)index];
+            output[(size_t)index] = left[(size_t)index] + right[(size_t)index];
         }
     } else if (operation == LW_SCALAR_BINARY_MUL) {
         for (index = 0u; index < element_count; ++index) {
-            output[(size_t)index] =
-                left[(size_t)index] * right[(size_t)index];
+            output[(size_t)index] = left[(size_t)index] * right[(size_t)index];
         }
     } else {
         for (index = 0u; index < element_count; ++index) {
-            output[(size_t)index] =
-                left[(size_t)index] / right[(size_t)index];
+            output[(size_t)index] = left[(size_t)index] / right[(size_t)index];
         }
     }
 }
 
-void lw_scalar_binary_right_scalar_f32(
-    lw_scalar_binary_op operation,
-    const float* left,
-    float right,
-    float* output,
-    uint64_t element_count) {
+void lw_scalar_binary_right_scalar_f32(lw_scalar_binary_op operation, const float* left,
+                                       float right, float* output, uint64_t element_count) {
     uint64_t index;
     if (operation == LW_SCALAR_BINARY_ADD) {
         for (index = 0u; index < element_count; ++index) {
@@ -77,74 +65,49 @@ void lw_scalar_binary_right_scalar_f32(
     }
 }
 
-static void dispatch_binary_contiguous_for_level_f32(
-    lw_scalar_binary_op operation,
-    const float* left,
-    const float* right,
-    float* output,
-    uint64_t element_count,
-    lw_simd_level simd_level) {
+static void dispatch_binary_contiguous_for_level_f32(lw_scalar_binary_op operation,
+                                                     const float* left, const float* right,
+                                                     float* output, uint64_t element_count,
+                                                     lw_simd_level simd_level) {
     if (simd_level >= LW_SIMD_LEVEL_AVX2) {
-        lw_avx2_binary_contiguous_f32(
-            operation, left, right, output, element_count);
+        lw_avx2_binary_contiguous_f32(operation, left, right, output, element_count);
     } else if (simd_level >= LW_SIMD_LEVEL_SSE2) {
-        lw_sse2_binary_contiguous_f32(
-            operation, left, right, output, element_count);
+        lw_sse2_binary_contiguous_f32(operation, left, right, output, element_count);
     } else {
-        lw_scalar_binary_contiguous_f32(
-            operation, left, right, output, element_count);
+        lw_scalar_binary_contiguous_f32(operation, left, right, output, element_count);
     }
 }
 
-static void dispatch_binary_contiguous_f32(
-    lw_scalar_binary_op operation,
-    const float* left,
-    const float* right,
-    float* output,
-    uint64_t element_count) {
-    dispatch_binary_contiguous_for_level_f32(
-        operation, left, right, output, element_count, lw_detect_simd_level());
+static void dispatch_binary_contiguous_f32(lw_scalar_binary_op operation, const float* left,
+                                           const float* right, float* output,
+                                           uint64_t element_count) {
+    dispatch_binary_contiguous_for_level_f32(operation, left, right, output, element_count,
+                                             lw_detect_simd_level());
 }
 
-static void dispatch_binary_right_scalar_for_level_f32(
-    lw_scalar_binary_op operation,
-    const float* left,
-    float right,
-    float* output,
-    uint64_t element_count,
-    lw_simd_level simd_level) {
+static void dispatch_binary_right_scalar_for_level_f32(lw_scalar_binary_op operation,
+                                                       const float* left, float right,
+                                                       float* output, uint64_t element_count,
+                                                       lw_simd_level simd_level) {
     if (simd_level >= LW_SIMD_LEVEL_AVX2) {
-        lw_avx2_binary_right_scalar_f32(
-            operation, left, right, output, element_count);
+        lw_avx2_binary_right_scalar_f32(operation, left, right, output, element_count);
     } else if (simd_level >= LW_SIMD_LEVEL_SSE2) {
-        lw_sse2_binary_right_scalar_f32(
-            operation, left, right, output, element_count);
+        lw_sse2_binary_right_scalar_f32(operation, left, right, output, element_count);
     } else {
-        lw_scalar_binary_right_scalar_f32(
-            operation, left, right, output, element_count);
+        lw_scalar_binary_right_scalar_f32(operation, left, right, output, element_count);
     }
 }
 
-static void dispatch_binary_right_scalar_f32(
-    lw_scalar_binary_op operation,
-    const float* left,
-    float right,
-    float* output,
-    uint64_t element_count) {
-    dispatch_binary_right_scalar_for_level_f32(
-        operation, left, right, output, element_count, lw_detect_simd_level());
+static void dispatch_binary_right_scalar_f32(lw_scalar_binary_op operation, const float* left,
+                                             float right, float* output, uint64_t element_count) {
+    dispatch_binary_right_scalar_for_level_f32(operation, left, right, output, element_count,
+                                               lw_detect_simd_level());
 }
 
 static int try_dispatch_binary_single_axis_broadcast_f32(
-    lw_scalar_binary_op operation,
-    const float* left,
-    const float* right,
-    float* output,
-    uint32_t right_rank,
-    const int32_t* right_dimensions,
-    uint32_t output_rank,
-    const int32_t* output_dimensions,
-    uint64_t output_count) {
+    lw_scalar_binary_op operation, const float* left, const float* right, float* output,
+    uint32_t right_rank, const int32_t* right_dimensions, uint32_t output_rank,
+    const int32_t* output_dimensions, uint64_t output_count) {
     uint32_t right_padding = output_rank - right_rank;
     uint32_t non_unit_dimensions = 0u;
     uint32_t broadcast_axis = 0u;
@@ -155,9 +118,10 @@ static int try_dispatch_binary_single_axis_broadcast_f32(
     uint64_t outer_index;
     lw_simd_level simd_level;
 
+    /* Many OCR graph biases vary on exactly one axis. Recognizing that shape
+     * turns a general coordinate walk into contiguous vector operations. */
     for (axis = 0u; axis < output_rank; ++axis) {
-        int32_t dimension = axis < right_padding ?
-            1 : right_dimensions[axis - right_padding];
+        int32_t dimension = axis < right_padding ? 1 : right_dimensions[axis - right_padding];
         if (dimension != 1) {
             ++non_unit_dimensions;
             broadcast_axis = axis;
@@ -175,34 +139,26 @@ static int try_dispatch_binary_single_axis_broadcast_f32(
     for (outer_index = 0u; outer_index < outer_count; ++outer_index) {
         uint64_t outer_offset = outer_index * right_dimension * inner_count;
         if (inner_count == 1u) {
-            dispatch_binary_contiguous_for_level_f32(
-                operation, left + (size_t)outer_offset, right,
-                output + (size_t)outer_offset, right_dimension, simd_level);
+            dispatch_binary_contiguous_for_level_f32(operation, left + (size_t)outer_offset, right,
+                                                     output + (size_t)outer_offset, right_dimension,
+                                                     simd_level);
         } else {
             uint64_t right_index;
             for (right_index = 0u; right_index < right_dimension; ++right_index) {
                 uint64_t block_offset = outer_offset + right_index * inner_count;
                 dispatch_binary_right_scalar_for_level_f32(
-                    operation, left + (size_t)block_offset,
-                    right[(size_t)right_index], output + (size_t)block_offset,
-                    inner_count, simd_level);
+                    operation, left + (size_t)block_offset, right[(size_t)right_index],
+                    output + (size_t)block_offset, inner_count, simd_level);
             }
         }
     }
     return 1;
 }
 
-lw_status lw_scalar_binary_f32(
-    lw_scalar_binary_op operation,
-    const float* left,
-    uint32_t left_rank,
-    const int32_t* left_dimensions,
-    const float* right,
-    uint32_t right_rank,
-    const int32_t* right_dimensions,
-    float* output,
-    uint32_t output_rank,
-    const int32_t* output_dimensions) {
+lw_status lw_scalar_binary_f32(lw_scalar_binary_op operation, const float* left, uint32_t left_rank,
+                               const int32_t* left_dimensions, const float* right,
+                               uint32_t right_rank, const int32_t* right_dimensions, float* output,
+                               uint32_t output_rank, const int32_t* output_dimensions) {
     uint64_t left_contiguous[LW_MAX_DIMS] = {0u};
     uint64_t right_contiguous[LW_MAX_DIMS] = {0u};
     uint64_t left_strides[LW_MAX_DIMS] = {0u};
@@ -224,8 +180,8 @@ lw_status lw_scalar_binary_f32(
     if (left == NULL || right == NULL || output == NULL || output == left || output == right) {
         return LW_STATUS_INVALID_ARGUMENT;
     }
-    if (left_rank > LW_MAX_DIMS || right_rank > LW_MAX_DIMS ||
-        output_rank > LW_MAX_DIMS || output_rank != (left_rank > right_rank ? left_rank : right_rank) ||
+    if (left_rank > LW_MAX_DIMS || right_rank > LW_MAX_DIMS || output_rank > LW_MAX_DIMS ||
+        output_rank != (left_rank > right_rank ? left_rank : right_rank) ||
         (output_rank != 0u && output_dimensions == NULL)) {
         return LW_STATUS_INVALID_SHAPE;
     }
@@ -266,20 +222,19 @@ lw_status lw_scalar_binary_f32(
         return LW_STATUS_OUT_OF_BOUNDS;
     }
 
+    /* Prefer simple contiguous cases before the generic broadcasting loop. */
     if (left_count == output_count && right_count == output_count) {
-        dispatch_binary_contiguous_f32(
-            operation, left, right, output, output_count);
+        dispatch_binary_contiguous_f32(operation, left, right, output, output_count);
         return LW_STATUS_OK;
     }
     if (left_count == output_count && right_count == 1u) {
-        dispatch_binary_right_scalar_f32(
-            operation, left, right[0], output, output_count);
+        dispatch_binary_right_scalar_f32(operation, left, right[0], output, output_count);
         return LW_STATUS_OK;
     }
     if (left_count == output_count &&
-        try_dispatch_binary_single_axis_broadcast_f32(
-            operation, left, right, output, right_rank, right_dimensions,
-            output_rank, output_dimensions, output_count)) {
+        try_dispatch_binary_single_axis_broadcast_f32(operation, left, right, output, right_rank,
+                                                      right_dimensions, output_rank,
+                                                      output_dimensions, output_count)) {
         return LW_STATUS_OK;
     }
 
@@ -303,10 +258,10 @@ lw_status lw_scalar_binary_f32(
                 break;
             }
             coordinates[current_axis] = 0u;
-            left_offset -= left_strides[current_axis] *
-                           ((uint32_t)output_dimensions[current_axis] - 1u);
-            right_offset -= right_strides[current_axis] *
-                            ((uint32_t)output_dimensions[current_axis] - 1u);
+            left_offset -=
+                left_strides[current_axis] * ((uint32_t)output_dimensions[current_axis] - 1u);
+            right_offset -=
+                right_strides[current_axis] * ((uint32_t)output_dimensions[current_axis] - 1u);
         }
     }
     return LW_STATUS_OK;

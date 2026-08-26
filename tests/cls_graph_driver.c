@@ -61,9 +61,8 @@ int main(int argc, char** argv) {
     }
     lw_tensor_desc_init(&output_desc);
     status = lw_session_get_output_desc(session, 0u, &output_desc);
-    if (status != LW_STATUS_OK || output_desc.dtype != LW_DTYPE_F32 ||
-        output_desc.rank != 2u || output_desc.dimensions[0] != 1 ||
-        output_desc.dimensions[1] != OUTPUT_COUNT) {
+    if (status != LW_STATUS_OK || output_desc.dtype != LW_DTYPE_F32 || output_desc.rank != 2u ||
+        output_desc.dimensions[0] != 1 || output_desc.dimensions[1] != OUTPUT_COUNT) {
         fprintf(stderr, "unexpected classifier output descriptor\n");
         goto cleanup;
     }
@@ -80,22 +79,20 @@ int main(int argc, char** argv) {
         input[index] = (float)((int32_t)((index * 19u) % 263u) - 131) / 131.0f;
     }
     lw_error_init(&error);
-    status = lw_execute_session_f32(
-        session, input, input_count - 1u, output, OUTPUT_COUNT, &error);
+    status = lw_execute_session_f32(session, input, input_count - 1u, output, OUTPUT_COUNT, &error);
     if (status != LW_STATUS_INVALID_SHAPE) {
         fprintf(stderr, "executor accepted an incorrect input element count\n");
         goto cleanup;
     }
     lw_error_init(&error);
-    status = lw_execute_session_f32(
-        session, input, input_count, output, OUTPUT_COUNT, &error);
+    status = lw_execute_session_f32(session, input, input_count, output, OUTPUT_COUNT, &error);
     if (status != LW_STATUS_OK) {
-        fprintf(stderr, "graph execution failed: %s: %s\n", lw_status_string(status), error.message);
+        fprintf(stderr, "graph execution failed: %s: %s\n", lw_status_string(status),
+                error.message);
         goto cleanup;
     }
     lw_error_init(&error);
-    status = lw_execute_session_f32(
-        session, input, input_count, repeated, OUTPUT_COUNT, &error);
+    status = lw_execute_session_f32(session, input, input_count, repeated, OUTPUT_COUNT, &error);
     if (status != LW_STATUS_OK || memcmp(output, repeated, sizeof(output)) != 0) {
         fprintf(stderr, "repeated graph execution is not deterministic\n");
         goto cleanup;
@@ -103,8 +100,7 @@ int main(int argc, char** argv) {
     if (!write_output(argv[2], output, OUTPUT_COUNT)) {
         goto cleanup;
     }
-    printf("shape=1,2 label=%d score=%.9g\n",
-           output[1] > output[0] ? 1 : 0,
+    printf("shape=1,2 label=%d score=%.9g\n", output[1] > output[0] ? 1 : 0,
            (double)(output[1] > output[0] ? output[1] : output[0]));
     exit_code = 0;
 

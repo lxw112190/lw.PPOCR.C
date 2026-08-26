@@ -32,10 +32,9 @@ int main(int argc, char** argv) {
     info.struct_size = (uint32_t)sizeof(info);
     status = lw_model_get_info(model, &info);
     if (status != LW_STATUS_OK || info.format_major != 0u || info.format_minor != 1u ||
-        info.tensor_count != 282u || info.node_count != 161u ||
-        info.input_count != 1u || info.output_count != 1u ||
-        info.file_size == 0u || info.weight_size == 0u || info.workspace_size != 0u ||
-        info.content_checksum == 0u) {
+        info.tensor_count != 282u || info.node_count != 161u || info.input_count != 1u ||
+        info.output_count != 1u || info.file_size == 0u || info.weight_size == 0u ||
+        info.workspace_size != 0u || info.content_checksum == 0u) {
         fprintf(stderr, "unexpected model metadata\n");
         lw_model_free(model);
         return 1;

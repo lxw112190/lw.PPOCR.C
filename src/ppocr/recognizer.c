@@ -1,5 +1,7 @@
 #include "lw_infer.h"
 
+/* Public REC handle: preprocessing -> graph execution -> UTF-8 CTC decoding. */
+
 #include "error_internal.h"
 #include "executor_internal.h"
 #include "rec_internal.h"
@@ -62,13 +64,9 @@ void lw_recognition_result_init(lw_recognition_result* result) {
     clear_result(result);
 }
 
-static lw_status validate_options(
-    const lw_recognizer_options* options,
-    uint32_t* target_width,
-    uint64_t* max_image_pixels,
-    lw_model_options* model_options,
-    lw_session_options* session_options,
-    lw_error* error) {
+static lw_status validate_options(const lw_recognizer_options* options, uint32_t* target_width,
+                                  uint64_t* max_image_pixels, lw_model_options* model_options,
+                                  lw_session_options* session_options, lw_error* error) {
     lw_recognizer_options defaults;
     lw_recognizer_options_init(&defaults);
     *target_width = defaults.target_width;
@@ -99,18 +97,16 @@ static lw_status validate_options(
         *max_image_pixels = options->max_image_pixels;
     }
     if (*target_width > INT32_MAX) {
-        lw_set_error(error, LW_STATUS_INVALID_SHAPE, "recognizer target width exceeds the tensor ABI");
+        lw_set_error(error, LW_STATUS_INVALID_SHAPE,
+                     "recognizer target width exceeds the tensor ABI");
         return LW_STATUS_INVALID_SHAPE;
     }
     return LW_STATUS_OK;
 }
 
-lw_status lw_recognizer_create(
-    const char* model_path_utf8,
-    const char* dictionary_path_utf8,
-    const lw_recognizer_options* options,
-    lw_recognizer** out_recognizer,
-    lw_error* error) {
+lw_status lw_recognizer_create(const char* model_path_utf8, const char* dictionary_path_utf8,
+                               const lw_recognizer_options* options, lw_recognizer** out_recognizer,
+                               lw_error* error) {
     lw_model_options model_options;
     lw_session_options session_options;
     lw_tensor_desc input_desc;
@@ -124,15 +120,14 @@ lw_status lw_recognizer_create(
     if (out_recognizer != NULL) {
         *out_recognizer = NULL;
     }
-    if (model_path_utf8 == NULL || model_path_utf8[0] == '\0' ||
-        dictionary_path_utf8 == NULL || dictionary_path_utf8[0] == '\0' ||
-        out_recognizer == NULL) {
+    if (model_path_utf8 == NULL || model_path_utf8[0] == '\0' || dictionary_path_utf8 == NULL ||
+        dictionary_path_utf8[0] == '\0' || out_recognizer == NULL) {
         lw_set_error(error, LW_STATUS_INVALID_ARGUMENT,
                      "model path, dictionary path, and output recognizer are required");
         return LW_STATUS_INVALID_ARGUMENT;
     }
-    status = validate_options(options, &target_width, &max_image_pixels,
-                              &model_options, &session_options, error);
+    status = validate_options(options, &target_width, &max_image_pixels, &model_options,
+                              &session_options, error);
     if (status != LW_STATUS_OK) {
         return status;
     }
@@ -146,8 +141,7 @@ lw_status lw_recognizer_create(
     if (status != LW_STATUS_OK) {
         goto fail;
     }
-    status = lw_rec_dictionary_load(
-        dictionary_path_utf8, &recognizer->dictionary, error);
+    status = lw_rec_dictionary_load(dictionary_path_utf8, &recognizer->dictionary, error);
     if (status != LW_STATUS_OK) {
         goto fail;
     }
@@ -158,17 +152,16 @@ lw_status lw_recognizer_create(
     input_desc.dimensions[1] = 3;
     input_desc.dimensions[2] = (int32_t)LW_REC_INPUT_HEIGHT;
     input_desc.dimensions[3] = (int32_t)target_width;
-    status = lw_session_create(
-        recognizer->model, &input_desc, 1u, &session_options,
-        &recognizer->session, error);
+    status = lw_session_create(recognizer->model, &input_desc, 1u, &session_options,
+                               &recognizer->session, error);
     if (status != LW_STATUS_OK) {
         goto fail;
     }
     lw_tensor_desc_init(&output_desc);
     status = lw_session_get_output_desc(recognizer->session, 0u, &output_desc);
-    if (status != LW_STATUS_OK || output_desc.dtype != LW_DTYPE_F32 ||
-        output_desc.rank != 3u || output_desc.dimensions[0] != 1 ||
-        output_desc.dimensions[1] <= 0 || output_desc.dimensions[2] <= 0 ||
+    if (status != LW_STATUS_OK || output_desc.dtype != LW_DTYPE_F32 || output_desc.rank != 3u ||
+        output_desc.dimensions[0] != 1 || output_desc.dimensions[1] <= 0 ||
+        output_desc.dimensions[2] <= 0 ||
         (uint32_t)output_desc.dimensions[2] !=
             lw_rec_dictionary_class_count(recognizer->dictionary)) {
         lw_set_error(error, LW_STATUS_INVALID_SHAPE,
@@ -176,35 +169,28 @@ lw_status lw_recognizer_create(
         status = LW_STATUS_INVALID_SHAPE;
         goto fail;
     }
-    recognizer->input_element_count =
-        (uint64_t)3u * LW_REC_INPUT_HEIGHT * target_width;
+    recognizer->input_element_count = (uint64_t)3u * LW_REC_INPUT_HEIGHT * target_width;
     recognizer->probability_element_count =
-        (uint64_t)(uint32_t)output_desc.dimensions[1] *
-        (uint32_t)output_desc.dimensions[2];
+        (uint64_t)(uint32_t)output_desc.dimensions[1] * (uint32_t)output_desc.dimensions[2];
     if (recognizer->input_element_count > SIZE_MAX / sizeof(*recognizer->input) ||
-        recognizer->probability_element_count >
-            SIZE_MAX / sizeof(*recognizer->probabilities)) {
+        recognizer->probability_element_count > SIZE_MAX / sizeof(*recognizer->probabilities)) {
         lw_set_error(error, LW_STATUS_OUT_OF_BOUNDS, "recognizer buffer size overflows");
         status = LW_STATUS_OUT_OF_BOUNDS;
         goto fail;
     }
-    recognizer->input = (float*)malloc(
-        (size_t)recognizer->input_element_count * sizeof(*recognizer->input));
-    recognizer->probabilities = (float*)malloc(
-        (size_t)recognizer->probability_element_count *
-        sizeof(*recognizer->probabilities));
+    recognizer->input =
+        (float*)malloc((size_t)recognizer->input_element_count * sizeof(*recognizer->input));
+    recognizer->probabilities = (float*)malloc((size_t)recognizer->probability_element_count *
+                                               sizeof(*recognizer->probabilities));
     if (recognizer->input == NULL || recognizer->probabilities == NULL) {
         lw_set_error(error, LW_STATUS_OUT_OF_MEMORY, "unable to allocate recognizer buffers");
         status = LW_STATUS_OUT_OF_MEMORY;
         goto fail;
     }
-    max_label_bytes =
-        lw_rec_dictionary_max_label_byte_count(recognizer->dictionary);
+    max_label_bytes = lw_rec_dictionary_max_label_byte_count(recognizer->dictionary);
     if (max_label_bytes == 0u ||
-        (uint64_t)(uint32_t)output_desc.dimensions[1] >
-            (UINT64_MAX - 1u) / max_label_bytes) {
-        lw_set_error(error, LW_STATUS_OUT_OF_BOUNDS,
-                     "recognizer maximum text capacity overflows");
+        (uint64_t)(uint32_t)output_desc.dimensions[1] > (UINT64_MAX - 1u) / max_label_bytes) {
+        lw_set_error(error, LW_STATUS_OUT_OF_BOUNDS, "recognizer maximum text capacity overflows");
         status = LW_STATUS_OUT_OF_BOUNDS;
         goto fail;
     }
@@ -243,9 +229,7 @@ void lw_recognizer_free(lw_recognizer* recognizer) {
     free(recognizer);
 }
 
-lw_status lw_recognizer_get_info(
-    const lw_recognizer* recognizer,
-    lw_recognizer_info* info) {
+lw_status lw_recognizer_get_info(const lw_recognizer* recognizer, lw_recognizer_info* info) {
     if (recognizer == NULL || info == NULL || info->struct_size != sizeof(*info)) {
         return LW_STATUS_INVALID_ARGUMENT;
     }
@@ -253,17 +237,11 @@ lw_status lw_recognizer_get_info(
     return LW_STATUS_OK;
 }
 
-lw_status lw_recognizer_recognize_bgr_u8(
-    lw_recognizer* recognizer,
-    const uint8_t* source,
-    uint64_t source_byte_count,
-    uint32_t source_width,
-    uint32_t source_height,
-    uint32_t source_stride,
-    char* text_utf8,
-    uint64_t text_capacity,
-    lw_recognition_result* result,
-    lw_error* error) {
+lw_status lw_recognizer_recognize_bgr_u8(lw_recognizer* recognizer, const uint8_t* source,
+                                         uint64_t source_byte_count, uint32_t source_width,
+                                         uint32_t source_height, uint32_t source_stride,
+                                         char* text_utf8, uint64_t text_capacity,
+                                         lw_recognition_result* result, lw_error* error) {
     uint64_t source_pixels;
     uint32_t resized_width = 0u;
     uint64_t required_capacity = 0u;
@@ -271,43 +249,38 @@ lw_status lw_recognizer_recognize_bgr_u8(
     uint32_t emitted_count = 0u;
     lw_status status;
     if (recognizer == NULL || source == NULL || result == NULL ||
-        result->struct_size != sizeof(*result) ||
-        (text_utf8 == NULL && text_capacity != 0u)) {
+        result->struct_size != sizeof(*result) || (text_utf8 == NULL && text_capacity != 0u)) {
         lw_set_error(error, LW_STATUS_INVALID_ARGUMENT,
                      "recognizer, BGR source, and initialized result are required");
         return LW_STATUS_INVALID_ARGUMENT;
     }
     clear_result(result);
     if (source_width == 0u || source_height == 0u) {
-        lw_set_error(error, LW_STATUS_INVALID_ARGUMENT,
-                     "source image dimensions must be positive");
+        lw_set_error(error, LW_STATUS_INVALID_ARGUMENT, "source image dimensions must be positive");
         return LW_STATUS_INVALID_ARGUMENT;
     }
     source_pixels = (uint64_t)source_width * source_height;
     if (source_pixels > recognizer->max_image_pixels) {
-        lw_set_error(error, LW_STATUS_MEMORY_LIMIT,
-                     "source image exceeds max_image_pixels");
+        lw_set_error(error, LW_STATUS_MEMORY_LIMIT, "source image exceeds max_image_pixels");
         return LW_STATUS_MEMORY_LIMIT;
     }
-    status = lw_rec_preprocess_bgr_u8(
-        source, source_byte_count, source_width, source_height, source_stride,
-        recognizer->info.target_width, recognizer->input,
-        recognizer->input_element_count, &resized_width);
+    status =
+        lw_rec_preprocess_bgr_u8(source, source_byte_count, source_width, source_height,
+                                 source_stride, recognizer->info.target_width, recognizer->input,
+                                 recognizer->input_element_count, &resized_width);
     if (status != LW_STATUS_OK) {
         lw_set_error(error, status, "BGR source layout is invalid");
         return status;
     }
-    status = lw_execute_session_f32(
-        recognizer->session, recognizer->input,
-        recognizer->input_element_count, recognizer->probabilities,
-        recognizer->probability_element_count, error);
+    status = lw_execute_session_f32(recognizer->session, recognizer->input,
+                                    recognizer->input_element_count, recognizer->probabilities,
+                                    recognizer->probability_element_count, error);
     if (status != LW_STATUS_OK) {
         return status;
     }
     status = lw_rec_ctc_decode_f32(
-        recognizer->dictionary, recognizer->probabilities,
-        recognizer->probability_element_count, recognizer->info.time_steps,
-        recognizer->info.class_count, text_utf8, text_capacity,
+        recognizer->dictionary, recognizer->probabilities, recognizer->probability_element_count,
+        recognizer->info.time_steps, recognizer->info.class_count, text_utf8, text_capacity,
         &required_capacity, &score, &emitted_count, error);
     result->emitted_count = emitted_count;
     result->score = score;
