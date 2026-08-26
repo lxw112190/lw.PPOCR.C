@@ -32,3 +32,6 @@ lw_configure_example(lw-classify-ppm-consumer)
 
 add_executable(lw-detect-ppm-consumer detect_ppm.c)
 lw_configure_example(lw-detect-ppm-consumer)
+
+add_executable(lw-ocr-ppm-consumer ocr_ppm.c)
+lw_configure_example(lw-ocr-ppm-consumer)

@@ -98,9 +98,11 @@ set(LW_PPOCR_C_SOURCES
     src/ppocr/classifier.c
     src/ppocr/cls_preprocess.c
     src/ppocr/ctc_decode.c
+    src/ppocr/crop.c
     src/ppocr/db_postprocess.c
     src/ppocr/det_preprocess.c
     src/ppocr/detector.c
+    src/ppocr/ocr.c
     src/ppocr/rec_preprocess.c
     src/ppocr/recognizer.c
     src/runtime/executor.c
@@ -250,6 +252,19 @@ elseif(APPLE)
 else()
     set_target_properties(lw-detect-ppm PROPERTIES INSTALL_RPATH "$ORIGIN/../lib")
 endif()
+
+add_executable(lw-ocr-ppm examples/ocr_ppm.c)
+target_link_libraries(lw-ocr-ppm PRIVATE lw_ppocr_c_shared)
+target_compile_features(lw-ocr-ppm PRIVATE c_std_11)
+add_dependencies(lw-ocr-ppm convert_det_model convert_cls_model
+    convert_rec_model det_demo_fixture)
+if(WIN32)
+    target_link_libraries(lw-ocr-ppm PRIVATE shell32)
+elseif(APPLE)
+    set_target_properties(lw-ocr-ppm PROPERTIES INSTALL_RPATH "@loader_path/../lib")
+else()
+    set_target_properties(lw-ocr-ppm PROPERTIES INSTALL_RPATH "$ORIGIN/../lib")
+endif()
 if(MSVC)
     target_compile_options(lw-classify-ppm PRIVATE /W4 /WX /utf-8)
 else()
@@ -260,6 +275,12 @@ if(MSVC)
     target_compile_options(lw-detect-ppm PRIVATE /W4 /WX /utf-8)
 else()
     target_compile_options(lw-detect-ppm PRIVATE
+        -Wall -Wextra -Wpedantic -Werror)
+endif()
+if(MSVC)
+    target_compile_options(lw-ocr-ppm PRIVATE /W4 /WX /utf-8)
+else()
+    target_compile_options(lw-ocr-ppm PRIVATE
         -Wall -Wextra -Wpedantic -Werror)
 endif()
 if(MSVC)
@@ -390,6 +411,16 @@ if(BUILD_TESTING)
                 "${LW_PPOCR_C_DET_LWM}"
                 "${LW_PPOCR_C_DET_DEMO_PPM}")
     set_tests_properties(c_demo_detection PROPERTIES TIMEOUT 300)
+
+    add_test(
+        NAME c_demo_full_ocr
+        COMMAND lw-ocr-ppm
+                "${LW_PPOCR_C_DET_LWM}"
+                "${LW_PPOCR_C_CLS_LWM}"
+                "${LW_PPOCR_C_REC_LWM}"
+                "${CMAKE_CURRENT_SOURCE_DIR}/models/ppocrv6-tiny/ppocr_keys.txt"
+                "${LW_PPOCR_C_DET_DEMO_PPM}")
+    set_tests_properties(c_demo_full_ocr PROPERTIES TIMEOUT 600)
 
     add_test(
         NAME c_demo_recognition
@@ -582,6 +613,33 @@ if(BUILD_TESTING)
         WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
         TIMEOUT 900)
 
+    add_executable(ocr-pipeline-driver tests/ocr_pipeline_driver.c)
+    target_link_libraries(ocr-pipeline-driver PRIVATE lw_ppocr_c)
+    target_include_directories(ocr-pipeline-driver PRIVATE
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/ppocr")
+    target_compile_features(ocr-pipeline-driver PRIVATE c_std_11)
+    add_dependencies(ocr-pipeline-driver convert_det_model convert_cls_model
+        convert_rec_model)
+    if(MSVC)
+        target_compile_options(ocr-pipeline-driver PRIVATE /W4 /WX /utf-8)
+    else()
+        target_compile_options(ocr-pipeline-driver PRIVATE
+            -Wall -Wextra -Wpedantic -Werror)
+    endif()
+    add_test(
+        NAME full_ocr_pipeline_reference
+        COMMAND "${Python3_EXECUTABLE}"
+                "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_ocr_pipeline_reference.py"
+                --driver "$<TARGET_FILE:ocr-pipeline-driver>"
+                --detector "${LW_PPOCR_C_DET_LWM}"
+                --classifier "${LW_PPOCR_C_CLS_LWM}"
+                --recognizer "${LW_PPOCR_C_REC_LWM}"
+                --dictionary "${CMAKE_CURRENT_SOURCE_DIR}/models/ppocrv6-tiny/ppocr_keys.txt"
+                --sample "${CMAKE_CURRENT_SOURCE_DIR}/models/ppocrv6-tiny/sample.jpg")
+    set_tests_properties(full_ocr_pipeline_reference PROPERTIES
+        WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+        TIMEOUT 1200)
+
     add_executable(cls-pipeline-driver tests/cls_pipeline_driver.c)
     target_link_libraries(cls-pipeline-driver PRIVATE lw_ppocr_c)
     if(WIN32)
@@ -695,6 +753,7 @@ install(TARGETS lw_ppocr_c lw_ppocr_c_shared
     LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}"
     ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}")
 install(TARGETS lw-recognize-ppm lw-rec-benchmark lw-classify-ppm lw-detect-ppm
+    lw-ocr-ppm
     RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}")
 install(FILES include/lw_infer.h
     DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}")
@@ -702,6 +761,7 @@ install(FILES
     examples/CMakeLists.txt
     examples/classify_ppm.c
     examples/detect_ppm.c
+    examples/ocr_ppm.c
     examples/ppm_image.h
     examples/recognize_ppm.c
     DESTINATION examples)
@@ -752,6 +812,10 @@ if(BUILD_TESTING)
                 -DLW_STAGE_DIR=${CMAKE_CURRENT_BINARY_DIR}/stage-test
                 -DLW_CONFIG=$<CONFIG>
                 -DLW_GENERATOR=${CMAKE_GENERATOR}
+                -DLW_MAKE_PROGRAM=${CMAKE_MAKE_PROGRAM}
+                -DLW_C_COMPILER=${CMAKE_C_COMPILER}
+                -DLW_RC_COMPILER=${CMAKE_RC_COMPILER}
+                -DLW_MT=${CMAKE_MT}
                 -DLW_PYTHON=${Python3_EXECUTABLE}
                 -DLW_TEST_SCRIPT=${CMAKE_CURRENT_SOURCE_DIR}/tests/test_staged_package.py
                 -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/run_staged_package_test.cmake")

@@ -5,11 +5,13 @@ public C APIs. REC is verified through preprocessing, its full graph, and UTF-8
 CTC decoding. CLS is verified through preprocessing, its full graph, and the
 0/180-degree result. DET is verified through preprocessing, its full graph,
 DB-style quadrilateral postprocessing, and original-coordinate restoration.
-Encoded image-file decoding stays outside the core API.
+The exact three-model composition is also verified through pure-C perspective
+crop, optional direction correction, and UTF-8 full-image output. Encoded
+image-file decoding stays outside the core API.
 
 The following exact conversion inputs are analysis-verified. All three are
-converter-, loader-, workspace-planner-, and full-graph-output-verified. REC
-and all three have public pipeline verification.
+converter-, loader-, workspace-planner-, full-graph-output-, and public-pipeline
+verified. Their composed full-OCR path has a real-image Golden test.
 
 | Model | Role | Runtime priority | SHA-256 |
 |---|---|---|---|
@@ -29,6 +31,13 @@ DET is tested at dynamic `[1,3,32,32]` and `[1,3,32,64]` graph inputs. Its
 converted output shape remains `[1,1,H,W]`; every graph output value is compared
 with ONNX Runtime. Separate reference tests cover preprocessing, synthetic
 postprocessing geometry/capacity, and the public real-image box pipeline.
+
+The composed full-OCR gate verifies the sample's 16 reading-order text lines,
+DET/CLS/REC metadata, the detected 180-degree correction, exact capacity-query
+semantics, unchanged output buffers on capacity failure, CLS-disabled creation,
+and crop-pixel resource rejection. OpenCV is used only by the test oracle for
+pixel-tolerance comparison of horizontal and tall perspective crops; it is not
+linked into or shipped with the runtime.
 
 The deterministic REC conversion currently produces a 4,455,632-byte LWM v0.1
 file with SHA-256

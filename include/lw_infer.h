@@ -201,11 +201,57 @@ typedef struct lw_detection_result {
     float height_ratio;
 } lw_detection_result;
 
+typedef struct lw_ocr_options {
+    uint32_t struct_size;
+    uint32_t use_direction_classification;
+    float classifier_threshold;
+    uint32_t reserved;
+    uint64_t max_crop_pixels;
+    lw_detector_options detector;
+    lw_classifier_options classifier;
+    lw_recognizer_options recognizer;
+} lw_ocr_options;
+
+typedef struct lw_ocr_info {
+    uint32_t struct_size;
+    uint32_t use_direction_classification;
+    uint32_t max_line_capacity;
+    uint32_t reserved;
+    uint64_t max_text_capacity;
+    uint64_t max_text_capacity_per_line;
+    uint64_t max_crop_pixels;
+} lw_ocr_info;
+
+typedef struct lw_ocr_line {
+    lw_detection_box box;
+    float recognition_score;
+    float classification_score;
+    uint32_t classification_label;
+    uint32_t applied_rotation_degrees;
+    uint32_t emitted_count;
+    uint32_t reserved;
+    uint64_t text_offset;
+    uint64_t text_length;
+} lw_ocr_line;
+
+typedef struct lw_ocr_result {
+    uint32_t struct_size;
+    uint32_t line_count;
+    uint32_t required_line_capacity;
+    uint32_t detected_count;
+    uint32_t detector_resized_width;
+    uint32_t detector_resized_height;
+    uint32_t reserved0;
+    uint32_t reserved1;
+    uint64_t required_text_capacity;
+} lw_ocr_result;
+
 typedef struct lw_model lw_model;
 typedef struct lw_session lw_session;
 typedef struct lw_recognizer lw_recognizer;
 typedef struct lw_classifier lw_classifier;
 typedef struct lw_detector lw_detector;
+typedef struct lw_ocr lw_ocr;
 
 LW_API void lw_model_options_init(lw_model_options* options);
 LW_API void lw_model_info_init(lw_model_info* info);
@@ -300,6 +346,32 @@ LW_API lw_status lw_detector_detect_bgr_u8(
     lw_detection_box* boxes,
     uint32_t box_capacity,
     lw_detection_result* result,
+    lw_error* error);
+LW_API void lw_ocr_options_init(lw_ocr_options* options);
+LW_API void lw_ocr_info_init(lw_ocr_info* info);
+LW_API void lw_ocr_result_init(lw_ocr_result* result);
+LW_API lw_status lw_ocr_create(
+    const char* detector_model_path_utf8,
+    const char* classifier_model_path_utf8,
+    const char* recognizer_model_path_utf8,
+    const char* dictionary_path_utf8,
+    const lw_ocr_options* options,
+    lw_ocr** out_ocr,
+    lw_error* error);
+LW_API void lw_ocr_free(lw_ocr* ocr);
+LW_API lw_status lw_ocr_get_info(const lw_ocr* ocr, lw_ocr_info* info);
+LW_API lw_status lw_ocr_run_bgr_u8(
+    lw_ocr* ocr,
+    const uint8_t* source,
+    uint64_t source_byte_count,
+    uint32_t source_width,
+    uint32_t source_height,
+    uint32_t source_stride,
+    lw_ocr_line* lines,
+    uint32_t line_capacity,
+    char* text_utf8,
+    uint64_t text_capacity,
+    lw_ocr_result* result,
     lw_error* error);
 LW_API const char* lw_status_string(lw_status status);
 

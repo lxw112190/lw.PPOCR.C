@@ -30,12 +30,15 @@ original ONNX model at multiple input sizes. A public detector C API now owns
 DET resize/normalize, graph execution, bounded DB-style postprocessing,
 coordinate restoration, and reading-order quadrilateral output. Image-file
 decoding remains outside the core: applications provide decoded BGR8 pixels.
-Crop extraction and the combined full-OCR API remain future milestones.
+A public full-OCR C API now composes detection, pure-C perspective cropping,
+optional direction classification/180-degree correction, and recognition. It
+returns one canonical quadrilateral per UTF-8 text line through caller-owned,
+capacity-checked buffers.
 
 Current scope:
 
 - PP-OCRv6 tiny;
-- public REC, fixed-batch CLS, and DET paths;
+- public REC, fixed-batch CLS, DET, and composed full-OCR paths;
 - FP32, CPU, scalar/SSE2/AVX2 runtime dispatch, single-threaded;
 - custom, non-frozen LWM v0.1 format;
 - Windows x64 and Linux x64 first;
@@ -66,7 +69,8 @@ ctest --test-dir build -C Release --output-on-failure
 
 The normal build creates `build/models/rec.lwm`, `build/models/cls.lwm`,
 `build/models/det.lwm`, static and shared pure-C
-libraries, the `lw-recognize-ppm` and `lw-detect-ppm` public-API Demos, the machine-readable
+libraries, the `lw-recognize-ppm`, `lw-detect-ppm`, and `lw-ocr-ppm`
+public-API Demos, the machine-readable
 `lw-rec-benchmark`, and `lwm-inspect`. Inspect the converted model with:
 
 ```powershell
@@ -93,6 +97,8 @@ The public CLS direction-classification contract and reference gates are documen
 The DET graph gate and public detection pipeline are documented in
 [`docs/det-graph.md`](docs/det-graph.md) and
 [`docs/det-pipeline.md`](docs/det-pipeline.md).
+The composed DET/optional-CLS/REC pipeline, output ownership, and crop
+correctness gates are documented in [`docs/full-ocr.md`](docs/full-ocr.md).
 The ten-crop ONNX-versus-pure-C correctness gate is documented in
 [`docs/rec-golden-corpus.md`](docs/rec-golden-corpus.md).
 The optimization baseline and benchmark protocol are documented in

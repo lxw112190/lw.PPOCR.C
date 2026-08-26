@@ -10,7 +10,7 @@ bin/                         PPM demo, benchmark, shared runtime, Windows CRT
 include/lw_infer.h           public C header
 lib/                         static library and shared-library import library
 lib/cmake/lw.PPOCR.C/        CMake package configuration
-examples/                    standalone REC/CLS/DET CMake consumer examples
+examples/                    standalone REC/CLS/DET/full-OCR CMake consumers
 models/rec.lwm               converted PP-OCRv6 tiny REC model
 models/cls.lwm               converted PP-OCRv6 tiny CLS model
 models/det.lwm               converted DET model for the public detector
@@ -70,6 +70,22 @@ It prints clockwise quadrilateral coordinates in the original image coordinate
 system and one score per detected region. The package smoke test executes this
 installed binary and requires a non-empty result.
 
+Run the complete OCR Demo against the same full-image fixture:
+
+```powershell
+.\bin\lw-ocr-ppm.exe `
+  .\models\det.lwm `
+  .\models\cls.lwm `
+  .\models\rec.lwm `
+  .\models\ppocr_keys.txt `
+  .\models\sample.ppm
+```
+
+It runs DET, pure-C perspective crop, CLS direction correction, and REC, then
+prints UTF-8 text, all stage scores, applied rotation, and one original-image
+quadrilateral per line. The staged-package smoke test builds the installed
+consumer and requires the expected sample title from this installed binary.
+
 ## Run the scalar benchmark
 
 The packaged benchmark reuses one recognizer and emits machine-readable JSON:
@@ -107,5 +123,6 @@ cpack --config .\build\CPackConfig.cmake -C Release -G ZIP
 ```
 
 CPack writes the archive and its `.sha256` checksum under `build/packages`.
-The package test installs to a clean staging directory and runs the installed
-Demo against the installed model, dictionary, and fixture before packaging.
+The package test installs to a clean staging directory, builds consumers using
+the installed CMake package, and runs the installed Demos against installed
+models, dictionary, and fixtures before packaging.

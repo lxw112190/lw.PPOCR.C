@@ -2,12 +2,15 @@
 
 The public API in `include/lw_infer.h` is available for integration experiments
 but is not ABI-frozen before 1.0. It covers low-level model/session planning and
-complete recognize-only, direction-classification, and text-detection APIs for decoded BGR8
+complete recognize-only, direction-classification, text-detection, and
+full-OCR APIs for decoded BGR8
 pixels. The recognizer hides preprocessing, graph execution, dictionary
 indexing, and UTF-8 CTC decoding. The classifier hides resize/pad/normalize,
 graph execution, and the two-class 0/180-degree decision.
 The detector hides resize/normalize, dynamic graph planning and execution,
 DB-style postprocessing, and original-coordinate quadrilateral restoration.
+The full-OCR handle composes those components with pure-C perspective crop and
+optional direction correction.
 
 ## Ownership and thread model
 
@@ -32,6 +35,12 @@ DB-style postprocessing, and original-coordinate quadrilateral restoration.
   transient scratch memory.
 - A single detector must not be called concurrently. Separate detectors own
   independent mutable state and may run in parallel.
+- `lw_ocr_create` owns its detector, optional classifier, recognizer, model
+  handles, sessions, and reusable line/text/crop scratch until `lw_ocr_free`.
+- A full-OCR handle grows its crop buffer only when a larger text region is
+  encountered. Detection postprocessing may also use bounded transient memory.
+- A single full-OCR handle must not be called concurrently. Separate handles
+  own independent mutable state and may run in parallel.
 - Every successful create has one matching free; all free functions accept null.
 
 Paths passed to the library are UTF-8. The Windows implementation converts to
@@ -256,6 +265,74 @@ does not promise bit-identical boxes to OpenCV contours or Clipper offsets; its
 precise implementation and correctness boundary are documented in
 `det-pipeline.md`.
 
+## Public full OCR
+
+`lw_ocr_create` composes a DET model, an optional CLS model, a REC model, and a
+UTF-8 dictionary. Initialized options enable direction classification, use a
+classifier threshold of `0.9`, limit one perspective crop to 16,000,000 pixels,
+and embed the normal DET/CLS/REC option structures. Initialize the outer and
+nested structures with `lw_ocr_options_init`; all reserved fields must remain
+zero.
+
+Set `use_direction_classification` to zero to omit CLS. In that mode the CLS
+model path may be null, classification fields are zero, and no 180-degree
+correction is applied. Otherwise, an odd classifier label whose score is
+strictly greater than `classifier_threshold` rotates the private crop by 180
+degrees before recognition. Tall crops are first rotated 90 degrees clockwise
+by the perspective-crop stage.
+
+`lw_ocr_run_bgr_u8` accepts decoded interleaved BGR8 pixels, not JPEG/PNG file
+bytes. Results use two caller-owned buffers:
+
+- `lw_ocr_line[]` stores one canonical clockwise quadrilateral plus DET, CLS,
+  REC, rotation, and emitted-character metadata;
+- one UTF-8 byte buffer stores all NUL-terminated strings. Each line selects its
+  string with `text_offset` and `text_length`; length excludes the trailing NUL.
+
+For a one-pass call, use `lw_ocr_get_info` and allocate `max_line_capacity` lines
+and `max_text_capacity` bytes. To allocate exact output, pass null line/text
+pointers with both capacities zero; the entire pipeline still runs and returns
+`required_line_capacity` and `required_text_capacity`, so obtaining the output
+requires a second call. If either supplied capacity is insufficient, the call
+returns `LW_STATUS_OUT_OF_BOUNDS` and copies neither output buffer.
+
+`detected_count` reports detector output. `line_count` can be smaller when a
+degenerate quadrilateral cannot produce a valid crop. Output lines retain the
+detector reading order. A crop exceeding `max_crop_pixels` returns
+`LW_STATUS_MEMORY_LIMIT`.
+
+```c
+lw_ocr* ocr = NULL;
+lw_ocr_info info;
+lw_ocr_result result;
+lw_ocr_line* lines = NULL;
+char* text = NULL;
+lw_error error;
+
+lw_error_init(&error);
+if (lw_ocr_create("det.lwm", "cls.lwm", "rec.lwm", "ppocr_keys.txt",
+                  NULL, &ocr, &error) == LW_STATUS_OK) {
+    lw_ocr_info_init(&info);
+    if (lw_ocr_get_info(ocr, &info) == LW_STATUS_OK) {
+        lines = (lw_ocr_line*)calloc(info.max_line_capacity, sizeof(*lines));
+        text = (char*)malloc((size_t)info.max_text_capacity);
+    }
+    lw_ocr_result_init(&result);
+    if (lines != NULL && text != NULL && lw_ocr_run_bgr_u8(
+            ocr, bgr, bgr_byte_count, width, height, stride,
+            lines, info.max_line_capacity, text, info.max_text_capacity,
+            &result, &error) == LW_STATUS_OK) {
+        /* text + lines[i].text_offset is NUL-terminated UTF-8. */
+    }
+}
+free(text);
+free(lines);
+lw_ocr_free(ocr);
+```
+
+The complete crop geometry, reference tolerance, and real-image Golden gate are
+documented in `full-ocr.md`.
+
 ## Errors
 
 Programs should branch on `lw_status`, not parse diagnostic text. Relevant
@@ -267,8 +344,8 @@ planning errors are:
 - `LW_STATUS_OUT_OF_MEMORY`: host allocation failure;
 - model load errors defined by the LWM loader.
 
-Recognition, classification, and detection additionally return
+Recognition, classification, detection, and full OCR additionally return
 `LW_STATUS_INVALID_SHAPE` for a truncated BGR layout and
 `LW_STATUS_MEMORY_LIMIT` when decoded dimensions exceed `max_image_pixels`.
-Recognition and detection return `LW_STATUS_OUT_OF_BOUNDS` for insufficient
-caller-owned output capacity.
+Recognition, detection, and full OCR return `LW_STATUS_OUT_OF_BOUNDS` for
+insufficient caller-owned output capacity.

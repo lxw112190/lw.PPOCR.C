@@ -15,6 +15,7 @@ platform-independent LWM v0                preprocess + executor + CTC/class res
                                           |
 decoded BGR pixels -> REC preprocess -> probabilities -> UTF-8 CTC text
 decoded BGR pixels -> CLS preprocess -> probabilities -> 0/180 orientation
+decoded BGR pixels -> DET -> perspective crop -> optional CLS -> REC -> UTF-8 lines
 ```
 
 The converter and runtime are separate products with separate dependency
@@ -38,6 +39,7 @@ runtime loader -> tensor/memory -> executor -> scalar/SIMD kernels
                                            |
                               REC preprocess + CTC
                               CLS preprocess + orientation
+                              DET + crop + optional CLS + REC composition
 ```
 
 `src/runtime` must not know about OCR text, dictionaries, boxes, or DB
@@ -115,8 +117,14 @@ and architecture-specific kernels are isolated under `src/simd`.
 25. Public DET pipeline — complete; decoded BGR preprocessing, dynamic session
     reuse, bounded DB-style postprocessing, original-coordinate quadrilaterals,
     capacity semantics, shared exports, real-image tests, and packaged Demo.
-26. Next: implement crop extraction and compose DET/optional CLS/REC into a
-    separately reviewed full-OCR API.
+26. Pure-C crop extraction and composed DET/optional CLS/REC full-OCR API —
+    complete; the API uses caller-owned dual-capacity output, one canonical
+    quadrilateral, bounded crop pixels, optional 180-degree correction, a
+    dependency-free PPM Demo, OpenCV crop-oracle tests, and a real-image text
+    Golden gate on Windows x64/x86.
+27. Next: broaden the full-OCR Golden corpus and harden invalid-input,
+    sanitizer, repeated-run memory, and cross-platform CI coverage before any
+    ABI freeze.
 
 ## Compatibility claims
 

@@ -1,5 +1,6 @@
 if(NOT DEFINED LW_BUILD_DIR OR NOT DEFINED LW_STAGE_DIR OR
-   NOT DEFINED LW_GENERATOR OR NOT DEFINED LW_PYTHON OR
+   NOT DEFINED LW_GENERATOR OR NOT DEFINED LW_MAKE_PROGRAM OR
+   NOT DEFINED LW_C_COMPILER OR NOT DEFINED LW_PYTHON OR
    NOT DEFINED LW_TEST_SCRIPT)
     message(FATAL_ERROR "staged package test arguments are required")
 endif()
@@ -17,11 +18,21 @@ endif()
 
 set(consumer_build "${LW_BUILD_DIR}/stage-consumer-test")
 file(REMOVE_RECURSE "${consumer_build}")
+set(consumer_tool_args
+    -DCMAKE_MAKE_PROGRAM=${LW_MAKE_PROGRAM}
+    -DCMAKE_C_COMPILER=${LW_C_COMPILER})
+if(DEFINED LW_RC_COMPILER AND NOT LW_RC_COMPILER STREQUAL "")
+    list(APPEND consumer_tool_args -DCMAKE_RC_COMPILER=${LW_RC_COMPILER})
+endif()
+if(DEFINED LW_MT AND NOT LW_MT STREQUAL "")
+    list(APPEND consumer_tool_args -DCMAKE_MT=${LW_MT})
+endif()
 execute_process(
     COMMAND "${CMAKE_COMMAND}"
             -S "${LW_STAGE_DIR}/examples"
             -B "${consumer_build}"
             -G "${LW_GENERATOR}"
+            ${consumer_tool_args}
             -DCMAKE_BUILD_TYPE=Release
             -DCMAKE_PREFIX_PATH=${LW_STAGE_DIR}
     RESULT_VARIABLE configure_consumer_result

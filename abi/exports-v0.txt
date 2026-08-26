@@ -18,6 +18,13 @@ lw_model_get_info
 lw_model_info_init
 lw_model_load
 lw_model_options_init
+lw_ocr_create
+lw_ocr_free
+lw_ocr_get_info
+lw_ocr_info_init
+lw_ocr_options_init
+lw_ocr_result_init
+lw_ocr_run_bgr_u8
 lw_recognition_result_init
 lw_recognizer_create
 lw_recognizer_free

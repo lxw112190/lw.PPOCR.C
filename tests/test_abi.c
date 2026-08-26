@@ -18,6 +18,10 @@ _Static_assert(sizeof(lw_detector_options) == 64u, "lw_detector_options ABI chan
 _Static_assert(sizeof(lw_detector_info) == 40u, "lw_detector_info ABI changed");
 _Static_assert(sizeof(lw_detection_box) == 40u, "lw_detection_box ABI changed");
 _Static_assert(sizeof(lw_detection_result) == 32u, "lw_detection_result ABI changed");
+_Static_assert(sizeof(lw_ocr_options) == 176u, "lw_ocr_options ABI changed");
+_Static_assert(sizeof(lw_ocr_info) == 40u, "lw_ocr_info ABI changed");
+_Static_assert(sizeof(lw_ocr_line) == 80u, "lw_ocr_line ABI changed");
+_Static_assert(sizeof(lw_ocr_result) == 40u, "lw_ocr_result ABI changed");
 _Static_assert(LW_STATUS_OK == 0, "success status must remain zero");
 _Static_assert(LW_STATUS_UNSUPPORTED == 8, "status numbering changed");
 _Static_assert(LW_STATUS_MEMORY_LIMIT == 10, "status numbering changed");
@@ -37,6 +41,9 @@ int main(void) {
     lw_detector_options detector_options;
     lw_detector_info detector_info;
     lw_detection_result detection_result;
+    lw_ocr_options ocr_options;
+    lw_ocr_info ocr_info;
+    lw_ocr_result ocr_result;
     lw_model_options_init(&options);
     lw_error_init(&error);
     lw_tensor_desc_init(&tensor);
@@ -51,6 +58,9 @@ int main(void) {
     lw_detector_options_init(&detector_options);
     lw_detector_info_init(&detector_info);
     lw_detection_result_init(&detection_result);
+    lw_ocr_options_init(&ocr_options);
+    lw_ocr_info_init(&ocr_info);
+    lw_ocr_result_init(&ocr_result);
     return options.struct_size == sizeof(options) && error.struct_size == sizeof(error) &&
                    tensor.struct_size == sizeof(tensor) &&
                    session_options.struct_size == sizeof(session_options) &&
@@ -66,7 +76,14 @@ int main(void) {
                    detector_options.limit_side_length == 960u &&
                    detector_options.max_candidates == 1000u &&
                    detector_info.struct_size == sizeof(detector_info) &&
-                   detection_result.struct_size == sizeof(detection_result)
+                   detection_result.struct_size == sizeof(detection_result) &&
+                   ocr_options.struct_size == sizeof(ocr_options) &&
+                   ocr_options.use_direction_classification == 1u &&
+                   ocr_options.detector.struct_size == sizeof(ocr_options.detector) &&
+                   ocr_options.classifier.struct_size == sizeof(ocr_options.classifier) &&
+                   ocr_options.recognizer.struct_size == sizeof(ocr_options.recognizer) &&
+                   ocr_info.struct_size == sizeof(ocr_info) &&
+                   ocr_result.struct_size == sizeof(ocr_result)
                ? 0
                : 1;
 }
