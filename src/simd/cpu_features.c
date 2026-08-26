@@ -5,6 +5,8 @@
  * CPU supports AVX2, so callers must always dispatch through this result.
  */
 
+#include <stddef.h>
+
 #if defined(_M_IX86) || defined(_M_X64)
 #  include <intrin.h>
 #elif defined(__i386__) || defined(__x86_64__)

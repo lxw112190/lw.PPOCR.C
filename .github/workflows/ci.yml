@@ -16,6 +16,8 @@ jobs:
       matrix:
         os: [windows-latest, ubuntu-22.04]
     runs-on: ${{ matrix.os }}
+    env:
+      SCCACHE_GHA_ENABLED: "true"
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-python@v6
@@ -23,11 +25,20 @@ jobs:
           python-version: "3.12"
           cache: pip
           cache-dependency-path: requirements-converter.txt
+      - name: Set up compiler cache
+        uses: mozilla-actions/sccache-action@v0.0.11
+        with:
+          version: "v0.16.0"
       - name: Install converter dependencies
         run: python -m pip install -r requirements-converter.txt
       - name: Configure
-        run: cmake -S . -B build -DBUILD_TESTING=ON
-      - name: Build runtime and convert REC model
+        run: >-
+          cmake -S . -B build -G Ninja
+          -DCMAKE_BUILD_TYPE=Release
+          -DBUILD_TESTING=ON
+          -DCMAKE_C_COMPILER_LAUNCHER=sccache
+          -DCMAKE_CXX_COMPILER_LAUNCHER=sccache
+      - name: Build runtime and convert models
         run: cmake --build build --config Release
       - name: Regenerate analysis
         run: cmake --build build --target analyze_models --config Release
