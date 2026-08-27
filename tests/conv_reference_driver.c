@@ -48,6 +48,7 @@ int main(void) {
     const int32_t stride2_input_dimensions[4] = {1, 2, 5, 18};
     const int32_t stride2_weight_dimensions[4] = {3, 2, 3, 3};
     const int32_t stride2_output_dimensions[4] = {1, 3, 3, 9};
+    const int32_t stride2_four_output_dimensions[4] = {1, 4, 3, 9};
     const int32_t unit_conv_input_dimensions[4] = {1, 3, 5, 19};
     const int32_t unit_conv_weight_dimensions[4] = {2, 3, 3, 3};
     const int32_t unit_conv_output_dimensions[4] = {1, 2, 5, 19};
@@ -96,6 +97,7 @@ int main(void) {
     const int32_t transpose_conv_strides[2] = {2, 2};
     const float normal_bias[3] = {0.25f, -0.5f, 1.0f};
     const float stride2_bias[3] = {-0.125f, 0.625f, -0.875f};
+    const float stride2_four_bias[4] = {-0.125f, 0.625f, -0.875f, 0.375f};
     const float unit_conv_bias[2] = {0.375f, -0.625f};
     const float unit_depthwise_bias[2] = {0.375f, -0.625f};
     const float pointwise_bias[6] = {0.25f, -0.5f, 1.0f, -1.25f, 0.75f, 0.5f};
@@ -114,6 +116,9 @@ int main(void) {
     float stride2_output[81];
     float stride2_dispatched_output[81];
     float stride2_simd_output[81];
+    float stride2_four_weights[72];
+    float stride2_four_output[108];
+    float stride2_four_simd_output[108];
     float unit_conv_input[285];
     float unit_conv_weights[54];
     float unit_conv_output[190];
@@ -205,6 +210,23 @@ int main(void) {
         return 1;
     }
     print_values("stride2_conv", stride2_output, 81u);
+
+    /* Four output channels exercise the AVX2 kernel that reuses each gathered
+     * input vector across four independent NCHW output planes. */
+    fill_values(stride2_four_weights, 72u, 19u, 47u, 23, 12.0f);
+    lw_scalar_conv3x3_stride2_pad1_f32(stride2_input, stride2_four_weights, stride2_four_bias,
+                                       stride2_four_output, stride2_input_dimensions,
+                                       stride2_four_output_dimensions);
+    if (simd_level >= LW_SIMD_LEVEL_AVX2) {
+        lw_avx2_conv3x3_stride2_pad1_f32(stride2_input, stride2_four_weights, stride2_four_bias,
+                                         stride2_four_simd_output, stride2_input_dimensions,
+                                         stride2_four_output_dimensions);
+        if (memcmp(stride2_four_output, stride2_four_simd_output, sizeof(stride2_four_output)) !=
+            0) {
+            fprintf(stderr, "AVX2 four-output stride-2 Conv differs from scalar output\n");
+            return 1;
+        }
+    }
 
     fill_values(unit_conv_input, 285u, 17u, 43u, 21, 11.0f);
     fill_values(unit_conv_weights, 54u, 19u, 37u, 18, 9.0f);

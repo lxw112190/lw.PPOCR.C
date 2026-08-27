@@ -148,6 +148,11 @@ and architecture-specific kernels are isolated under `src/simd`.
     classification axis uses direct row pointers while retaining the same
     maximum shift, `expf`, sum and per-element division order. Strided axes keep
     the general implementation, and in-place operation remains supported.
+33. AVX2 stride-2 3x3 output-channel blocking — complete locally; four NCHW
+    output planes share each gathered eight-value input vector while keeping
+    separate accumulators and the original input-channel/kernel addition order.
+    Non-multiple-of-four output counts retain the previous streaming path or a
+    small-input-channel spatial block.
 
 ## Compatibility claims
 

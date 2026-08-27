@@ -266,3 +266,49 @@ repeatable gain: 412.13 ms became 413.18 ms with one worker, and 216.08 ms
 became 216.18 ms with four workers. Both implementations were removed. Future
 Erf work therefore needs a genuinely vectorized approximation plus an explicit
 error corpus; eliminating intermediate tensor passes alone is not sufficient.
+
+## Four-output stride-2 3x3 Conv
+
+The next AVX2 experiment targets the stride-2 3x3 Conv family used by DET, CLS
+and REC. The previous kernel streamed one output channel at a time, so every
+output plane repeated the same strided input loads and even-lane shuffles. The
+new path keeps four independent output vectors in registers and applies four
+output-channel weights to each gathered input vector. Every output still adds
+input channels and the nine kernel positions in the original order, and FMA
+remains disabled, so the result is byte-identical to the scalar reference.
+
+The selector requires an output-channel count divisible by four. Other shapes
+retain the previous output-plane streaming kernel; a small-input-channel path
+also covers non-multiple-of-four outputs. No packed weights, session memory,
+public ABI or LWM model change is introduced.
+
+An alternating local A/B used independent Release builds from commit `7fb8881`
+and the candidate source, the same bundled 500x500/16-line fixture, three
+profiled iterations and one line worker. Across four operator-profile runs, the
+accumulated stride-2 3x3 work per request changed as follows:
+
+| Component | Existing AVX2 path | Four-output path | Change |
+|---|---:|---:|---:|
+| All DET/CLS/REC stride-2 3x3 | 57.98 ms | 35.40 ms | -38.9% |
+| DET | 27.61 ms | 19.71 ms | -28.6% |
+| CLS | 1.93 ms | 0.85 ms | -56.0% |
+| REC | 28.44 ms | 14.85 ms | -47.8% |
+
+The first DET layer (`Cin=3`, `Cout=16`) fell from about 6.08 ms to 1.75 ms in
+the alternating measurements. The direct Conv reference driver includes odd
+spatial dimensions and a four-output-channel case, and requires the AVX2 result
+to be byte-identical to the scalar kernel before graph and OCR gates run.
+
+The public reusable-handle benchmark was also run in alternating order for the
+complete OCR latency. Each entry below is the mean of three independent
+processes; every process used three warm-up calls followed by eight measured
+calls on the same 500x500/16-line fixture.
+
+| Line workers | Existing AVX2 path | Four-output path | Latency change | Speedup |
+|---:|---:|---:|---:|---:|
+| 1 | 401.195 ms | 382.943 ms | -4.55% | 1.048x |
+| 4 | 212.031 ms | 203.781 ms | -3.89% | 1.040x |
+
+Throughput increased by 4.77% with one worker and 4.03% with four workers. The
+end-to-end gain is smaller than the targeted operator reduction because image
+pre/post-processing and the other graph operators are unchanged.
