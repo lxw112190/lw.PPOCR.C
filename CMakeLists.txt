@@ -122,6 +122,7 @@ set(LW_PPOCR_C_SOURCES
     src/runtime/executor.c
     src/runtime/memory.c
     src/runtime/model.c
+    src/runtime/parallel.c
     src/runtime/session.c
     src/runtime/shape.c
     src/runtime/validate.c

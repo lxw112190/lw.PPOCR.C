@@ -8,6 +8,7 @@
 
 #include "lwm_read.h"
 #include "packed_conv_internal.h"
+#include "parallel_internal.h"
 #include "scalar_kernels.h"
 #include "session_internal.h"
 #include "cpu_features.h"
@@ -15,6 +16,8 @@
 
 #include <stdio.h>
 #include <string.h>
+
+#define LW_PARALLEL_CONV_MIN_MULTIPLY_ADDS UINT64_C(8000000)
 
 enum {
     LW_OP_CONV = 1,
@@ -79,6 +82,154 @@ static float* tensor_output_data(lw_session* session, uint32_t tensor_index) {
     return (float*)(void*)(session->workspace + (size_t)tensor->workspace_offset);
 }
 
+typedef struct lw_parallel_conv_context {
+    const float* input;
+    const float* weights;
+    const float* bias;
+    float* output;
+    int32_t input_dimensions[4];
+    int32_t weight_dimensions[4];
+    int32_t output_dimensions[4];
+    int32_t kernel[2];
+    int32_t strides[2];
+    int32_t dilations[2];
+    int32_t pads[4];
+    uint32_t groups;
+    uint32_t packed;
+    lw_status statuses[LW_PARALLEL_MAX_WORKERS];
+} lw_parallel_conv_context;
+
+static uint64_t multiply_saturated(uint64_t left, uint64_t right) {
+    return right != 0u && left > UINT64_MAX / right ? UINT64_MAX : left * right;
+}
+
+static uint32_t parallel_conv_worker_count(const lw_session* session,
+                                           const lw_parallel_conv_context* context) {
+    uint32_t output_channels = (uint32_t)context->output_dimensions[1];
+    uint32_t maximum_workers;
+    uint64_t work;
+    int depthwise;
+    if (session->intra_op_thread_count <= 1u || context->input_dimensions[0] != 1 ||
+        context->output_dimensions[0] != 1 || output_channels == 0u) {
+        return 1u;
+    }
+    depthwise = context->groups == (uint32_t)context->input_dimensions[1] &&
+                context->groups == output_channels && context->weight_dimensions[1] == 1;
+    if (context->groups != 1u && !depthwise) {
+        return 1u;
+    }
+    if (context->packed != 0u) {
+        if (output_channels % LW_PACKED_CONV1X1_OUTPUT_TILE != 0u) {
+            return 1u;
+        }
+        maximum_workers = output_channels / LW_PACKED_CONV1X1_OUTPUT_TILE;
+    } else {
+        maximum_workers = output_channels;
+    }
+    if (maximum_workers > session->intra_op_thread_count) {
+        maximum_workers = session->intra_op_thread_count;
+    }
+    if (maximum_workers < 2u) {
+        return 1u;
+    }
+    work = multiply_saturated(output_channels, (uint32_t)context->output_dimensions[2]);
+    work = multiply_saturated(work, (uint32_t)context->output_dimensions[3]);
+    work = multiply_saturated(work, (uint32_t)context->weight_dimensions[1]);
+    work = multiply_saturated(work, (uint32_t)context->kernel[0]);
+    work = multiply_saturated(work, (uint32_t)context->kernel[1]);
+    return work >= LW_PARALLEL_CONV_MIN_MULTIPLY_ADDS ? maximum_workers : 1u;
+}
+
+static void execute_parallel_conv_slice(void* opaque, uint32_t worker_index,
+                                        uint32_t worker_count) {
+    lw_parallel_conv_context* context = (lw_parallel_conv_context*)opaque;
+    uint32_t output_channels = (uint32_t)context->output_dimensions[1];
+    uint32_t item_size = context->packed != 0u ? LW_PACKED_CONV1X1_OUTPUT_TILE : 1u;
+    uint32_t item_count = output_channels / item_size;
+    uint32_t channel_begin =
+        (uint32_t)(((uint64_t)item_count * worker_index) / worker_count) * item_size;
+    uint32_t channel_end =
+        (uint32_t)(((uint64_t)item_count * (worker_index + 1u)) / worker_count) * item_size;
+    uint32_t channel_count = channel_end - channel_begin;
+    uint64_t input_plane = (uint64_t)(uint32_t)context->input_dimensions[2] *
+                           (uint32_t)context->input_dimensions[3];
+    uint64_t output_plane = (uint64_t)(uint32_t)context->output_dimensions[2] *
+                            (uint32_t)context->output_dimensions[3];
+    uint64_t kernel_plane =
+        (uint64_t)(uint32_t)context->kernel[0] * (uint32_t)context->kernel[1];
+    int32_t input_dimensions[4];
+    int32_t weight_dimensions[4];
+    int32_t output_dimensions[4];
+    const float* input = context->input;
+    const float* weights;
+    const float* bias = context->bias == NULL ? NULL : context->bias + channel_begin;
+    float* output = context->output + (size_t)((uint64_t)channel_begin * output_plane);
+    uint32_t groups = context->groups;
+    memcpy(input_dimensions, context->input_dimensions, sizeof(input_dimensions));
+    memcpy(weight_dimensions, context->weight_dimensions, sizeof(weight_dimensions));
+    memcpy(output_dimensions, context->output_dimensions, sizeof(output_dimensions));
+    output_dimensions[1] = (int32_t)channel_count;
+    weight_dimensions[0] = (int32_t)channel_count;
+    if (context->packed != 0u) {
+        uint32_t input_channels = (uint32_t)input_dimensions[1];
+        weights = context->weights + (size_t)((uint64_t)channel_begin * input_channels);
+        lw_packed_conv1x1_f32(input, weights, bias, output, input_dimensions, output_dimensions);
+        context->statuses[worker_index] = LW_STATUS_OK;
+        return;
+    }
+    if (groups == 1u) {
+        weights = context->weights +
+                  (size_t)((uint64_t)channel_begin * (uint32_t)weight_dimensions[1] * kernel_plane);
+    } else {
+        input += (size_t)((uint64_t)channel_begin * input_plane);
+        weights = context->weights + (size_t)((uint64_t)channel_begin * kernel_plane);
+        input_dimensions[1] = (int32_t)channel_count;
+        groups = channel_count;
+    }
+    context->statuses[worker_index] = lw_scalar_conv2d_f32(
+        input, weights, bias, bias == NULL ? 0u : channel_count, output, input_dimensions,
+        weight_dimensions, output_dimensions, context->kernel, context->strides,
+        context->dilations, context->pads, groups);
+}
+
+static lw_status dispatch_parallel_conv(lw_session* session, const float* input,
+                                        const float* weights, const float* bias, float* output,
+                                        const int32_t input_dimensions[4],
+                                        const int32_t weight_dimensions[4],
+                                        const int32_t output_dimensions[4],
+                                        const int32_t kernel[2], const int32_t strides[2],
+                                        const int32_t dilations[2], const int32_t pads[4],
+                                        uint32_t groups, uint32_t packed) {
+    lw_parallel_conv_context context;
+    uint32_t worker_count;
+    uint32_t worker_index;
+    memset(&context, 0, sizeof(context));
+    context.input = input;
+    context.weights = weights;
+    context.bias = bias;
+    context.output = output;
+    memcpy(context.input_dimensions, input_dimensions, sizeof(context.input_dimensions));
+    memcpy(context.weight_dimensions, weight_dimensions, sizeof(context.weight_dimensions));
+    memcpy(context.output_dimensions, output_dimensions, sizeof(context.output_dimensions));
+    memcpy(context.kernel, kernel, sizeof(context.kernel));
+    memcpy(context.strides, strides, sizeof(context.strides));
+    memcpy(context.dilations, dilations, sizeof(context.dilations));
+    memcpy(context.pads, pads, sizeof(context.pads));
+    context.groups = groups;
+    context.packed = packed;
+    worker_count = parallel_conv_worker_count(session, &context);
+    if (worker_count <= 1u) {
+        return LW_STATUS_UNSUPPORTED;
+    }
+    lw_thread_pool_run(session->thread_pool, worker_count, execute_parallel_conv_slice, &context);
+    for (worker_index = 0u; worker_index < worker_count; ++worker_index) {
+        if (context.statuses[worker_index] != LW_STATUS_OK) {
+            return context.statuses[worker_index];
+        }
+    }
+    return LW_STATUS_OK;
+}
+
 static lw_status dispatch_node(lw_session* session, const uint8_t* node, uint32_t node_index,
                                uint32_t graph_input_index, const float* graph_input,
                                lw_simd_level simd_level) {
@@ -121,6 +272,8 @@ static lw_status dispatch_node(lw_session* session, const uint8_t* node, uint32_
         int32_t dilations[2] = {lwm_read_i32(params + 24), lwm_read_i32(params + 28)};
         int32_t pads[4] = {lwm_read_i32(params + 32), lwm_read_i32(params + 36),
                            lwm_read_i32(params + 40), lwm_read_i32(params + 44)};
+        uint32_t groups = lwm_read_u32(params + 4);
+        lw_status parallel_status;
         if (input_count != 2u && input_count != 3u) {
             return LW_STATUS_INVALID_SHAPE;
         }
@@ -130,15 +283,29 @@ static lw_status dispatch_node(lw_session* session, const uint8_t* node, uint32_
             const float* packed_weights =
                 (const float*)(const void*)(session->packed_weights +
                                             (size_t)prepared->packed_weight_offset);
+            parallel_status = dispatch_parallel_conv(
+                session, inputs[0], packed_weights, input_count == 3u ? inputs[2] : NULL, output,
+                input_tensors[0]->dimensions, input_tensors[1]->dimensions,
+                output_tensor->dimensions, kernel, strides, dilations, pads, groups, 1u);
+            if (parallel_status == LW_STATUS_OK) {
+                return LW_STATUS_OK;
+            }
             lw_packed_conv1x1_f32(inputs[0], packed_weights, input_count == 3u ? inputs[2] : NULL,
                                   output, input_tensors[0]->dimensions, output_tensor->dimensions);
+            return LW_STATUS_OK;
+        }
+        parallel_status = dispatch_parallel_conv(
+            session, inputs[0], inputs[1], input_count == 3u ? inputs[2] : NULL, output,
+            input_tensors[0]->dimensions, input_tensors[1]->dimensions, output_tensor->dimensions,
+            kernel, strides, dilations, pads, groups, 0u);
+        if (parallel_status == LW_STATUS_OK) {
             return LW_STATUS_OK;
         }
         return lw_scalar_conv2d_f32(
             inputs[0], inputs[1], input_count == 3u ? inputs[2] : NULL,
             input_count == 3u ? (uint32_t)tensor_element_count(input_tensors[2]) : 0u, output,
             input_tensors[0]->dimensions, input_tensors[1]->dimensions, output_tensor->dimensions,
-            kernel, strides, dilations, pads, lwm_read_u32(params + 4));
+            kernel, strides, dilations, pads, groups);
     }
     case LW_OP_ADD:
     case LW_OP_MUL:

@@ -164,6 +164,16 @@ and architecture-specific kernels are isolated under `src/simd`.
     special-value, graph, pipeline, Golden-corpus, x64 and x86 gates protect the
     approximation. SIMD capability is detected once per graph execution;
     non-AVX2 and non-x86 targets retain the scalar `erff` path.
+36. REC width-distribution profiling — complete locally; the private full-OCR
+    profiler records actual resized width, target width, padding ratio and
+    stable 64/96/128/160/192/256/320/overflow buckets without changing the
+    public ABI or adding work to ordinary OCR calls. Width bucketing remains an
+    evidence-gated experiment rather than a default behavior change.
+37. DET output-channel parallelism — complete locally; large group-1 and
+    depthwise convolutions split disjoint output-channel ranges across a fixed
+    session-owned thread pool. Small convolutions stay serial, packed 1x1
+    ranges remain four-channel aligned, and DET finishes before the existing
+    CLS/REC line workers start, avoiding nested oversubscription.
 
 ## Compatibility claims
 

@@ -6,6 +6,8 @@
 
 #include <stdint.h>
 
+#define LW_REC_WIDTH_HISTOGRAM_BUCKET_COUNT 8u
+
 /*
  * Private profiling contract used by benchmarks and regression tests. It is
  * deliberately kept out of the public C ABI until the measurement fields and
@@ -29,6 +31,10 @@ typedef struct lw_ocr_execution_profile {
     uint64_t line_worker_critical_nanoseconds;
     uint64_t line_dispatch_overhead_nanoseconds;
     uint64_t output_nanoseconds;
+    uint64_t rec_width_sample_count;
+    uint64_t rec_resized_width_sum;
+    uint64_t rec_target_width_sum;
+    uint64_t rec_width_histogram[LW_REC_WIDTH_HISTOGRAM_BUCKET_COUNT];
     lw_pipeline_component_profile detector;
     lw_pipeline_component_profile classifier;
     lw_pipeline_component_profile recognizer;
@@ -47,6 +53,7 @@ uint64_t lw_ocr_profile_now(const lw_ocr_execution_profile* profile);
 void lw_ocr_profile_add_elapsed(uint64_t* destination, uint64_t started,
                                 const lw_ocr_execution_profile* profile);
 void lw_profile_add_value(uint64_t* destination, uint64_t value);
+uint32_t lw_rec_width_histogram_bucket(uint32_t resized_width);
 
 lw_status lw_detector_detect_bgr_u8_profiled(
     lw_detector* detector, const uint8_t* source, uint64_t source_byte_count, uint32_t source_width,

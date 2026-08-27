@@ -109,6 +109,25 @@ class FullOcrProfileTest(unittest.TestCase):
                     sum(item["percentage"] for item in operators), 100.0, places=3
                 )
 
+                rec_width = report["rec_width"]
+                self.assertEqual(rec_width["samples"], report["lines"])
+                self.assertGreater(rec_width["resized_width_sum"], 0)
+                self.assertGreaterEqual(
+                    rec_width["target_width_sum"], rec_width["resized_width_sum"]
+                )
+                self.assertGreater(rec_width["mean_resized_width"], 0.0)
+                self.assertLessEqual(rec_width["mean_resized_width"], 320.0)
+                self.assertGreaterEqual(rec_width["mean_padding_ratio"], 0.0)
+                self.assertLessEqual(rec_width["mean_padding_ratio"], 1.0)
+                histogram = rec_width["histogram"]
+                self.assertEqual(
+                    [item["max_width"] for item in histogram],
+                    [64, 96, 128, 160, 192, 256, 320, None],
+                )
+                self.assertEqual(
+                    sum(item["count"] for item in histogram), rec_width["samples"]
+                )
+
                 conv = next(item for item in operators if item["name"] == "Conv")
                 self.assertEqual(report["conv_invocations"], conv["invocations"])
                 self.assertEqual(
@@ -160,6 +179,8 @@ class FullOcrProfileTest(unittest.TestCase):
             [item["invocations"] for item in reports[0]["operators"]],
             [item["invocations"] for item in reports[1]["operators"]],
         )
+        self.assertEqual(reports[0]["output_checksum"], reports[1]["output_checksum"])
+        self.assertEqual(reports[0]["rec_width"], reports[1]["rec_width"])
 
 
 def parse_args() -> argparse.Namespace:

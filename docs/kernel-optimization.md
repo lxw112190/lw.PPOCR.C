@@ -461,12 +461,14 @@ capacity planning.
 ## Full OCR line-level parallelism
 
 The OpenCV reference implementation gains multi-line throughput from multiple
-recognition predictors. The pure-C equivalent keeps DET and every individual
-graph deterministic and single-threaded, but gives each full-OCR worker its own
-CLS/REC model, session, and reusable buffers. After DET, crops are processed in
-batches of at most `worker_count`; Windows uses native threads and Linux/macOS
-use pthreads. WebAssembly and x86 default to one worker, while native 64-bit
-builds default to four. The public OCR handle remains non-reentrant.
+recognition predictors. The pure-C equivalent gives each full-OCR worker its
+own CLS/REC model, session, and reusable buffers. DET reuses a fixed,
+session-owned thread pool for large output-channel-parallel convolutions, then
+crops are processed in batches of at most `worker_count`; Windows uses native
+threads and Linux/macOS use pthreads. These phases never overlap, so DET
+operator parallelism is not nested inside line parallelism. WebAssembly and x86
+default to one worker, while native 64-bit builds default to four. The public
+OCR handle remains non-reentrant.
 
 The crop buffer holds only the active batch rather than every detected line,
 so peak crop memory scales with worker count instead of page line count. Thread

@@ -8,6 +8,7 @@
  */
 
 #include "crop_internal.h"
+#include "det_internal.h"
 #include "error_internal.h"
 #include "profile_internal.h"
 
@@ -51,6 +52,10 @@ typedef struct lw_ocr_worker_task {
     lw_error error;
     uint32_t profile_enabled;
     uint64_t wall_nanoseconds;
+    uint64_t rec_width_sample_count;
+    uint64_t rec_resized_width_sum;
+    uint64_t rec_target_width_sum;
+    uint64_t rec_width_histogram[LW_REC_WIDTH_HISTOGRAM_BUCKET_COUNT];
     lw_pipeline_component_profile classifier_profile;
     lw_pipeline_component_profile recognizer_profile;
 } lw_ocr_worker_task;
@@ -73,6 +78,7 @@ struct lw_ocr {
     uint8_t* worker_started;
     uint8_t* crop;
     uint64_t crop_capacity;
+    uint32_t recognizer_target_width;
     uint64_t max_crop_pixels;
     uint64_t text_capacity_per_line;
     float classifier_threshold;
@@ -189,6 +195,7 @@ lw_status lw_ocr_create(const char* detector_model_path_utf8,
     status = lw_detector_create(detector_model_path_utf8, &values.detector, &ocr->detector, error);
     if (status != LW_STATUS_OK)
         goto fail;
+    lw_detector_set_intra_op_thread_count(ocr->detector, values.worker_count);
     ocr->worker_count = values.worker_count;
     ocr->classifiers = (lw_classifier**)calloc(ocr->worker_count, sizeof(*ocr->classifiers));
     ocr->recognizers = (lw_recognizer**)calloc(ocr->worker_count, sizeof(*ocr->recognizers));
@@ -262,6 +269,7 @@ lw_status lw_ocr_create(const char* detector_model_path_utf8,
     }
     ocr->max_crop_pixels = values.max_crop_pixels;
     ocr->text_capacity_per_line = recognizer_info.max_text_capacity;
+    ocr->recognizer_target_width = recognizer_info.target_width;
     ocr->classifier_threshold = values.classifier_threshold;
     lw_ocr_info_init(&ocr->info);
     ocr->info.use_direction_classification = values.use_direction_classification;
@@ -385,6 +393,13 @@ static void process_worker_task(lw_ocr_worker_task* task) {
             lw_set_error(&task->error, task->status,
                          "recognizer returned an invalid text capacity");
             return;
+        }
+        if (task->profile_enabled != 0u) {
+            uint32_t bucket = lw_rec_width_histogram_bucket(recognition.resized_width);
+            lw_profile_add_value(&task->rec_width_sample_count, 1u);
+            lw_profile_add_value(&task->rec_resized_width_sum, recognition.resized_width);
+            lw_profile_add_value(&task->rec_target_width_sum, ocr->recognizer_target_width);
+            lw_profile_add_value(&task->rec_width_histogram[bucket], 1u);
         }
 
         memset(line, 0, sizeof(*line));
@@ -512,10 +527,21 @@ static lw_status run_worker_tasks(lw_ocr* ocr, uint32_t first_crop, uint32_t cro
     }
     for (worker_index = 0u; worker_index < active_workers; ++worker_index) {
         if (profile != NULL) {
+            uint32_t bucket;
             lw_pipeline_component_profile_accumulate(
                 &profile->classifier, &ocr->worker_tasks[worker_index].classifier_profile);
             lw_pipeline_component_profile_accumulate(
                 &profile->recognizer, &ocr->worker_tasks[worker_index].recognizer_profile);
+            lw_profile_add_value(&profile->rec_width_sample_count,
+                                 ocr->worker_tasks[worker_index].rec_width_sample_count);
+            lw_profile_add_value(&profile->rec_resized_width_sum,
+                                 ocr->worker_tasks[worker_index].rec_resized_width_sum);
+            lw_profile_add_value(&profile->rec_target_width_sum,
+                                 ocr->worker_tasks[worker_index].rec_target_width_sum);
+            for (bucket = 0u; bucket < LW_REC_WIDTH_HISTOGRAM_BUCKET_COUNT; ++bucket) {
+                lw_profile_add_value(&profile->rec_width_histogram[bucket],
+                                     ocr->worker_tasks[worker_index].rec_width_histogram[bucket]);
+            }
         }
         if (ocr->worker_tasks[worker_index].status != LW_STATUS_OK) {
             status = ocr->worker_tasks[worker_index].status;

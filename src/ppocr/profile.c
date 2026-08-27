@@ -16,6 +16,17 @@ void lw_profile_add_value(uint64_t* destination, uint64_t value) {
     }
 }
 
+uint32_t lw_rec_width_histogram_bucket(uint32_t resized_width) {
+    static const uint32_t upper_bounds[LW_REC_WIDTH_HISTOGRAM_BUCKET_COUNT - 1u] = {
+        64u, 96u, 128u, 160u, 192u, 256u, 320u};
+    uint32_t bucket = 0u;
+    while (bucket + 1u < LW_REC_WIDTH_HISTOGRAM_BUCKET_COUNT &&
+           resized_width > upper_bounds[bucket]) {
+        ++bucket;
+    }
+    return bucket;
+}
+
 void lw_pipeline_component_profile_reset(lw_pipeline_component_profile* profile,
                                          lw_execution_profile_clock clock, void* clock_context) {
     if (profile == NULL) {

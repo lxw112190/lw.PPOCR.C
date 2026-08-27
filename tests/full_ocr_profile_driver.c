@@ -70,6 +70,16 @@ static uint64_t add_saturated(uint64_t left, uint64_t right) {
     return left > UINT64_MAX - right ? UINT64_MAX : left + right;
 }
 
+static uint64_t hash_bytes(const uint8_t* bytes, uint64_t byte_count) {
+    uint64_t hash = UINT64_C(14695981039346656037);
+    uint64_t index;
+    for (index = 0u; index < byte_count; ++index) {
+        hash ^= bytes[index];
+        hash *= UINT64_C(1099511628211);
+    }
+    return hash;
+}
+
 static uint64_t operator_nanoseconds(const lw_ocr_execution_profile* profile, uint32_t operation) {
     uint64_t total = profile->detector.execution.operator_nanoseconds[operation];
     total = add_saturated(total, profile->classifier.execution.operator_nanoseconds[operation]);
@@ -150,6 +160,8 @@ int main(int argc, char** argv) {
     uint64_t graph_work_nanoseconds = 0u;
     uint64_t conv_nanoseconds = 0u;
     uint64_t conv_invocations = 0u;
+    double mean_rec_width;
+    double mean_rec_padding_ratio;
     uint32_t index;
     lw_error error;
     lw_status status;
@@ -275,11 +287,22 @@ int main(int argc, char** argv) {
         conv_nanoseconds = add_saturated(conv_nanoseconds, class_ns);
         conv_invocations = add_saturated(conv_invocations, class_calls);
     }
+    mean_rec_width = profile.rec_width_sample_count == 0u
+                         ? 0.0
+                         : (double)profile.rec_resized_width_sum /
+                               (double)profile.rec_width_sample_count;
+    mean_rec_padding_ratio = profile.rec_target_width_sum == 0u
+                                 ? 0.0
+                                 : 1.0 - (double)profile.rec_resized_width_sum /
+                                             (double)profile.rec_target_width_sum;
 
     printf("{\"schema_version\":1,\"image_width\":%u,\"image_height\":%u,", image.width,
            image.height);
-    printf("\"iterations\":%u,\"workers\":%u,\"lines\":%u,", iterations, workers,
-           reference_line_count);
+    printf("\"iterations\":%u,\"workers\":%u,\"lines\":%u,"
+           "\"output_checksum\":\"%016llx\",",
+           iterations, workers, reference_line_count,
+           (unsigned long long)hash_bytes((const uint8_t*)reference_text,
+                                          reference_text_capacity));
     printf("\"wall_nanoseconds\":{");
     printf("\"total\":%llu,\"det_preprocess\":%llu,\"det_graph\":%llu,",
            (unsigned long long)profile.total_nanoseconds,
@@ -329,7 +352,30 @@ int main(int argc, char** argv) {
                (unsigned long long)profile.classifier.execution.operator_nanoseconds[index],
                (unsigned long long)profile.recognizer.execution.operator_nanoseconds[index]);
     }
-    printf("],\"conv_nanoseconds\":%llu,\"conv_invocations\":%llu,\"conv_classes\":[",
+    printf("],\"rec_width\":{\"samples\":%llu,\"resized_width_sum\":%llu,"
+           "\"target_width_sum\":%llu,\"mean_resized_width\":%.6f,"
+           "\"mean_padding_ratio\":%.9f,\"histogram\":[",
+           (unsigned long long)profile.rec_width_sample_count,
+           (unsigned long long)profile.rec_resized_width_sum,
+           (unsigned long long)profile.rec_target_width_sum, mean_rec_width,
+           mean_rec_padding_ratio);
+    {
+        static const uint32_t upper_bounds[LW_REC_WIDTH_HISTOGRAM_BUCKET_COUNT] = {
+            64u, 96u, 128u, 160u, 192u, 256u, 320u, UINT32_MAX};
+        for (index = 0u; index < LW_REC_WIDTH_HISTOGRAM_BUCKET_COUNT; ++index) {
+            if (index != 0u) {
+                putchar(',');
+            }
+            if (upper_bounds[index] == UINT32_MAX) {
+                printf("{\"max_width\":null,\"count\":%llu}",
+                       (unsigned long long)profile.rec_width_histogram[index]);
+            } else {
+                printf("{\"max_width\":%u,\"count\":%llu}", upper_bounds[index],
+                       (unsigned long long)profile.rec_width_histogram[index]);
+            }
+        }
+    }
+    printf("]},\"conv_nanoseconds\":%llu,\"conv_invocations\":%llu,\"conv_classes\":[",
            (unsigned long long)conv_nanoseconds, (unsigned long long)conv_invocations);
     for (index = 0u; index < LW_EXECUTION_PROFILE_CONV_CLASS_CAPACITY; ++index) {
         uint64_t nanoseconds = profile.detector.execution.conv_class_nanoseconds[index];

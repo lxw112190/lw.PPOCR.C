@@ -4,6 +4,7 @@
 /* Runtime tensor metadata shared by shape inference, planning and execution. */
 
 #include "model_internal.h"
+#include "parallel_internal.h"
 
 #include <stddef.h>
 #include <stdint.h>
@@ -42,10 +43,13 @@ struct lw_session {
     lw_prepared_node* prepared_nodes;
     uint8_t* packed_weights;
     size_t packed_weight_bytes;
+    lw_thread_pool* thread_pool;
+    uint32_t intra_op_thread_count;
     lw_session_info info;
 };
 
 lw_status lw_resolve_shapes(lw_session* session, uint64_t max_tensor_size, lw_error* error);
 lw_status lw_plan_workspace(lw_session* session, uint64_t max_workspace_size, lw_error* error);
+void lw_session_set_intra_op_thread_count(lw_session* session, uint32_t thread_count);
 
 #endif

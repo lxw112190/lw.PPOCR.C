@@ -40,7 +40,9 @@ optional direction correction.
   `lw_ocr_free`.
 - Full OCR crops and processes at most `worker_count` lines per batch. Its crop
   buffer grows to the largest such batch encountered and is then reused.
-  Detection postprocessing may also use bounded transient memory.
+  The detector reuses a fixed thread pool of the same size for large
+  output-channel-parallel convolutions before line workers begin. Detection
+  postprocessing may also use bounded transient memory.
 - A single full-OCR handle must not be called concurrently. Separate handles
   own independent mutable state and may run in parallel.
 - Every successful create has one matching free; all free functions accept null.

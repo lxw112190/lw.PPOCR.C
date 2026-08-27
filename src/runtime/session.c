@@ -7,6 +7,7 @@
  */
 #include "lwm_read.h"
 #include "packed_conv_internal.h"
+#include "parallel_internal.h"
 #include "cpu_features.h"
 
 #include <stdlib.h>
@@ -310,6 +311,7 @@ lw_status lw_session_create(const lw_model* model, const lw_tensor_desc* inputs,
         lw_set_error(error, LW_STATUS_OUT_OF_MEMORY, "unable to allocate session handle");
         return LW_STATUS_OUT_OF_MEMORY;
     }
+    session->intra_op_thread_count = 1u;
     session->model = model;
     session->tensors =
         (lw_runtime_tensor*)calloc(model->info.tensor_count, sizeof(*session->tensors));
@@ -412,10 +414,30 @@ lw_status lw_session_create(const lw_model* model, const lw_tensor_desc* inputs,
     return LW_STATUS_OK;
 }
 
+void lw_session_set_intra_op_thread_count(lw_session* session, uint32_t thread_count) {
+    if (session == NULL) {
+        return;
+    }
+    if (thread_count == 0u) {
+        thread_count = 1u;
+    }
+    if (thread_count > LW_PARALLEL_MAX_WORKERS) {
+        thread_count = LW_PARALLEL_MAX_WORKERS;
+    }
+    if (session->intra_op_thread_count == thread_count) {
+        return;
+    }
+    lw_thread_pool_free(session->thread_pool);
+    session->thread_pool = thread_count > 1u ? lw_thread_pool_create(thread_count) : NULL;
+    session->intra_op_thread_count = lw_thread_pool_worker_count(session->thread_pool);
+}
+
 void lw_session_free(lw_session* session) {
     if (session == NULL) {
         return;
     }
+    lw_thread_pool_free(session->thread_pool);
+    session->thread_pool = NULL;
     workspace_release(session->workspace);
     session->workspace = NULL;
     workspace_release(session->packed_weights);

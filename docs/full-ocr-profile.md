@@ -396,3 +396,71 @@ reported instead of selecting the fastest run:
 Steady RSS was effectively unchanged. The complete Windows x64 suite passed
 33/33 tests and the complete x86 suite passed 32/32 tests, including numerical,
 graph, full-OCR, Golden-corpus, ABI/export and staged-package coverage.
+
+## REC resized-width distribution
+
+The private full-OCR profile now records the actual aspect-ratio-preserving REC
+width before right padding. Its JSON report includes the sample count, resized
+and target width sums, mean resized width, mean padding ratio, and stable
+64/96/128/160/192/256/320/overflow histogram buckets. Worker-local counters are
+merged after joining, so profiling remains race-free. Ordinary OCR calls do not
+collect these values, and the public C ABI is unchanged.
+
+On the bundled 500x500/16-line fixture, three repeated requests produced 48
+samples with the same distribution for one and four workers:
+
+| Metric | Observation |
+|---|---:|
+| Mean resized width | 299.5625 |
+| Mean right-padding ratio | 6.39% |
+| Width <= 256 | 9 / 48 |
+| 256 < width <= 320 | 39 / 48 |
+| Width <= 192 | 0 / 48 |
+
+The ten-crop REC Golden corpus is similarly wide: its estimated mean resized
+width is 313.7 and mean padding ratio is about 1.97%. These fixtures therefore
+do not support immediately adding multiple REC width sessions: their maximum
+theoretical width-work reduction is small compared with the extra session and
+workspace memory. Broader customer-image profiling should precede a width-bucket
+implementation; the current evidence instead keeps DET parallelism as the next
+high-potential latency experiment.
+
+## Fixed-pool DET output-channel parallelism
+
+The full-OCR worker budget now also drives a session-owned DET thread pool.
+Eligible group-1 and depthwise convolutions split disjoint output-channel
+ranges only when their estimated multiply-add count reaches eight million.
+Packed 1x1 slices remain aligned to four output channels. Threads are created
+once with the dynamic DET session and reused across graph nodes; small kernels
+remain serial. DET and CLS/REC execute in separate phases, so operator workers
+are never nested inside line workers. Standalone detector and session APIs keep
+their previous single-thread behavior, and the public C ABI is unchanged.
+
+On the local Windows x64 Release AVX2 build, the bundled 500x500/16-line fixture
+was warmed up and then measured in seven independent processes with five OCR
+requests per process. Median per-request results were:
+
+| Metric | 1 worker | 4 workers | Change |
+|---|---:|---:|---:|
+| Complete OCR | 291.35 ms | 121.20 ms | -58.40% |
+| DET graph | 90.66 ms | 49.15 ms | -45.78% |
+| CLS/REC line phase | 190.84 ms | 61.36 ms | -67.85% |
+
+Compared with the immediately preceding four-worker build, whose repeated
+profile was about 175 ms per request, the combined fixed-pool DET change brings
+the complete pipeline to about 121 ms on this machine. The profile regression
+also compares a deterministic text checksum between one- and four-worker runs.
+
+The uninstrumented reusable-handle benchmark used five independent processes,
+each with three warm-ups and twenty measured calls. Its median process means
+represent the user-visible full OCR latency without per-node profile clocks:
+
+| Workers | Mean OCR | P95 OCR | Throughput | Steady RSS |
+|---:|---:|---:|---:|---:|
+| 1 | 295.14 ms | 298.13 ms | 3.39/s | 72.46 MiB |
+| 4 | 122.46 ms | 130.17 ms | 8.17/s | 109.22 MiB |
+
+Four workers therefore reduced complete OCR latency by 58.51%, delivered a
+2.41x speedup, and increased throughput by about 141%. The additional memory is
+primarily the existing independent CLS/REC worker sessions; the DET pool shares
+the detector model, weights, workspace, input, and output buffers.

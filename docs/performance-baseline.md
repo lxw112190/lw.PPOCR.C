@@ -43,6 +43,20 @@ The JSON separates DET latency from full OCR latency and reports the derived
 crop/CLS/REC remainder, line count, selected worker count, throughput, and RSS.
 Every warm-up and measured call must return identical packed UTF-8 text.
 
+The current fixed-pool DET plus line-worker implementation was measured on the
+same local Windows x64 host in five independent processes. Each process used
+three warm-ups and twenty measured calls on the bundled 500x500/16-line fixture;
+the table reports the median process result:
+
+| Workers | Full OCR mean | P95 | Throughput | RSS after warm-up |
+|---:|---:|---:|---:|---:|
+| 1 | 295.14 ms | 298.13 ms | 3.39/s | 72.46 MiB |
+| 4 | 122.46 ms | 130.17 ms | 8.17/s | 109.22 MiB |
+
+The four-worker configuration reduced complete OCR latency by 58.51% and ran
+2.41x as fast as one worker on this host. This is a local engineering result,
+not a portable latency guarantee.
+
 ## Local baseline
 
 The following is one local measurement, not a general performance promise:

@@ -6,6 +6,7 @@
 #include "error_internal.h"
 #include "executor_internal.h"
 #include "profile_internal.h"
+#include "session_internal.h"
 
 #include <limits.h>
 #include <math.h>
@@ -29,6 +30,7 @@ struct lw_detector {
     uint64_t probability_element_count;
     uint32_t resized_width;
     uint32_t resized_height;
+    uint32_t intra_op_thread_count;
     lw_session_options session_options;
     lw_detector_info info;
 };
@@ -154,6 +156,7 @@ static lw_status ensure_session(lw_detector* detector, uint32_t width, uint32_t 
                                &new_session, error);
     if (status != LW_STATUS_OK)
         goto fail;
+    lw_session_set_intra_op_thread_count(new_session, detector->intra_op_thread_count);
     lw_tensor_desc_init(&output_desc);
     status = lw_session_get_output_desc(new_session, 0u, &output_desc);
     if (status != LW_STATUS_OK || output_desc.dtype != LW_DTYPE_F32 || output_desc.rank != 4u ||
@@ -208,6 +211,7 @@ lw_status lw_detector_create(const char* model_path_utf8, const lw_detector_opti
         lw_set_error(error, LW_STATUS_OUT_OF_MEMORY, "unable to allocate detector handle");
         return LW_STATUS_OUT_OF_MEMORY;
     }
+    detector->intra_op_thread_count = 1u;
     status = validate_options(options, &detector->info, &model_options, &detector->session_options,
                               error);
     if (status != LW_STATUS_OK)
@@ -225,6 +229,14 @@ lw_status lw_detector_create(const char* model_path_utf8, const lw_detector_opti
 fail:
     lw_detector_free(detector);
     return status;
+}
+
+void lw_detector_set_intra_op_thread_count(lw_detector* detector, uint32_t thread_count) {
+    if (detector == NULL) {
+        return;
+    }
+    detector->intra_op_thread_count = thread_count == 0u ? 1u : thread_count;
+    lw_session_set_intra_op_thread_count(detector->session, detector->intra_op_thread_count);
 }
 
 void lw_detector_free(lw_detector* detector) {
