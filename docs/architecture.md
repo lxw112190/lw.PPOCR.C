@@ -130,11 +130,11 @@ and architecture-specific kernels are isolated under `src/simd`.
     client, while a separate C++ `cpp-httplib` executable provides the
     cross-platform HTTP API, browser-side image-to-PPM conversion, stable
     request IDs, quadrilateral drawing, and staged-package live tests.
-29. Session-prepared pointwise weights — complete locally; eligible long-map,
-    group-1 1x1 Conv weights are packed once into four-output-channel blocks,
-    then consumed by scalar/SSE2/AVX2 microkernels. Square detector maps and
-    non-SSE2 machines retain the canonical path, and LWM/public ABI layouts do
-    not change.
+29. Session-prepared pointwise weights — complete locally; eligible group-1
+    1x1 Conv weights are packed once into four-output-channel blocks, then
+    consumed by scalar/SSE2/AVX2 microkernels. Long OCR maps use this layout on
+    SSE2-capable hosts; x64 AVX2 also prepares sufficiently large square maps.
+    LWM and public ABI layouts do not change.
 30. Integer nearest-neighbor NCHW Resize — complete locally; unchanged N/C
     dimensions and exact integer spatial scale factors use contiguous
     horizontal replication plus row copies. Fractional, downsampling, and
@@ -153,6 +153,17 @@ and architecture-specific kernels are isolated under `src/simd`.
     separate accumulators and the original input-channel/kernel addition order.
     Non-multiple-of-four output counts retain the previous streaming path or a
     small-input-channel spatial block.
+34. Shape-aware x64 AVX2 pointwise microkernel — complete locally; four output
+    planes now keep two eight-value spatial vectors live, halving packed-weight
+    broadcasts for the 16-value main loop. x86 retains the 4x8 kernel because
+    it has fewer vector registers, and only x64 AVX2 enables packed square DET
+    maps with at least 256 spatial positions.
+35. AVX2 Erf approximation — complete locally; three degree-8 polynomial
+    regions cover absolute inputs below 4, larger finite magnitudes saturate to
+    one, and the original sign is restored without branches. Dense numerical,
+    special-value, graph, pipeline, Golden-corpus, x64 and x86 gates protect the
+    approximation. SIMD capability is detected once per graph execution;
+    non-AVX2 and non-x86 targets retain the scalar `erff` path.
 
 ## Compatibility claims
 

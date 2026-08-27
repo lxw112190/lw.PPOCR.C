@@ -49,7 +49,25 @@ static int uint64_fits_size_t(uint64_t value) {
     return (uint64_t)(size_t)value == value;
 }
 
-static int prepared_pointwise_node(const lw_session* session, uint32_t node_index,
+static int prepared_pointwise_geometry(lw_simd_level simd_level,
+                                       const lw_runtime_tensor* input) {
+    const uint64_t height = (uint32_t)input->dimensions[2];
+    const uint64_t width = (uint32_t)input->dimensions[3];
+    if (width >= UINT64_C(2) * height) {
+        return 1;
+    }
+#if defined(_M_X64) || defined(__x86_64__)
+    /* The 4x16 microkernel needs the x64 register file. Keep square feature
+     * maps on the canonical kernel for x86, SSE2-only hosts and tiny tensors. */
+    return simd_level >= LW_SIMD_LEVEL_AVX2 && height * width >= 256u;
+#else
+    (void)simd_level;
+    return 0;
+#endif
+}
+
+static int prepared_pointwise_node(const lw_session* session, lw_simd_level simd_level,
+                                   uint32_t node_index,
                                    uint32_t* weight_tensor_index, uint64_t* packed_weight_count) {
     const lw_model* model = session->model;
     const uint8_t* node =
@@ -74,9 +92,8 @@ static int prepared_pointwise_node(const lw_session* session, uint32_t node_inde
     input = &session->tensors[input_index];
     weights = &session->tensors[weights_index];
     output = &session->tensors[output_index];
-    /* The four-output microkernel wins on the long feature maps used by OCR
-     * classification/recognition. Large square detector maps create four
-     * distant output streams and are faster with the canonical kernel. */
+    /* Long OCR feature maps use the portable packed path. Large square maps
+     * additionally require the x64 AVX2 4x16 microkernel. */
     if (input->dtype != LW_DTYPE_F32 || input->rank != 4u || weights->dtype != LW_DTYPE_F32 ||
         weights->rank != 4u || output->dtype != LW_DTYPE_F32 || output->rank != 4u ||
         (weights->flags & LWM_V0_TENSOR_FLAG_CONSTANT) == 0u || lwm_read_u32(params + 4u) != 1u ||
@@ -90,7 +107,7 @@ static int prepared_pointwise_node(const lw_session* session, uint32_t node_inde
         weights->dimensions[3] != 1 || input->dimensions[0] != output->dimensions[0] ||
         output->dimensions[1] < (int32_t)LW_PACKED_CONV1X1_OUTPUT_TILE ||
         output->dimensions[1] % (int32_t)LW_PACKED_CONV1X1_OUTPUT_TILE != 0 ||
-        (uint64_t)(uint32_t)input->dimensions[3] < UINT64_C(2) * (uint32_t)input->dimensions[2] ||
+        !prepared_pointwise_geometry(simd_level, input) ||
         input->dimensions[2] != output->dimensions[2] ||
         input->dimensions[3] != output->dimensions[3] ||
         !lw_packed_conv1x1_weight_count((uint32_t)input->dimensions[1],
@@ -111,9 +128,10 @@ static const float* constant_f32_data(const lw_session* session, uint32_t tensor
 
 static lw_status prepare_pointwise_weights(lw_session* session, lw_error* error) {
     const lw_model* model = session->model;
+    const lw_simd_level simd_level = lw_detect_simd_level();
     uint64_t total_bytes = 0u;
     uint32_t node_index;
-    if (model->info.node_count == 0u || lw_detect_simd_level() < LW_SIMD_LEVEL_SSE2) {
+    if (model->info.node_count == 0u || simd_level < LW_SIMD_LEVEL_SSE2) {
         return LW_STATUS_OK;
     }
     session->prepared_nodes =
@@ -127,7 +145,7 @@ static lw_status prepare_pointwise_weights(lw_session* session, lw_error* error)
         uint64_t packed_weight_count;
         uint64_t packed_bytes;
         lw_prepared_node* prepared = &session->prepared_nodes[node_index];
-        if (!prepared_pointwise_node(session, node_index, &weight_tensor_index,
+        if (!prepared_pointwise_node(session, simd_level, node_index, &weight_tensor_index,
                                      &packed_weight_count)) {
             continue;
         }
@@ -168,7 +186,7 @@ static lw_status prepare_pointwise_weights(lw_session* session, lw_error* error)
         uint32_t input_index;
         uint32_t output_index;
         if (prepared->kind != LW_PREPARED_NODE_CONV1X1_PACKED4 ||
-            !prepared_pointwise_node(session, node_index, &weight_tensor_index,
+            !prepared_pointwise_node(session, simd_level, node_index, &weight_tensor_index,
                                      &packed_weight_count) ||
             packed_weight_count != prepared->packed_weight_count) {
             continue;

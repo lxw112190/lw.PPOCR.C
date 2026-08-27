@@ -441,7 +441,8 @@ int main(void) {
     }
     print_values("grouped_pointwise_conv", pointwise_output, 120u);
 
-    /* Exercise four-output-channel packing, including a three-channel tail. */
+    /* Exercise four-output-channel packing, including the x64 16-value spatial
+     * main loop, its five-value tail, and a three-output-channel block. */
     fill_values(packed_pointwise_input, 210u, 13u, 43u, 21, 11.0f);
     fill_values(packed_pointwise_weights, 35u, 17u, 37u, 18, 9.0f);
     lw_scalar_conv1x1_unit_f32(packed_pointwise_input, packed_pointwise_weights,

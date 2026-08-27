@@ -27,6 +27,7 @@ static int expect_status(const char* name, lw_status actual, lw_status expected)
 }
 
 int main(void) {
+    enum { ERF_DENSE_COUNT = 4099 };
     const int32_t left_dimensions[3] = {2, 3, 4};
     const int32_t right_dimensions[2] = {3, 1};
     const int32_t output_dimensions[3] = {2, 3, 4};
@@ -60,6 +61,8 @@ int main(void) {
     float trailing_left[20];
     float trailing_output[20];
     float activation_output[9];
+    float erf_dense_input[ERF_DENSE_COUNT];
+    float erf_dense_output[ERF_DENSE_COUNT];
     float softmax_output[24];
     float softmax_in_place[24];
     lw_simd_level simd_level;
@@ -176,6 +179,38 @@ int main(void) {
     }
     print_values("erf", activation_output, 9u);
 
+    if (simd_level >= LW_SIMD_LEVEL_AVX2) {
+        const float special_input[8] = {0.0f, -0.0f, INFINITY, -INFINITY, NAN, 0.5f, -0.5f, 4.0f};
+        float special_output[8];
+        float maximum_error = 0.0f;
+        for (index = 0u; index < ERF_DENSE_COUNT; ++index) {
+            erf_dense_input[index] = -6.0f + 12.0f * (float)index / (float)(ERF_DENSE_COUNT - 1u);
+        }
+        lw_avx2_erf_f32(erf_dense_input, erf_dense_output, ERF_DENSE_COUNT);
+        for (index = 0u; index < ERF_DENSE_COUNT; ++index) {
+            float error = fabsf(erf_dense_output[index] - erff(erf_dense_input[index]));
+            if (error > maximum_error) {
+                maximum_error = error;
+            }
+            if (index != 0u && erf_dense_output[index] < erf_dense_output[index - 1u]) {
+                fprintf(stderr, "AVX2 Erf approximation is not monotonic\n");
+                return 1;
+            }
+        }
+        if (maximum_error > 5.0e-7f) {
+            fprintf(stderr, "AVX2 Erf maximum absolute error %.9g exceeds limit\n",
+                    (double)maximum_error);
+            return 1;
+        }
+        lw_avx2_erf_f32(special_input, special_output, 8u);
+        if (special_output[0] != 0.0f || signbit(special_output[0]) || special_output[1] != 0.0f ||
+            !signbit(special_output[1]) || special_output[2] != 1.0f ||
+            special_output[3] != -1.0f || !isnan(special_output[4])) {
+            fprintf(stderr, "AVX2 Erf special-value contract failed\n");
+            return 1;
+        }
+    }
+
     status = lw_scalar_hard_sigmoid_f32(activation_input, activation_output, 9u, 0.2f, 0.5f);
     if (!expect_status("hard_sigmoid", status, LW_STATUS_OK)) {
         return 1;
@@ -201,16 +236,15 @@ int main(void) {
     }
     print_values("softmax_in_place", softmax_in_place, 24u);
 
-    status =
-        lw_scalar_softmax_f32(softmax_input, softmax_output, 2u, softmax_last_dimensions, -1);
+    status = lw_scalar_softmax_f32(softmax_input, softmax_output, 2u, softmax_last_dimensions, -1);
     if (!expect_status("contiguous-axis softmax", status, LW_STATUS_OK)) {
         return 1;
     }
     print_values("softmax_contiguous_axis", softmax_output, 24u);
 
     memcpy(softmax_in_place, softmax_input, sizeof(softmax_input));
-    status = lw_scalar_softmax_f32(softmax_in_place, softmax_in_place, 2u,
-                                   softmax_last_dimensions, 1);
+    status =
+        lw_scalar_softmax_f32(softmax_in_place, softmax_in_place, 2u, softmax_last_dimensions, 1);
     if (!expect_status("in-place contiguous-axis softmax", status, LW_STATUS_OK) ||
         memcmp(softmax_output, softmax_in_place, sizeof(softmax_output)) != 0) {
         fprintf(stderr, "in-place contiguous-axis softmax differs from separate output\n");

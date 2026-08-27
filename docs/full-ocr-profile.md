@@ -312,3 +312,87 @@ calls on the same 500x500/16-line fixture.
 Throughput increased by 4.77% with one worker and 4.03% with four workers. The
 end-to-end gain is smaller than the targeted operator reduction because image
 pre/post-processing and the other graph operators are unchanged.
+
+## Shape-aware x64 pointwise microkernel
+
+The next pointwise experiment retains the existing four-output packed-weight
+format but doubles the x64 AVX2 spatial tile from 8 to 16 values. Eight output
+accumulators remain live while each packed weight broadcast is shared by two
+input vectors. The wider tile is x64-only because 32-bit x86 exposes too few
+vector registers and would spill; x86, SSE2, non-x86, and spatial tails retain
+their existing kernels.
+
+The session selector continues to prepare long CLS/REC feature maps. On an x64
+AVX2 host it now also prepares square pointwise maps with at least 256 spatial
+positions, covering the useful DET maps while excluding tiny attention
+tensors. The canonical LWM weights remain unchanged. Prepared weights are
+private session state, every output retains its original input-channel
+addition order, FMA remains disabled, and the public ABI is unchanged.
+
+Four alternating three-iteration operator profiles compared the independent
+Release binary from commit `fcbb37e` with the final candidate:
+
+| Profiled work per request | Existing 4x8 path | Shape-aware 4x16 path | Change |
+|---|---:|---:|---:|
+| All 1x1 Conv | 112.244 ms | 84.396 ms | -24.81% |
+| DET 1x1 Conv | 30.370 ms | 22.156 ms | -27.05% |
+| Instrumented full OCR wall | 399.979 ms | 381.103 ms | -4.72% |
+
+The uninstrumented reusable-handle benchmark used the same 500x500/16-line
+fixture. Two alternating one-worker pairs, each with five warm-ups and twenty
+measured calls, changed full OCR from 389.570 ms to 359.945 ms (-7.60%, 1.082x)
+and throughput by +8.22%. Five alternating four-worker pairs, each with three
+warm-ups and twelve measured calls, averaged 213.683 ms versus 199.140 ms
+(-6.80%); the paired reduction median was 5.92%, with a 1.67% to 15.31% range
+under visible host-load variation.
+
+Preparing the additional DET weights raised steady RSS by about 2.8 MiB per OCR
+handle. This is one detector-side cost and does not multiply with the number of
+line workers. The complete Windows x64 suite passed 33/33 tests, while the x86
+ABI, export, Conv, DET graph, full-OCR, and staged-package gates passed 6/6 and
+continued to use the previous 4x8 path.
+
+## Piecewise AVX2 Erf
+
+The successful follow-up to the rejected scalar Erf experiments uses three
+piecewise degree-8 single-precision polynomials. They cover `|x| < 1`,
+`1 <= |x| < 2`, and `2 <= |x| < 4`; larger finite magnitudes saturate to one,
+then the input sign bit is restored. The implementation evaluates eight values
+at a time without FMA, preserves positive and negative zero, maps infinities to
+positive and negative one, and propagates NaNs. A scalar `erff` tail handles
+non-multiples of eight. Non-AVX2 and non-x86 targets continue to execute the
+existing scalar kernel.
+
+The direct kernel gate samples 4,099 evenly spaced values from -6 through 6,
+requires maximum absolute error no greater than `5e-7`, checks monotonicity and
+checks the special-value contract. REC, CLS and DET graph references, the full
+OCR pipeline reference, and the ten-crop OCR Golden corpus remain mandatory.
+SIMD capability is detected once per graph execution so the runtime does not
+repeat CPUID/XGETBV for every Erf node. No public ABI, LWM model, or caller-owned
+buffer contract changes.
+
+Four alternating three-iteration operator profiles compared the frozen
+shape-aware pointwise binary with this candidate on the bundled
+500x500/16-line fixture:
+
+| Profiled work per request | Scalar `erff` | Piecewise AVX2 | Change |
+|---|---:|---:|---:|
+| All Erf | 86.599 ms | 15.248 ms | -82.39% |
+| DET Erf | 20.586 ms | 3.626 ms | -82.39% |
+| REC Erf | 66.013 ms | 11.622 ms | -82.39% |
+| Instrumented full OCR wall | 390.733 ms | 307.389 ms | -21.33% |
+
+The uninstrumented reusable-handle benchmark then used five alternating pairs.
+One worker used five warm-ups and twenty measured calls per process; four
+workers used three warm-ups and twelve measured calls. Because this host showed
+visible run-to-run load variation, the paired median and full range are
+reported instead of selecting the fastest run:
+
+| Line workers | Paired latency reduction median | Pair range | Throughput gain at median pair |
+|---:|---:|---:|---:|
+| 1 | 19.61% | 3.73% to 39.95% | 24.40% |
+| 4 | 16.50% | 3.65% to 18.56% | 19.76% |
+
+Steady RSS was effectively unchanged. The complete Windows x64 suite passed
+33/33 tests and the complete x86 suite passed 32/32 tests, including numerical,
+graph, full-OCR, Golden-corpus, ABI/export and staged-package coverage.

@@ -10,6 +10,8 @@
 #include "packed_conv_internal.h"
 #include "scalar_kernels.h"
 #include "session_internal.h"
+#include "cpu_features.h"
+#include "simd_kernels.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -78,7 +80,8 @@ static float* tensor_output_data(lw_session* session, uint32_t tensor_index) {
 }
 
 static lw_status dispatch_node(lw_session* session, const uint8_t* node, uint32_t node_index,
-                               uint32_t graph_input_index, const float* graph_input) {
+                               uint32_t graph_input_index, const float* graph_input,
+                               lw_simd_level simd_level) {
     const lw_model* model = session->model;
     const uint16_t op = lwm_read_u16(node);
     const uint16_t input_count = lwm_read_u16(node + 2);
@@ -151,10 +154,18 @@ static lw_status dispatch_node(lw_session* session, const uint8_t* node, uint32_
                                     input_tensors[1]->dimensions, output, output_tensor->rank,
                                     output_tensor->dimensions);
     }
-    case LW_OP_ERF:
-        return input_count == 1u
-                   ? lw_scalar_erf_f32(inputs[0], output, tensor_element_count(input_tensors[0]))
-                   : LW_STATUS_INVALID_SHAPE;
+    case LW_OP_ERF: {
+        uint64_t element_count;
+        if (input_count != 1u) {
+            return LW_STATUS_INVALID_SHAPE;
+        }
+        element_count = tensor_element_count(input_tensors[0]);
+        if (simd_level >= LW_SIMD_LEVEL_AVX2) {
+            lw_avx2_erf_f32(inputs[0], output, element_count);
+            return LW_STATUS_OK;
+        }
+        return lw_scalar_erf_f32(inputs[0], output, element_count);
+    }
     case LW_OP_HARD_SIGMOID:
         return input_count == 1u
                    ? lw_scalar_hard_sigmoid_f32(inputs[0], output,
@@ -347,6 +358,7 @@ static lw_status execute_session_f32(lw_session* session, const float* input,
     uint32_t graph_input_index;
     uint32_t graph_output_index;
     uint32_t node_index;
+    lw_simd_level simd_level;
     lw_status status;
     char message[LW_ERROR_MESSAGE_CAPACITY];
 
@@ -355,6 +367,9 @@ static lw_status execute_session_f32(lw_session* session, const float* input,
         return LW_STATUS_INVALID_ARGUMENT;
     }
     model = session->model;
+    /* One graph run can visit several SIMD-capable nodes. Detect once rather
+     * than issuing CPUID/XGETBV for every Erf operation. */
+    simd_level = lw_detect_simd_level();
     if (model->info.input_count != 1u || model->info.output_count != 1u) {
         lw_set_error(error, LW_STATUS_UNSUPPORTED,
                      "private executor currently requires one input and one output");
@@ -378,7 +393,7 @@ static lw_status execute_session_f32(lw_session* session, const float* input,
         if (profile != NULL) {
             started = profile->clock(profile->clock_context);
         }
-        status = dispatch_node(session, node, node_index, graph_input_index, input);
+        status = dispatch_node(session, node, node_index, graph_input_index, input, simd_level);
         if (profile != NULL && operation < LW_EXECUTION_PROFILE_OPERATOR_CAPACITY) {
             uint64_t finished = profile->clock(profile->clock_context);
             if (finished >= started) {
