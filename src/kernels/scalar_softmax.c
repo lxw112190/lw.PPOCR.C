@@ -49,6 +49,33 @@ lw_status lw_scalar_softmax_f32(const float* input, float* output, uint32_t rank
         return LW_STATUS_OUT_OF_BOUNDS;
     }
 
+    /* The REC classifier axis is the contiguous final dimension. Direct row
+     * pointers remove the general strided offset arithmetic while preserving
+     * the maximum, expf, accumulation and division order exactly. */
+    if (inner_count == 1u) {
+        for (outer = 0u; outer < outer_count; ++outer) {
+            const float* input_row = input + (size_t)(outer * axis_count);
+            float* output_row = output + (size_t)(outer * axis_count);
+            float maximum = input_row[0];
+            float sum = 0.0f;
+            uint64_t axis_index;
+            for (axis_index = 1u; axis_index < axis_count; ++axis_index) {
+                if (input_row[(size_t)axis_index] > maximum) {
+                    maximum = input_row[(size_t)axis_index];
+                }
+            }
+            for (axis_index = 0u; axis_index < axis_count; ++axis_index) {
+                float value = expf(input_row[(size_t)axis_index] - maximum);
+                output_row[(size_t)axis_index] = value;
+                sum += value;
+            }
+            for (axis_index = 0u; axis_index < axis_count; ++axis_index) {
+                output_row[(size_t)axis_index] /= sum;
+            }
+        }
+        return LW_STATUS_OK;
+    }
+
     for (outer = 0u; outer < outer_count; ++outer) {
         for (inner = 0u; inner < inner_count; ++inner) {
             uint64_t axis_index;

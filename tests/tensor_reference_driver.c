@@ -51,12 +51,20 @@ int main(void) {
     const int32_t reduce_output_dimensions[3] = {2, 1, 1};
     const int32_t reduce_axes[2] = {1, -1};
     const int32_t duplicate_reduce_axes[2] = {1, -2};
+    const int32_t reduce_spatial_input_dimensions[4] = {2, 2, 2, 3};
+    const int32_t reduce_spatial_output_dimensions[4] = {2, 2, 1, 1};
+    const int32_t reduce_spatial_axes[2] = {2, 3};
     const int32_t pool_input_dimensions[4] = {1, 2, 3, 5};
     const int32_t pool_output_dimensions[4] = {1, 2, 3, 3};
     const int32_t invalid_pool_output[4] = {1, 2, 2, 3};
     const int32_t pool_kernel[2] = {2, 3};
     const int32_t pool_strides[2] = {1, 2};
     const int32_t pool_pads[4] = {1, 1, 0, 1};
+    const int32_t max_pool_same_input_dimensions[4] = {2, 2, 2, 3};
+    const int32_t max_pool_same_output_dimensions[4] = {2, 2, 2, 3};
+    const int32_t max_pool_same_kernel[2] = {2, 2};
+    const int32_t max_pool_same_strides[2] = {1, 1};
+    const int32_t max_pool_same_pads[4] = {0, 0, 1, 1};
     const int32_t concat_left_dimensions[3] = {1, 2, 3};
     const int32_t concat_right_dimensions[3] = {1, 1, 3};
     const int32_t concat_output_dimensions[3] = {1, 3, 3};
@@ -73,7 +81,9 @@ int main(void) {
     float transpose_output[24];
     float reshape_output[6];
     float reduce_output[24];
+    float reduce_spatial_output[4];
     float pool_output[18];
+    float max_pool_same_output[24];
     float concat_left[6] = {-3.0f, -2.0f, -1.0f, 1.0f, 2.0f, 3.0f};
     float concat_right[3] = {4.0f, 5.0f, 6.0f};
     const float* concat_inputs[2] = {concat_left, concat_right};
@@ -143,6 +153,14 @@ int main(void) {
     }
     print_values("reduce_noop", reduce_output, 24u);
 
+    status = lw_scalar_reduce_mean_f32(
+        tensor_input, reduce_spatial_output, 4u, reduce_spatial_input_dimensions, 2u,
+        reduce_spatial_axes, 1u, 0u, 4u, reduce_spatial_output_dimensions);
+    if (!expect_status("NCHW spatial reduce mean", status, LW_STATUS_OK)) {
+        return 1;
+    }
+    print_values("reduce_mean_nchw_spatial", reduce_spatial_output, 4u);
+
     status = lw_scalar_average_pool2d_f32(tensor_input, pool_output, pool_input_dimensions,
                                           pool_output_dimensions, pool_kernel, pool_strides,
                                           pool_pads, 0u, 0u);
@@ -166,6 +184,15 @@ int main(void) {
         return 1;
     }
     print_values("max_pool", pool_output, 18u);
+
+    status = lw_scalar_max_pool2d_f32(
+        tensor_input, max_pool_same_output, max_pool_same_input_dimensions,
+        max_pool_same_output_dimensions, max_pool_same_kernel, max_pool_same_strides,
+        max_pool_same_pads, 0u);
+    if (!expect_status("2x2 SAME_UPPER max pool", status, LW_STATUS_OK)) {
+        return 1;
+    }
+    print_values("max_pool_same_upper_2x2", max_pool_same_output, 24u);
 
     status = lw_scalar_concat_f32(concat_inputs, 2u, concat_ranks, concat_dimensions, concat_output,
                                   3u, concat_output_dimensions, 1);

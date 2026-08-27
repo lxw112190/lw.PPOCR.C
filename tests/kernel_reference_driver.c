@@ -32,6 +32,7 @@ int main(void) {
     const int32_t output_dimensions[3] = {2, 3, 4};
     const int32_t invalid_output_dimensions[3] = {2, 3, 5};
     const int32_t softmax_dimensions[3] = {2, 3, 4};
+    const int32_t softmax_last_dimensions[2] = {2, 12};
     const int32_t flat_dimensions[1] = {10};
     const int32_t trailing_left_dimensions[2] = {2, 10};
     const int32_t trailing_right_dimensions[1] = {10};
@@ -199,6 +200,23 @@ int main(void) {
         return 1;
     }
     print_values("softmax_in_place", softmax_in_place, 24u);
+
+    status =
+        lw_scalar_softmax_f32(softmax_input, softmax_output, 2u, softmax_last_dimensions, -1);
+    if (!expect_status("contiguous-axis softmax", status, LW_STATUS_OK)) {
+        return 1;
+    }
+    print_values("softmax_contiguous_axis", softmax_output, 24u);
+
+    memcpy(softmax_in_place, softmax_input, sizeof(softmax_input));
+    status = lw_scalar_softmax_f32(softmax_in_place, softmax_in_place, 2u,
+                                   softmax_last_dimensions, 1);
+    if (!expect_status("in-place contiguous-axis softmax", status, LW_STATUS_OK) ||
+        memcmp(softmax_output, softmax_in_place, sizeof(softmax_output)) != 0) {
+        fprintf(stderr, "in-place contiguous-axis softmax differs from separate output\n");
+        return 1;
+    }
+    print_values("softmax_contiguous_axis_in_place", softmax_in_place, 24u);
 
     status = lw_scalar_binary_f32(LW_SCALAR_BINARY_ADD, left, 3u, left_dimensions, add_right, 2u,
                                   right_dimensions, binary_output, 3u, invalid_output_dimensions);

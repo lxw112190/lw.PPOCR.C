@@ -66,6 +66,22 @@ def max_pool_reference(input_values: np.ndarray) -> np.ndarray:
     return output
 
 
+def max_pool_same_upper_2x2_reference(input_values: np.ndarray) -> np.ndarray:
+    output = np.empty_like(input_values)
+    for batch in range(input_values.shape[0]):
+        for channel in range(input_values.shape[1]):
+            for output_y in range(input_values.shape[2]):
+                for output_x in range(input_values.shape[3]):
+                    values = input_values[
+                        batch,
+                        channel,
+                        output_y : min(output_y + 2, input_values.shape[2]),
+                        output_x : min(output_x + 2, input_values.shape[3]),
+                    ]
+                    output[batch, channel, output_y, output_x] = np.max(values)
+    return output
+
+
 def expected_results() -> dict[str, np.ndarray]:
     tensor_input = np.asarray(
         [(((index * 5) % 17) - 8) / 3.0 for index in range(30)],
@@ -95,9 +111,15 @@ def expected_results() -> dict[str, np.ndarray]:
             reduce_input, axis=(1, 2), keepdims=True, dtype=np.float32
         ).ravel(),
         "reduce_noop": reduce_input.ravel(),
+        "reduce_mean_nchw_spatial": np.mean(
+            resize_multi_input, axis=(2, 3), keepdims=True, dtype=np.float32
+        ).ravel(),
         "average_pool": average_pool_reference(pool_input, False).ravel(),
         "average_pool_include_pad": average_pool_reference(pool_input, True).ravel(),
         "max_pool": max_pool_reference(pool_input).ravel(),
+        "max_pool_same_upper_2x2": max_pool_same_upper_2x2_reference(
+            resize_multi_input
+        ).ravel(),
         "concat": np.concatenate(
             (
                 np.asarray([-3, -2, -1, 1, 2, 3], dtype=np.float32).reshape(1, 2, 3),

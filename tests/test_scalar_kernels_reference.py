@@ -48,6 +48,14 @@ def expected_results() -> dict[str, np.ndarray]:
     shifted = softmax_input - np.max(softmax_input, axis=1, keepdims=True)
     exponentials = np.exp(shifted)
     softmax = exponentials / np.sum(exponentials, axis=1, keepdims=True)
+    softmax_contiguous_input = softmax_input.reshape(2, 12)
+    contiguous_shifted = softmax_contiguous_input - np.max(
+        softmax_contiguous_input, axis=1, keepdims=True
+    )
+    contiguous_exponentials = np.exp(contiguous_shifted)
+    softmax_contiguous = contiguous_exponentials / np.sum(
+        contiguous_exponentials, axis=1, keepdims=True
+    )
     flat_left = np.asarray(
         [-4.0, -2.5, -1.0, -0.25, 0.0, 0.5, 1.25, 2.0, 3.5, 5.0],
         dtype=np.float32,
@@ -90,6 +98,8 @@ def expected_results() -> dict[str, np.ndarray]:
         ),
         "softmax": softmax.ravel(),
         "softmax_in_place": softmax.ravel(),
+        "softmax_contiguous_axis": softmax_contiguous.ravel(),
+        "softmax_contiguous_axis_in_place": softmax_contiguous.ravel(),
     }
 
 

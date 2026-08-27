@@ -203,3 +203,66 @@ These are sequential local stage measurements, not a portable capacity claim.
 Steady RSS remained at the prepared-pointwise stage level. The tensor reference
 suite covers different height/width integer factors across multiple batches and
 channels, plus a fractional-scale case that must remain on the general path.
+
+## Exact spatial reduction and pooling
+
+The next exact optimization targets two remaining coordinate-heavy operators
+without changing their public or model contracts:
+
+- NCHW ReduceMean over spatial axes 2 and 3 now sums each contiguous channel
+  plane directly. Its input traversal and floating-point addition order remain
+  row-major and identical to the general implementation.
+- The detector's exact 2x2, stride-1, bottom/right-padded SAME_UPPER MaxPool
+  uses direct row pointers for the interior and separate right/bottom border
+  loops. Comparison order remains row-major, including the existing NaN
+  behavior.
+
+All other ReduceMean axes, keep-dimension modes, kernels, strides, padding and
+ceil modes retain the original general paths. Neither specialization allocates
+memory or adds session state.
+
+On the local Windows x64 Release operator profiler, using the bundled 500x500
+fixture, the targeted work per full OCR request changed as follows:
+
+| Operator | General path | Exact specialized path | Change |
+|---|---:|---:|---:|
+| MaxPool | 12.115 ms | 0.651 ms | -94.62% |
+| ReduceMean | 16.736 ms | 3.819 ms | -77.18% |
+
+An uninstrumented 3-warm-up/12-measurement observation after both changes
+reported 230.426 ms full-OCR mean and 4.340 requests/s with four line workers.
+Machine load produced visible run-to-run latency noise, so that observation is
+recorded as a local result rather than a paired end-to-end improvement claim.
+The tensor reference suite covers multi-batch/multi-channel spatial reduction,
+the specialized pool interior and borders, and the pre-existing general paths.
+
+## Contiguous-axis Softmax
+
+The recognition output Softmax processes 6,906 classes on a contiguous final
+axis. A direct-row path removes the general inner-stride multiplication and
+offset reconstruction, but deliberately retains `expf`, maximum selection,
+summation order and element-wise division. It supports separate and in-place
+output buffers; Softmax over a genuinely strided axis remains on the general
+path.
+
+In one five-iteration Windows x64 Release operator profile, Softmax work per
+full OCR request fell from 15.848 ms to 13.967 ms (-11.87%). The scalar
+reference suite covers both contiguous and strided axes and verifies that the
+contiguous in-place result is byte-identical to separate-output execution.
+
+A four-output-row MatMul experiment was also measured and rejected. Although
+it loaded each wide weight vector once for four output rows, the four concurrent
+6,906-column output streams expanded the active output working set. MatMul rose
+from 32.105 ms to 33.735 ms per request (+5.08%) on the same class of profile,
+so the experiment was removed rather than retained behind a heuristic.
+
+Two exactness-gated Erf/GELU experiments were also rejected. An Abramowitz and
+Stegun single-precision Erf approximation stayed within the numerical and OCR
+reference gates, but its `expf` and division work raised median Erf time from
+80.94 ms to 125.40 ms (+54.9%) on MSVC/UCRT. An exact five-node
+`Div -> Erf -> Add -> Mul -> Mul` fusion retained `erff` and the original
+floating-point operation order, but paired 3+12 full-OCR measurements showed no
+repeatable gain: 412.13 ms became 413.18 ms with one worker, and 216.08 ms
+became 216.18 ms with four workers. Both implementations were removed. Future
+Erf work therefore needs a genuinely vectorized approximation plus an explicit
+error corpus; eliminating intermediate tensor passes alone is not sufficient.

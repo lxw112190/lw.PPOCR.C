@@ -139,6 +139,15 @@ and architecture-specific kernels are isolated under `src/simd`.
     dimensions and exact integer spatial scale factors use contiguous
     horizontal replication plus row copies. Fractional, downsampling, and
     general-rank cases retain the coordinate-based reference path.
+31. Exact NCHW reduction and pooling fast paths — complete locally; spatial
+    keep-dimension ReduceMean walks contiguous channel planes without coordinate
+    decoding, while the detector's exact 2x2/stride-1/SAME_UPPER MaxPool handles
+    its interior and borders separately. Other axes and pool configurations
+    retain the general reference paths.
+32. Contiguous-axis Softmax — complete locally; a final or otherwise contiguous
+    classification axis uses direct row pointers while retaining the same
+    maximum shift, `expf`, sum and per-element division order. Strided axes keep
+    the general implementation, and in-place operation remains supported.
 
 ## Compatibility claims
 

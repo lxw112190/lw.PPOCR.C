@@ -109,6 +109,30 @@ lw_status lw_scalar_reduce_mean_f32(const float* input, float* output, uint32_t 
     if (status != LW_STATUS_OK || output_count > input_count) {
         return status == LW_STATUS_OK ? LW_STATUS_INVALID_SHAPE : status;
     }
+    /*
+     * GlobalAveragePool nodes in the bundled models are represented as a
+     * keep-dimension ReduceMean over NCHW spatial axes.  Each output is one
+     * contiguous input plane, so coordinate decoding is unnecessary.  The
+     * inner loop retains the original row-major addition order exactly.
+     */
+    if (input_rank == 4u && output_rank == 4u && keep_dimensions != 0u && !reduced[0] &&
+        !reduced[1] && reduced[2] && reduced[3] && output_dimensions[0] == input_dimensions[0] &&
+        output_dimensions[1] == input_dimensions[1] && output_dimensions[2] == 1 &&
+        output_dimensions[3] == 1) {
+        const uint64_t spatial_count =
+            (uint64_t)(uint32_t)input_dimensions[2] * (uint32_t)input_dimensions[3];
+        uint64_t plane;
+        for (plane = 0u; plane < output_count; ++plane) {
+            const uint64_t base = plane * spatial_count;
+            float sum = 0.0f;
+            uint64_t spatial_index;
+            for (spatial_index = 0u; spatial_index < spatial_count; ++spatial_index) {
+                sum += input[(size_t)(base + spatial_index)];
+            }
+            output[(size_t)plane] = sum / (float)spatial_count;
+        }
+        return LW_STATUS_OK;
+    }
     for (axis = output_rank; axis > 0u; --axis) {
         output_strides[axis - 1u] = stride;
         stride *= (uint32_t)output_dimensions[axis - 1u];
@@ -161,6 +185,64 @@ static int spatial_output(int32_t input, int32_t kernel, int32_t stride, int32_t
     }
     *output = (int32_t)value;
     return 1;
+}
+
+/*
+ * PP-OCR DET uses one large 2x2, stride-1 SAME_UPPER MaxPool.  The general
+ * pooling loop below must repeatedly derive coordinates and check four bounds
+ * for every output element.  This exact specialization handles the unpadded
+ * interior with direct row pointers, then writes the right and bottom borders
+ * separately.  Comparisons remain in row-major kernel order so finite values,
+ * infinities and the existing first-value NaN behavior are preserved.
+ */
+static void max_pool2x2_stride1_same_upper_f32(const float* input, float* output,
+                                                const int32_t dimensions[4]) {
+    const uint64_t plane_count = (uint64_t)(uint32_t)dimensions[0] * (uint32_t)dimensions[1];
+    const uint32_t height = (uint32_t)dimensions[2];
+    const uint32_t width = (uint32_t)dimensions[3];
+    const size_t plane_elements = (size_t)height * width;
+    uint64_t plane;
+    for (plane = 0u; plane < plane_count; ++plane) {
+        const float* input_plane = input + (size_t)plane * plane_elements;
+        float* output_plane = output + (size_t)plane * plane_elements;
+        uint32_t y;
+        for (y = 0u; y + 1u < height; ++y) {
+            const float* top_row = input_plane + (size_t)y * width;
+            const float* bottom_row = top_row + width;
+            float* output_row = output_plane + (size_t)y * width;
+            uint32_t x;
+            for (x = 0u; x + 1u < width; ++x) {
+                float maximum = top_row[x];
+                if (top_row[x + 1u] > maximum) {
+                    maximum = top_row[x + 1u];
+                }
+                if (bottom_row[x] > maximum) {
+                    maximum = bottom_row[x];
+                }
+                if (bottom_row[x + 1u] > maximum) {
+                    maximum = bottom_row[x + 1u];
+                }
+                output_row[x] = maximum;
+            }
+            output_row[width - 1u] = top_row[width - 1u];
+            if (bottom_row[width - 1u] > output_row[width - 1u]) {
+                output_row[width - 1u] = bottom_row[width - 1u];
+            }
+        }
+        {
+            const float* last_input_row = input_plane + (size_t)(height - 1u) * width;
+            float* last_output_row = output_plane + (size_t)(height - 1u) * width;
+            uint32_t x;
+            for (x = 0u; x + 1u < width; ++x) {
+                float maximum = last_input_row[x];
+                if (last_input_row[x + 1u] > maximum) {
+                    maximum = last_input_row[x + 1u];
+                }
+                last_output_row[x] = maximum;
+            }
+            last_output_row[width - 1u] = last_input_row[width - 1u];
+        }
+    }
 }
 
 lw_status lw_scalar_average_pool2d_f32(const float* input, float* output,
@@ -286,6 +368,13 @@ lw_status lw_scalar_max_pool2d_f32(const float* input, float* output,
         output_dimensions[1] != input_dimensions[1] || output_dimensions[2] != expected_height ||
         output_dimensions[3] != expected_width) {
         return LW_STATUS_INVALID_SHAPE;
+    }
+    if (kernel[0] == 2 && kernel[1] == 2 && strides[0] == 1 && strides[1] == 1 &&
+        pads[0] == 0 && pads[1] == 0 && pads[2] == 1 && pads[3] == 1 && ceil_mode == 0u &&
+        output_dimensions[2] == input_dimensions[2] &&
+        output_dimensions[3] == input_dimensions[3]) {
+        max_pool2x2_stride1_same_upper_f32(input, output, input_dimensions);
+        return LW_STATUS_OK;
     }
     for (batch = 0u; batch < (uint32_t)input_dimensions[0]; ++batch) {
         for (channel = 0u; channel < (uint32_t)input_dimensions[1]; ++channel) {
