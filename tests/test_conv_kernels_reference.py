@@ -104,6 +104,11 @@ def expected_results() -> dict[str, np.ndarray]:
     pointwise_bias = np.asarray(
         [0.25, -0.5, 1.0, -1.25, 0.75, 0.5], dtype=np.float32
     )
+    packed_pointwise_input = fill_values(210, 13, 43, 21, 11.0).reshape(2, 5, 3, 7)
+    packed_pointwise_weights = fill_values(35, 17, 37, 18, 9.0).reshape(7, 5, 1, 1)
+    packed_pointwise_bias = np.asarray(
+        [0.25, -0.5, 1.0, -1.25, 0.75, 0.5, -0.125], dtype=np.float32
+    )
     batch_norm_input = fill_values(24, 7, 21, 10, 4.0).reshape(2, 3, 2, 2)
     scale = np.asarray([1.5, -0.75, 0.25], dtype=np.float32).reshape(1, 3, 1, 1)
     bias = np.asarray([0.1, 0.5, -1.0], dtype=np.float32).reshape(1, 3, 1, 1)
@@ -171,6 +176,10 @@ def expected_results() -> dict[str, np.ndarray]:
         "grouped_pointwise_conv": conv2d_reference(
             pointwise_input, pointwise_weights, pointwise_bias,
             (1, 1), (1, 1), (0, 0, 0, 0), 2,
+        ).ravel(),
+        "packed_pointwise_conv": conv2d_reference(
+            packed_pointwise_input, packed_pointwise_weights, packed_pointwise_bias,
+            (1, 1), (1, 1), (0, 0, 0, 0), 1,
         ).ravel(),
         "conv_transpose": conv_transpose_reference(
             transpose_conv_input, transpose_conv_weights, transpose_conv_bias

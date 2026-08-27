@@ -100,6 +100,7 @@ add_custom_target(convert_det_model ALL
     DEPENDS "${LW_PPOCR_C_DET_LWM}" "${LW_PPOCR_C_DET_LWM_METADATA}")
 
 set(LW_PPOCR_C_SOURCES
+    src/kernels/packed_conv.c
     src/kernels/scalar_activation.c
     src/kernels/scalar_conv.c
     src/kernels/scalar_elementwise.c
@@ -131,6 +132,7 @@ set(LW_PPOCR_C_SOURCES
     src/simd/avx2_depthwise3x3.c
     src/simd/avx2_depthwise5x5.c
     src/simd/avx2_matmul.c
+    src/simd/avx2_packed_conv1x1.c
     src/simd/cpu_features.c
     src/simd/sse2_binary.c
     src/simd/sse2_conv1x1.c
@@ -138,14 +140,15 @@ set(LW_PPOCR_C_SOURCES
     src/simd/sse2_conv3x3.c
     src/simd/sse2_depthwise3x3.c
     src/simd/sse2_depthwise5x5.c
-    src/simd/sse2_matmul.c)
+    src/simd/sse2_matmul.c
+    src/simd/sse2_packed_conv1x1.c)
 
 if(MSVC AND MSVC_C_ARCHITECTURE_ID MATCHES "^(x64|X86)$")
     set_property(SOURCE src/simd/avx2_binary.c src/simd/avx2_conv1x1.c
         src/simd/avx2_conv2x2.c
         src/simd/avx2_conv3x3.c src/simd/avx2_depthwise3x3.c
         src/simd/avx2_depthwise5x5.c
-        src/simd/avx2_matmul.c APPEND PROPERTY
+        src/simd/avx2_matmul.c src/simd/avx2_packed_conv1x1.c APPEND PROPERTY
         COMPILE_OPTIONS /arch:AVX2 /fp:strict)
     set_property(SOURCE src/simd/cpu_features.c APPEND PROPERTY
         COMPILE_OPTIONS /arch:AVX)
@@ -498,6 +501,13 @@ if(BUILD_TESTING AND NOT EMSCRIPTEN)
         COMMAND "${Python3_EXECUTABLE}" -m unittest -v
                 tests.test_analyze_onnx)
     set_tests_properties(model_analysis PROPERTIES
+        WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
+
+    add_test(
+        NAME conv_shape_analysis
+        COMMAND "${Python3_EXECUTABLE}" -m unittest -v
+                tests.test_analyze_conv_shapes)
+    set_tests_properties(conv_shape_analysis PROPERTIES
         WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
 
     add_test(

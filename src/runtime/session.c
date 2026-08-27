@@ -6,6 +6,8 @@
  * therefore keep the model alive until every session created from it is freed.
  */
 #include "lwm_read.h"
+#include "packed_conv_internal.h"
+#include "cpu_features.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -16,6 +18,7 @@
 
 #define LW_DEFAULT_MAX_WORKSPACE_SIZE (UINT64_C(512) * UINT64_C(1024) * UINT64_C(1024))
 #define LW_DEFAULT_MAX_TENSOR_SIZE (UINT64_C(256) * UINT64_C(1024) * UINT64_C(1024))
+#define LW_OP_CONV 1u
 
 static void* workspace_allocate(size_t size) {
 #if defined(_WIN32)
@@ -31,6 +34,155 @@ static void workspace_release(void* pointer) {
 #else
     free(pointer);
 #endif
+}
+
+static int align_up_64(uint64_t value, uint64_t* aligned_value) {
+    const uint64_t mask = LW_WORKSPACE_ALIGNMENT - 1u;
+    if (aligned_value == NULL || value > UINT64_MAX - mask) {
+        return 0;
+    }
+    *aligned_value = (value + mask) & ~mask;
+    return 1;
+}
+
+static int uint64_fits_size_t(uint64_t value) {
+    return (uint64_t)(size_t)value == value;
+}
+
+static int prepared_pointwise_node(const lw_session* session, uint32_t node_index,
+                                   uint32_t* weight_tensor_index, uint64_t* packed_weight_count) {
+    const lw_model* model = session->model;
+    const uint8_t* node =
+        model->bytes + (size_t)model->node_offset + (size_t)node_index * LWM_V0_NODE_SIZE;
+    uint16_t input_count = lwm_read_u16(node + 2u);
+    uint64_t param_offset;
+    const uint8_t* params;
+    uint32_t input_index;
+    uint32_t weights_index;
+    uint32_t output_index;
+    const lw_runtime_tensor* input;
+    const lw_runtime_tensor* weights;
+    const lw_runtime_tensor* output;
+    if (lwm_read_u16(node) != LW_OP_CONV || (input_count != 2u && input_count != 3u)) {
+        return 0;
+    }
+    param_offset = lwm_read_u64(node + 56u);
+    params = model->bytes + (size_t)param_offset;
+    input_index = lwm_read_u32(node + 8u);
+    weights_index = lwm_read_u32(node + 12u);
+    output_index = lwm_read_u32(node + 40u);
+    input = &session->tensors[input_index];
+    weights = &session->tensors[weights_index];
+    output = &session->tensors[output_index];
+    /* The four-output microkernel wins on the long feature maps used by OCR
+     * classification/recognition. Large square detector maps create four
+     * distant output streams and are faster with the canonical kernel. */
+    if (input->dtype != LW_DTYPE_F32 || input->rank != 4u || weights->dtype != LW_DTYPE_F32 ||
+        weights->rank != 4u || output->dtype != LW_DTYPE_F32 || output->rank != 4u ||
+        (weights->flags & LWM_V0_TENSOR_FLAG_CONSTANT) == 0u || lwm_read_u32(params + 4u) != 1u ||
+        lwm_read_i32(params + 8u) != 1 || lwm_read_i32(params + 12u) != 1 ||
+        lwm_read_i32(params + 16u) != 1 || lwm_read_i32(params + 20u) != 1 ||
+        lwm_read_i32(params + 24u) != 1 || lwm_read_i32(params + 28u) != 1 ||
+        lwm_read_i32(params + 32u) != 0 || lwm_read_i32(params + 36u) != 0 ||
+        lwm_read_i32(params + 40u) != 0 || lwm_read_i32(params + 44u) != 0 ||
+        weights->dimensions[0] != output->dimensions[1] ||
+        weights->dimensions[1] != input->dimensions[1] || weights->dimensions[2] != 1 ||
+        weights->dimensions[3] != 1 || input->dimensions[0] != output->dimensions[0] ||
+        output->dimensions[1] < (int32_t)LW_PACKED_CONV1X1_OUTPUT_TILE ||
+        output->dimensions[1] % (int32_t)LW_PACKED_CONV1X1_OUTPUT_TILE != 0 ||
+        (uint64_t)(uint32_t)input->dimensions[3] < UINT64_C(2) * (uint32_t)input->dimensions[2] ||
+        input->dimensions[2] != output->dimensions[2] ||
+        input->dimensions[3] != output->dimensions[3] ||
+        !lw_packed_conv1x1_weight_count((uint32_t)input->dimensions[1],
+                                        (uint32_t)output->dimensions[1], packed_weight_count)) {
+        return 0;
+    }
+    *weight_tensor_index = weights_index;
+    return 1;
+}
+
+static const float* constant_f32_data(const lw_session* session, uint32_t tensor_index) {
+    const lw_model* model = session->model;
+    const uint8_t* disk =
+        model->bytes + (size_t)model->tensor_offset + (size_t)tensor_index * LWM_V0_TENSOR_SIZE;
+    uint64_t data_offset = lwm_read_u64(disk + 48u);
+    return (const float*)(const void*)(model->bytes + (size_t)data_offset);
+}
+
+static lw_status prepare_pointwise_weights(lw_session* session, lw_error* error) {
+    const lw_model* model = session->model;
+    uint64_t total_bytes = 0u;
+    uint32_t node_index;
+    if (model->info.node_count == 0u || lw_detect_simd_level() < LW_SIMD_LEVEL_SSE2) {
+        return LW_STATUS_OK;
+    }
+    session->prepared_nodes =
+        (lw_prepared_node*)calloc(model->info.node_count, sizeof(*session->prepared_nodes));
+    if (session->prepared_nodes == NULL) {
+        lw_set_error(error, LW_STATUS_OUT_OF_MEMORY, "unable to allocate prepared node table");
+        return LW_STATUS_OUT_OF_MEMORY;
+    }
+    for (node_index = 0u; node_index < model->info.node_count; ++node_index) {
+        uint32_t weight_tensor_index;
+        uint64_t packed_weight_count;
+        uint64_t packed_bytes;
+        lw_prepared_node* prepared = &session->prepared_nodes[node_index];
+        if (!prepared_pointwise_node(session, node_index, &weight_tensor_index,
+                                     &packed_weight_count)) {
+            continue;
+        }
+        (void)weight_tensor_index;
+        packed_bytes = packed_weight_count * sizeof(float);
+        if (!align_up_64(total_bytes, &total_bytes)) {
+            lw_set_error(error, LW_STATUS_OUT_OF_BOUNDS, "packed pointwise alignment overflows");
+            return LW_STATUS_OUT_OF_BOUNDS;
+        }
+        if (total_bytes > UINT64_MAX - packed_bytes ||
+            !uint64_fits_size_t(total_bytes + packed_bytes)) {
+            lw_set_error(error, LW_STATUS_OUT_OF_BOUNDS, "packed pointwise weights overflow");
+            return LW_STATUS_OUT_OF_BOUNDS;
+        }
+        prepared->kind = LW_PREPARED_NODE_CONV1X1_PACKED4;
+        prepared->packed_weight_offset = total_bytes;
+        prepared->packed_weight_count = packed_weight_count;
+        total_bytes += packed_bytes;
+    }
+    if (total_bytes == 0u) {
+        return LW_STATUS_OK;
+    }
+    if (!align_up_64(total_bytes, &total_bytes) || !uint64_fits_size_t(total_bytes)) {
+        lw_set_error(error, LW_STATUS_OUT_OF_BOUNDS, "packed pointwise allocation overflows");
+        return LW_STATUS_OUT_OF_BOUNDS;
+    }
+    session->packed_weights = (uint8_t*)workspace_allocate((size_t)total_bytes);
+    if (session->packed_weights == NULL) {
+        lw_set_error(error, LW_STATUS_OUT_OF_MEMORY, "unable to allocate packed pointwise weights");
+        return LW_STATUS_OUT_OF_MEMORY;
+    }
+    session->packed_weight_bytes = (size_t)total_bytes;
+    for (node_index = 0u; node_index < model->info.node_count; ++node_index) {
+        lw_prepared_node* prepared = &session->prepared_nodes[node_index];
+        uint32_t weight_tensor_index;
+        uint64_t packed_weight_count;
+        const uint8_t* node;
+        uint32_t input_index;
+        uint32_t output_index;
+        if (prepared->kind != LW_PREPARED_NODE_CONV1X1_PACKED4 ||
+            !prepared_pointwise_node(session, node_index, &weight_tensor_index,
+                                     &packed_weight_count) ||
+            packed_weight_count != prepared->packed_weight_count) {
+            continue;
+        }
+        node = model->bytes + (size_t)model->node_offset + (size_t)node_index * LWM_V0_NODE_SIZE;
+        input_index = lwm_read_u32(node + 8u);
+        output_index = lwm_read_u32(node + 40u);
+        lw_pack_conv1x1_weights_f32(
+            constant_f32_data(session, weight_tensor_index),
+            (uint32_t)session->tensors[input_index].dimensions[1],
+            (uint32_t)session->tensors[output_index].dimensions[1],
+            (float*)(void*)(session->packed_weights + (size_t)prepared->packed_weight_offset));
+    }
+    return LW_STATUS_OK;
 }
 
 static uint32_t runtime_dtype_size(uint32_t dtype) {
@@ -226,6 +378,11 @@ lw_status lw_session_create(const lw_model* model, const lw_tensor_desc* inputs,
             return LW_STATUS_OUT_OF_MEMORY;
         }
     }
+    status = prepare_pointwise_weights(session, error);
+    if (status != LW_STATUS_OK) {
+        lw_session_free(session);
+        return status;
+    }
     memset(&session->info, 0, sizeof(session->info));
     session->info.struct_size = (uint32_t)sizeof(session->info);
     session->info.tensor_count = model->info.tensor_count;
@@ -243,6 +400,11 @@ void lw_session_free(lw_session* session) {
     }
     workspace_release(session->workspace);
     session->workspace = NULL;
+    workspace_release(session->packed_weights);
+    session->packed_weights = NULL;
+    session->packed_weight_bytes = 0u;
+    free(session->prepared_nodes);
+    session->prepared_nodes = NULL;
     free(session->tensors);
     session->tensors = NULL;
     free(session);

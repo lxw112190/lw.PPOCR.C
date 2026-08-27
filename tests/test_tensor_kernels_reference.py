@@ -75,6 +75,7 @@ def expected_results() -> dict[str, np.ndarray]:
     reshape_input = tensor_input[:6].reshape(2, 1, 3, 1)
     reduce_input = tensor_input[:24].reshape(2, 3, 4)
     pool_input = tensor_input.reshape(1, 2, 3, 5)
+    resize_multi_input = tensor_input[:24].reshape(2, 2, 2, 3)
     matmul_input = np.asarray(
         [(((index * 3) % 13) - 6) / 4.0 for index in range(24)],
         dtype=np.float32,
@@ -110,6 +111,15 @@ def expected_results() -> dict[str, np.ndarray]:
                 2,
                 axis=2,
             ),
+            2,
+            axis=3,
+        ).ravel(),
+        "resize_nearest_nchw": np.repeat(
+            np.repeat(resize_multi_input, 2, axis=2), 3, axis=3
+        ).ravel(),
+        "resize_nearest_fractional": np.repeat(
+            np.asarray([-3, -2, -1, -3, -2, -1, 1, 2, 3], dtype=np.float32)
+            .reshape(1, 1, 3, 3),
             2,
             axis=3,
         ).ravel(),

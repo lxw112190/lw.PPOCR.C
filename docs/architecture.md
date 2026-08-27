@@ -130,6 +130,15 @@ and architecture-specific kernels are isolated under `src/simd`.
     client, while a separate C++ `cpp-httplib` executable provides the
     cross-platform HTTP API, browser-side image-to-PPM conversion, stable
     request IDs, quadrilateral drawing, and staged-package live tests.
+29. Session-prepared pointwise weights — complete locally; eligible long-map,
+    group-1 1x1 Conv weights are packed once into four-output-channel blocks,
+    then consumed by scalar/SSE2/AVX2 microkernels. Square detector maps and
+    non-SSE2 machines retain the canonical path, and LWM/public ABI layouts do
+    not change.
+30. Integer nearest-neighbor NCHW Resize — complete locally; unchanged N/C
+    dimensions and exact integer spatial scale factors use contiguous
+    horizontal replication plus row copies. Fractional, downsampling, and
+    general-rank cases retain the coordinate-based reference path.
 
 ## Compatibility claims
 

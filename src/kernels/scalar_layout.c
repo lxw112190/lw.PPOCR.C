@@ -48,6 +48,61 @@ static lw_status copy_reshape(const float* input, float* output, uint64_t elemen
     return LW_STATUS_OK;
 }
 
+static int integer_resize_factor(float scale, int32_t input_dimension, int32_t output_dimension,
+                                 uint32_t* factor) {
+    uint32_t candidate;
+    if (output_dimension % input_dimension != 0) {
+        return 0;
+    }
+    candidate = (uint32_t)(output_dimension / input_dimension);
+    if (candidate == 0u || (float)candidate != scale) {
+        return 0;
+    }
+    *factor = candidate;
+    return 1;
+}
+
+static void resize_nchw_integer_spatial_f32(const float* input, float* output,
+                                            const int32_t* input_dimensions,
+                                            const int32_t* output_dimensions,
+                                            uint32_t height_factor, uint32_t width_factor) {
+    const uint32_t batch_count = (uint32_t)input_dimensions[0];
+    const uint32_t channels = (uint32_t)input_dimensions[1];
+    const uint32_t input_height = (uint32_t)input_dimensions[2];
+    const uint32_t input_width = (uint32_t)input_dimensions[3];
+    const uint32_t output_height = (uint32_t)output_dimensions[2];
+    const uint32_t output_width = (uint32_t)output_dimensions[3];
+    uint32_t batch;
+    for (batch = 0u; batch < batch_count; ++batch) {
+        uint32_t channel;
+        for (channel = 0u; channel < channels; ++channel) {
+            uint64_t input_plane =
+                ((uint64_t)batch * channels + channel) * input_height * input_width;
+            uint64_t output_plane =
+                ((uint64_t)batch * channels + channel) * output_height * output_width;
+            uint32_t input_y;
+            for (input_y = 0u; input_y < input_height; ++input_y) {
+                const float* source_row = input + (size_t)(input_plane + input_y * input_width);
+                float* first_output_row =
+                    output +
+                    (size_t)(output_plane + (uint64_t)input_y * height_factor * output_width);
+                uint32_t input_x;
+                for (input_x = 0u; input_x < input_width; ++input_x) {
+                    uint32_t repeat_x;
+                    for (repeat_x = 0u; repeat_x < width_factor; ++repeat_x) {
+                        first_output_row[(size_t)input_x * width_factor + repeat_x] =
+                            source_row[input_x];
+                    }
+                }
+                for (uint32_t repeat_y = 1u; repeat_y < height_factor; ++repeat_y) {
+                    memcpy(first_output_row + (size_t)repeat_y * output_width, first_output_row,
+                           (size_t)output_width * sizeof(float));
+                }
+            }
+        }
+    }
+}
+
 lw_status lw_scalar_transpose_f32(const float* input, float* output, uint32_t rank,
                                   const int32_t* input_dimensions, uint32_t permutation_count,
                                   const int32_t* permutation, const int32_t* output_dimensions) {
@@ -281,6 +336,8 @@ lw_status lw_scalar_resize_nearest_f32(const float* input, float* output, uint32
     uint64_t output_index;
     uint64_t input_strides[LW_MAX_DIMS] = {0u};
     uint64_t stride = 1u;
+    uint32_t height_factor;
+    uint32_t width_factor;
     uint32_t axis;
     lw_status status;
     if (input == NULL || output == NULL || input == output || scales == NULL || rank == 0u ||
@@ -309,6 +366,16 @@ lw_status lw_scalar_resize_nearest_f32(const float* input, float* output, uint32
         if (expected != output_dimensions[axis]) {
             return LW_STATUS_INVALID_SHAPE;
         }
+    }
+    if (rank == 4u && input_dimensions[0] == output_dimensions[0] &&
+        input_dimensions[1] == output_dimensions[1] && scales[0] == 1.0f && scales[1] == 1.0f &&
+        integer_resize_factor(scales[2], input_dimensions[2], output_dimensions[2],
+                              &height_factor) &&
+        integer_resize_factor(scales[3], input_dimensions[3], output_dimensions[3],
+                              &width_factor)) {
+        resize_nchw_integer_spatial_f32(input, output, input_dimensions, output_dimensions,
+                                        height_factor, width_factor);
+        return LW_STATUS_OK;
     }
     for (output_index = 0u; output_index < output_count; ++output_index) {
         uint64_t remaining = output_index;

@@ -10,6 +10,18 @@
 
 #define LW_WORKSPACE_ALIGNMENT 64u
 
+typedef enum lw_prepared_node_kind {
+    LW_PREPARED_NODE_NONE = 0,
+    LW_PREPARED_NODE_CONV1X1_PACKED4 = 1
+} lw_prepared_node_kind;
+
+typedef struct lw_prepared_node {
+    uint32_t kind;
+    uint32_t reserved;
+    uint64_t packed_weight_offset;
+    uint64_t packed_weight_count;
+} lw_prepared_node;
+
 typedef struct lw_runtime_tensor {
     uint32_t dtype;
     uint32_t rank;
@@ -27,6 +39,9 @@ struct lw_session {
     lw_runtime_tensor* tensors;
     uint8_t* workspace;
     size_t workspace_bytes;
+    lw_prepared_node* prepared_nodes;
+    uint8_t* packed_weights;
+    size_t packed_weight_bytes;
     lw_session_info info;
 };
 

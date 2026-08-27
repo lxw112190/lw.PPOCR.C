@@ -125,3 +125,81 @@ requires deterministic 16-line output, verifies all 21 operator IDs, checks the
 exact 4,946 node invocations per request, and confirms that Conv-class counts
 sum to the Conv operator count. It also verifies the DET node metadata and
 requires every Conv/ConvTranspose invocation to have a concrete 4D shape.
+
+## Session-prepared pointwise weights
+
+The next 1x1 experiment keeps the public NCHW tensors and canonical LWM OIHW
+weights unchanged. During session creation, eligible group-1 weights are
+copied once into `[Cout/4][Cin][4]` blocks. The execution microkernel loads one
+input vector and updates four output-channel accumulators, reducing repeated
+input traffic without changing each output element's input-channel addition
+order. Separate scalar, SSE2, and AVX2 implementations share the packed format;
+FMA remains disabled.
+
+The selector is deliberately conservative. It requires SSE2 or AVX2, an output
+channel count divisible by four, and the long feature-map geometry used by the
+CLS/REC stages. Large square DET maps measured slower with four distant output
+streams and remain on the existing kernel. Non-x86 and scalar-only targets do
+not allocate packed weights.
+
+The checked analysis behind this decision can be reproduced with:
+
+```powershell
+python converter/analyze_conv_shapes.py
+```
+
+It reports every Conv/MatMul/Gemm node, its concrete shape and FLOP share, plus
+deduplicated kernel families for the bundled REC, CLS, and DET models.
+
+One paired local Windows x64 Release run used the preserved pre-change binary,
+the same DLL build settings, bundled 500x500/16-line fixture, three warm-ups,
+and twelve measured calls:
+
+| Metric | Existing kernel | Prepared 4-output kernel | Change |
+|---|---:|---:|---:|
+| Full OCR, 1 worker | 598.517 ms | 562.491 ms | -6.02% |
+| Post-DET, 1 worker | 389.860 ms | 355.069 ms | -8.92% |
+| Throughput, 1 worker | 1.671/s | 1.778/s | +6.41% |
+| Steady RSS, 1 worker | 67.61 MiB | 69.68 MiB | +2.07 MiB |
+| Full OCR, 4 workers | 361.050 ms | 338.231 ms | -6.32% |
+| Post-DET, 4 workers | 155.578 ms | 132.231 ms | -15.01% |
+| Throughput, 4 workers | 2.770/s | 2.957/s | +6.75% |
+| Steady RSS, 4 workers | 98.14 MiB | 106.38 MiB | +8.25 MiB |
+
+The extra memory is per-session packed weight storage, so it scales with the
+number of CLS/REC workers. This tradeoff should be remeasured on each target
+CPU and worker count. Direct tail-block tests require scalar, SSE2, AVX2, and
+automatic dispatch to be byte-identical before ONNX reference comparison; the
+complete x64 suite and x86 ABI, graph, package, and full-OCR gates also pass.
+
+## Integer nearest-neighbor Resize
+
+The DET feature pyramid contains six nearest-neighbor Resize nodes per graph
+execution. The original general-rank kernel decoded every output element back
+to all source coordinates with repeated modulo, division, and `floor` calls.
+For the model's exact NCHW integer upscales, that coordinate work dominated the
+actual copies.
+
+The specialized path requires rank 4, unchanged N/C dimensions, scale 1 on N/C,
+and exact positive integer height/width factors consistent with the resolved
+output shape. It expands one source row contiguously, then copies that completed
+row for the remaining vertical repetitions. Fractional scales, downsampling,
+and all other ranks still use the original path. No lookup table, persistent
+allocation, model-format change, or public API change is introduced.
+
+On the local three-iteration operator profile, Resize fell from 99.240 ms to
+1.775 ms (-98.21%), and the instrumented DET graph fell from 495.248 ms to
+389.256 ms (-21.40%). A follow-up uninstrumented 3+12 run measured:
+
+| Metric | Prepared-pointwise stage | Integer Resize stage | Change |
+|---|---:|---:|---:|
+| DET, 1 worker | 207.421 ms | 135.541 ms | -34.65% |
+| Full OCR, 1 worker | 562.491 ms | 436.159 ms | -22.46% |
+| DET, 4 workers | 206.000 ms | 139.311 ms | -32.37% |
+| Full OCR, 4 workers | 338.231 ms | 224.049 ms | -33.76% |
+| Throughput, 4 workers | 2.957/s | 4.463/s | +50.94% |
+
+These are sequential local stage measurements, not a portable capacity claim.
+Steady RSS remained at the prepared-pointwise stage level. The tensor reference
+suite covers different height/width integer factors across multiple batches and
+channels, plus a fractional-scale case that must remain on the general path.

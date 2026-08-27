@@ -7,6 +7,7 @@
  */
 
 #include "lwm_read.h"
+#include "packed_conv_internal.h"
 #include "scalar_kernels.h"
 #include "session_internal.h"
 
@@ -76,8 +77,8 @@ static float* tensor_output_data(lw_session* session, uint32_t tensor_index) {
     return (float*)(void*)(session->workspace + (size_t)tensor->workspace_offset);
 }
 
-static lw_status dispatch_node(lw_session* session, const uint8_t* node, uint32_t graph_input_index,
-                               const float* graph_input) {
+static lw_status dispatch_node(lw_session* session, const uint8_t* node, uint32_t node_index,
+                               uint32_t graph_input_index, const float* graph_input) {
     const lw_model* model = session->model;
     const uint16_t op = lwm_read_u16(node);
     const uint16_t input_count = lwm_read_u16(node + 2);
@@ -119,6 +120,16 @@ static lw_status dispatch_node(lw_session* session, const uint8_t* node, uint32_
                            lwm_read_i32(params + 40), lwm_read_i32(params + 44)};
         if (input_count != 2u && input_count != 3u) {
             return LW_STATUS_INVALID_SHAPE;
+        }
+        if (session->prepared_nodes != NULL &&
+            session->prepared_nodes[node_index].kind == LW_PREPARED_NODE_CONV1X1_PACKED4) {
+            const lw_prepared_node* prepared = &session->prepared_nodes[node_index];
+            const float* packed_weights =
+                (const float*)(const void*)(session->packed_weights +
+                                            (size_t)prepared->packed_weight_offset);
+            lw_packed_conv1x1_f32(inputs[0], packed_weights, input_count == 3u ? inputs[2] : NULL,
+                                  output, input_tensors[0]->dimensions, output_tensor->dimensions);
+            return LW_STATUS_OK;
         }
         return lw_scalar_conv2d_f32(
             inputs[0], inputs[1], input_count == 3u ? inputs[2] : NULL,
@@ -367,7 +378,7 @@ static lw_status execute_session_f32(lw_session* session, const float* input,
         if (profile != NULL) {
             started = profile->clock(profile->clock_context);
         }
-        status = dispatch_node(session, node, graph_input_index, input);
+        status = dispatch_node(session, node, node_index, graph_input_index, input);
         if (profile != NULL && operation < LW_EXECUTION_PROFILE_OPERATOR_CAPACITY) {
             uint64_t finished = profile->clock(profile->clock_context);
             if (finished >= started) {

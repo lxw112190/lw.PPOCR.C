@@ -1,5 +1,6 @@
 #include "scalar_kernels.h"
 #include "cpu_features.h"
+#include "packed_conv_internal.h"
 #include "simd_kernels.h"
 
 #include <inttypes.h>
@@ -83,6 +84,8 @@ int main(void) {
     const int32_t pointwise_input_dimensions[4] = {2, 4, 2, 5};
     const int32_t pointwise_weight_dimensions[4] = {6, 2, 1, 1};
     const int32_t pointwise_output_dimensions[4] = {2, 6, 2, 5};
+    const int32_t packed_pointwise_input_dimensions[4] = {2, 5, 3, 7};
+    const int32_t packed_pointwise_output_dimensions[4] = {2, 7, 3, 7};
     const int32_t point_kernel[2] = {1, 1};
     const int32_t no_pads[4] = {0, 0, 0, 0};
     const int32_t batch_norm_dimensions[4] = {2, 3, 2, 2};
@@ -96,6 +99,7 @@ int main(void) {
     const float unit_conv_bias[2] = {0.375f, -0.625f};
     const float unit_depthwise_bias[2] = {0.375f, -0.625f};
     const float pointwise_bias[6] = {0.25f, -0.5f, 1.0f, -1.25f, 0.75f, 0.5f};
+    const float packed_pointwise_bias[7] = {0.25f, -0.5f, 1.0f, -1.25f, 0.75f, 0.5f, -0.125f};
     const float batch_norm_scale[3] = {1.5f, -0.75f, 0.25f};
     const float batch_norm_bias[3] = {0.1f, 0.5f, -1.0f};
     const float batch_norm_mean[3] = {-0.25f, 1.0f, 0.5f};
@@ -143,6 +147,11 @@ int main(void) {
     float pointwise_output[120];
     float pointwise_dispatched_output[120];
     float pointwise_simd_output[120];
+    float packed_pointwise_input[210];
+    float packed_pointwise_weights[35];
+    float packed_pointwise_packed_weights[40];
+    float packed_pointwise_output[294];
+    float packed_pointwise_simd_output[294];
     float batch_norm_input[24];
     float batch_norm_output[24];
     float batch_norm_in_place[24];
@@ -409,6 +418,55 @@ int main(void) {
         return 1;
     }
     print_values("grouped_pointwise_conv", pointwise_output, 120u);
+
+    /* Exercise four-output-channel packing, including a three-channel tail. */
+    fill_values(packed_pointwise_input, 210u, 13u, 43u, 21, 11.0f);
+    fill_values(packed_pointwise_weights, 35u, 17u, 37u, 18, 9.0f);
+    lw_scalar_conv1x1_unit_f32(packed_pointwise_input, packed_pointwise_weights,
+                               packed_pointwise_bias, packed_pointwise_output,
+                               packed_pointwise_input_dimensions,
+                               packed_pointwise_output_dimensions, 1u, 5u, 7u);
+    lw_pack_conv1x1_weights_f32(packed_pointwise_weights, 5u, 7u, packed_pointwise_packed_weights);
+    lw_scalar_packed_conv1x1_f32(packed_pointwise_input, packed_pointwise_packed_weights,
+                                 packed_pointwise_bias, packed_pointwise_simd_output,
+                                 packed_pointwise_input_dimensions,
+                                 packed_pointwise_output_dimensions);
+    if (memcmp(packed_pointwise_output, packed_pointwise_simd_output,
+               sizeof(packed_pointwise_output)) != 0) {
+        fprintf(stderr, "scalar packed pointwise Conv differs from canonical output\n");
+        return 1;
+    }
+    if (simd_level >= LW_SIMD_LEVEL_SSE2) {
+        lw_sse2_packed_conv1x1_f32(packed_pointwise_input, packed_pointwise_packed_weights,
+                                   packed_pointwise_bias, packed_pointwise_simd_output,
+                                   packed_pointwise_input_dimensions,
+                                   packed_pointwise_output_dimensions);
+        if (memcmp(packed_pointwise_output, packed_pointwise_simd_output,
+                   sizeof(packed_pointwise_output)) != 0) {
+            fprintf(stderr, "SSE2 packed pointwise Conv differs from canonical output\n");
+            return 1;
+        }
+    }
+    if (simd_level >= LW_SIMD_LEVEL_AVX2) {
+        lw_avx2_packed_conv1x1_f32(packed_pointwise_input, packed_pointwise_packed_weights,
+                                   packed_pointwise_bias, packed_pointwise_simd_output,
+                                   packed_pointwise_input_dimensions,
+                                   packed_pointwise_output_dimensions);
+        if (memcmp(packed_pointwise_output, packed_pointwise_simd_output,
+                   sizeof(packed_pointwise_output)) != 0) {
+            fprintf(stderr, "AVX2 packed pointwise Conv differs from canonical output\n");
+            return 1;
+        }
+    }
+    lw_packed_conv1x1_f32(packed_pointwise_input, packed_pointwise_packed_weights,
+                          packed_pointwise_bias, packed_pointwise_simd_output,
+                          packed_pointwise_input_dimensions, packed_pointwise_output_dimensions);
+    if (memcmp(packed_pointwise_output, packed_pointwise_simd_output,
+               sizeof(packed_pointwise_output)) != 0) {
+        fprintf(stderr, "dispatched packed pointwise Conv differs from canonical output\n");
+        return 1;
+    }
+    print_values("packed_pointwise_conv", packed_pointwise_output, 294u);
 
     fill_values(transpose_conv_input, 8u, 3u, 13u, 6, 4.0f);
     fill_values(transpose_conv_weights, 8u, 5u, 17u, 8, 6.0f);

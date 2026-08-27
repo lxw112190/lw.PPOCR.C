@@ -64,6 +64,11 @@ int main(void) {
     const int32_t resize_input_dimensions[4] = {1, 1, 2, 3};
     const int32_t resize_output_dimensions[4] = {1, 1, 4, 6};
     const float resize_scales[4] = {1.0f, 1.0f, 2.0f, 2.0f};
+    const int32_t resize_multi_input_dimensions[4] = {2, 2, 2, 3};
+    const int32_t resize_multi_output_dimensions[4] = {2, 2, 4, 9};
+    const float resize_multi_scales[4] = {1.0f, 1.0f, 2.0f, 3.0f};
+    const int32_t resize_fractional_output_dimensions[4] = {1, 1, 3, 6};
+    const float resize_fractional_scales[4] = {1.0f, 1.0f, 1.5f, 2.0f};
     float tensor_input[30];
     float transpose_output[24];
     float reshape_output[6];
@@ -75,6 +80,8 @@ int main(void) {
     const int32_t* concat_dimensions[2] = {concat_left_dimensions, concat_right_dimensions};
     float concat_output[9];
     float resize_output[24];
+    float resize_multi_output[144];
+    float resize_fractional_output[18];
     float matmul_input[24];
     float matmul_weights[20];
     float matmul_output[30];
@@ -173,6 +180,23 @@ int main(void) {
         return 1;
     }
     print_values("resize_nearest", resize_output, 24u);
+
+    status = lw_scalar_resize_nearest_f32(tensor_input, resize_multi_output, 4u,
+                                          resize_multi_input_dimensions,
+                                          resize_multi_output_dimensions, resize_multi_scales);
+    if (!expect_status("multi-plane resize", status, LW_STATUS_OK)) {
+        return 1;
+    }
+    print_values("resize_nearest_nchw", resize_multi_output, 144u);
+
+    /* A fractional height scale must retain the general coordinate path. */
+    status = lw_scalar_resize_nearest_f32(
+        concat_left, resize_fractional_output, 4u, resize_input_dimensions,
+        resize_fractional_output_dimensions, resize_fractional_scales);
+    if (!expect_status("fractional resize", status, LW_STATUS_OK)) {
+        return 1;
+    }
+    print_values("resize_nearest_fractional", resize_fractional_output, 18u);
 
     for (index = 0u; index < 24u; ++index) {
         matmul_input[index] = (float)((int32_t)((index * 3u) % 13u) - 6) / 4.0f;
