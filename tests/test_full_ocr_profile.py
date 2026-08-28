@@ -187,15 +187,24 @@ class FullOcrProfileTest(unittest.TestCase):
         self.assertEqual(reports[0]["rec_width"], reports[1]["rec_width"])
 
     def test_profile_accepts_long_text_target_width(self) -> None:
-        report = self.run_profile(1, 960)
-        self.assertEqual(report["rec_target_width"], 960)
-        rec_width = report["rec_width"]
-        self.assertEqual(rec_width["target_width_sum"], 960 * report["lines"])
-        self.assertLessEqual(rec_width["mean_resized_width"], 960.0)
-        self.assertEqual(
-            [item["max_width"] for item in rec_width["histogram"]],
-            [192, 256, 320, 480, 640, 800, 960, None],
-        )
+        reports = [self.run_profile(1, 960), self.run_profile(4, 960)]
+        for report in reports:
+            self.assertEqual(report["rec_target_width"], 960)
+            rec_width = report["rec_width"]
+            self.assertEqual(rec_width["target_width_sum"], 9280)
+            self.assertLess(
+                rec_width["target_width_sum"], 960 * report["lines"]
+            )
+            self.assertGreaterEqual(
+                rec_width["target_width_sum"], rec_width["resized_width_sum"]
+            )
+            self.assertLessEqual(rec_width["mean_resized_width"], 960.0)
+            self.assertEqual(
+                [item["max_width"] for item in rec_width["histogram"]],
+                [192, 256, 320, 480, 640, 800, 960, None],
+            )
+        self.assertEqual(reports[0]["output_checksum"], reports[1]["output_checksum"])
+        self.assertEqual(reports[0]["rec_width"], reports[1]["rec_width"])
 
 
 def parse_args() -> argparse.Namespace:

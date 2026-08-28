@@ -24,9 +24,59 @@ struct lw_recognizer {
     float* probabilities;
     uint64_t input_element_count;
     uint64_t probability_element_count;
+    lw_session* cached_session;
+    float* cached_input;
+    float* cached_probabilities;
+    uint64_t cached_input_element_count;
+    uint64_t cached_probability_element_count;
+    uint32_t cached_target_width;
+    uint32_t cached_time_steps;
     uint64_t max_image_pixels;
+    lw_session_options session_options;
+    uint32_t current_target_width;
+    uint32_t current_time_steps;
+    uint32_t adaptive_width_enabled;
     lw_recognizer_info info;
 };
+
+static void release_cached_session(lw_recognizer* recognizer) {
+    free(recognizer->cached_probabilities);
+    free(recognizer->cached_input);
+    lw_session_free(recognizer->cached_session);
+    recognizer->cached_session = NULL;
+    recognizer->cached_input = NULL;
+    recognizer->cached_probabilities = NULL;
+    recognizer->cached_input_element_count = 0u;
+    recognizer->cached_probability_element_count = 0u;
+    recognizer->cached_target_width = 0u;
+    recognizer->cached_time_steps = 0u;
+}
+
+static void activate_cached_session(lw_recognizer* recognizer) {
+    lw_session* session = recognizer->session;
+    float* input = recognizer->input;
+    float* probabilities = recognizer->probabilities;
+    uint64_t input_element_count = recognizer->input_element_count;
+    uint64_t probability_element_count = recognizer->probability_element_count;
+    uint32_t target_width = recognizer->current_target_width;
+    uint32_t time_steps = recognizer->current_time_steps;
+
+    recognizer->session = recognizer->cached_session;
+    recognizer->input = recognizer->cached_input;
+    recognizer->probabilities = recognizer->cached_probabilities;
+    recognizer->input_element_count = recognizer->cached_input_element_count;
+    recognizer->probability_element_count = recognizer->cached_probability_element_count;
+    recognizer->current_target_width = recognizer->cached_target_width;
+    recognizer->current_time_steps = recognizer->cached_time_steps;
+
+    recognizer->cached_session = session;
+    recognizer->cached_input = input;
+    recognizer->cached_probabilities = probabilities;
+    recognizer->cached_input_element_count = input_element_count;
+    recognizer->cached_probability_element_count = probability_element_count;
+    recognizer->cached_target_width = target_width;
+    recognizer->cached_time_steps = time_steps;
+}
 
 static void clear_result(lw_recognition_result* result) {
     memset(result, 0, sizeof(*result));
@@ -105,13 +155,168 @@ static lw_status validate_options(const lw_recognizer_options* options, uint32_t
     return LW_STATUS_OK;
 }
 
+static lw_status configure_session(lw_recognizer* recognizer, uint32_t target_width,
+                                   lw_session_info* configured_info, lw_error* error) {
+    lw_tensor_desc input_desc;
+    lw_tensor_desc output_desc;
+    lw_session_info session_info;
+    lw_session* session = NULL;
+    float* input = NULL;
+    float* probabilities = NULL;
+    uint64_t input_element_count;
+    uint64_t probability_element_count;
+    lw_status status;
+
+    if (recognizer->cached_session != NULL && recognizer->cached_target_width == target_width) {
+        activate_cached_session(recognizer);
+        if (configured_info != NULL) {
+            lw_session_info_init(configured_info);
+            status = lw_session_get_info(recognizer->session, configured_info);
+            if (status != LW_STATUS_OK) {
+                activate_cached_session(recognizer);
+                lw_set_error(error, status, "unable to read recognizer session information");
+                return status;
+            }
+        }
+        return LW_STATUS_OK;
+    }
+
+    /* Keep at most two concrete widths. Discarding an inactive cache entry
+     * before construction bounds peak memory to the old active and candidate
+     * sessions; the active session remains valid if construction fails. */
+    release_cached_session(recognizer);
+
+    lw_tensor_desc_init(&input_desc);
+    input_desc.dtype = LW_DTYPE_F32;
+    input_desc.rank = 4u;
+    input_desc.dimensions[0] = 1;
+    input_desc.dimensions[1] = 3;
+    input_desc.dimensions[2] = (int32_t)LW_REC_INPUT_HEIGHT;
+    input_desc.dimensions[3] = (int32_t)target_width;
+    status = lw_session_create(recognizer->model, &input_desc, 1u, &recognizer->session_options,
+                               &session, error);
+    if (status != LW_STATUS_OK) {
+        return status;
+    }
+
+    lw_tensor_desc_init(&output_desc);
+    status = lw_session_get_output_desc(session, 0u, &output_desc);
+    if (status != LW_STATUS_OK || output_desc.dtype != LW_DTYPE_F32 || output_desc.rank != 3u ||
+        output_desc.dimensions[0] != 1 || output_desc.dimensions[1] <= 0 ||
+        output_desc.dimensions[2] <= 0 ||
+        (uint32_t)output_desc.dimensions[2] !=
+            lw_rec_dictionary_class_count(recognizer->dictionary)) {
+        lw_session_free(session);
+        lw_set_error(error, LW_STATUS_INVALID_SHAPE,
+                     "recognizer model output and dictionary are incompatible");
+        return LW_STATUS_INVALID_SHAPE;
+    }
+
+    input_element_count = (uint64_t)3u * LW_REC_INPUT_HEIGHT * target_width;
+    probability_element_count =
+        (uint64_t)(uint32_t)output_desc.dimensions[1] * (uint32_t)output_desc.dimensions[2];
+    if (input_element_count > SIZE_MAX / sizeof(*input) ||
+        probability_element_count > SIZE_MAX / sizeof(*probabilities)) {
+        lw_session_free(session);
+        lw_set_error(error, LW_STATUS_OUT_OF_BOUNDS, "recognizer buffer size overflows");
+        return LW_STATUS_OUT_OF_BOUNDS;
+    }
+    input = (float*)malloc((size_t)input_element_count * sizeof(*input));
+    probabilities = (float*)malloc((size_t)probability_element_count * sizeof(*probabilities));
+    if (input == NULL || probabilities == NULL) {
+        free(probabilities);
+        free(input);
+        lw_session_free(session);
+        lw_set_error(error, LW_STATUS_OUT_OF_MEMORY, "unable to allocate recognizer buffers");
+        return LW_STATUS_OUT_OF_MEMORY;
+    }
+
+    lw_session_info_init(&session_info);
+    status = lw_session_get_info(session, &session_info);
+    if (status != LW_STATUS_OK) {
+        free(probabilities);
+        free(input);
+        lw_session_free(session);
+        lw_set_error(error, status, "unable to read recognizer session information");
+        return status;
+    }
+
+    /* Publish the new shape only after every allocation and validation has
+     * succeeded. A failed adaptive switch therefore leaves the old session
+     * usable and avoids a partially configured recognizer. */
+    recognizer->cached_session = recognizer->session;
+    recognizer->cached_input = recognizer->input;
+    recognizer->cached_probabilities = recognizer->probabilities;
+    recognizer->cached_input_element_count = recognizer->input_element_count;
+    recognizer->cached_probability_element_count = recognizer->probability_element_count;
+    recognizer->cached_target_width = recognizer->current_target_width;
+    recognizer->cached_time_steps = recognizer->current_time_steps;
+    recognizer->session = session;
+    recognizer->input = input;
+    recognizer->probabilities = probabilities;
+    recognizer->input_element_count = input_element_count;
+    recognizer->probability_element_count = probability_element_count;
+    recognizer->current_target_width = target_width;
+    recognizer->current_time_steps = (uint32_t)output_desc.dimensions[1];
+    if (configured_info != NULL) {
+        *configured_info = session_info;
+    }
+    return LW_STATUS_OK;
+}
+
+static uint32_t adaptive_target_width(uint32_t source_width, uint32_t source_height,
+                                      uint32_t maximum_width) {
+    static const uint32_t buckets[] = {192u, 320u, 480u, 640u, 960u};
+    uint64_t scaled_width;
+    uint32_t index;
+    if (source_width == 0u || source_height == 0u || maximum_width <= 320u) {
+        return maximum_width;
+    }
+    scaled_width =
+        ((uint64_t)LW_REC_INPUT_HEIGHT * source_width + source_height - 1u) / source_height;
+    for (index = 0u; index < sizeof(buckets) / sizeof(buckets[0]); ++index) {
+        if (buckets[index] >= maximum_width) {
+            break;
+        }
+        if (scaled_width <= buckets[index]) {
+            return buckets[index];
+        }
+    }
+    return maximum_width;
+}
+
+lw_status lw_recognizer_enable_adaptive_width(lw_recognizer* recognizer, uint32_t enabled,
+                                              lw_error* error) {
+    if (recognizer == NULL || enabled > 1u) {
+        lw_set_error(error, LW_STATUS_INVALID_ARGUMENT,
+                     "recognizer and a boolean adaptive-width flag are required");
+        return LW_STATUS_INVALID_ARGUMENT;
+    }
+    recognizer->adaptive_width_enabled = enabled;
+    lw_set_error(error, LW_STATUS_OK, "");
+    return LW_STATUS_OK;
+}
+
+uint32_t lw_recognizer_target_width_for_image(const lw_recognizer* recognizer,
+                                              uint32_t source_width, uint32_t source_height) {
+    if (recognizer == NULL) {
+        return 0u;
+    }
+    if (recognizer->adaptive_width_enabled == 0u) {
+        return recognizer->info.target_width;
+    }
+    return adaptive_target_width(source_width, source_height, recognizer->info.target_width);
+}
+
+uint32_t lw_recognizer_current_target_width(const lw_recognizer* recognizer) {
+    return recognizer == NULL ? 0u : recognizer->current_target_width;
+}
+
 lw_status lw_recognizer_create(const char* model_path_utf8, const char* dictionary_path_utf8,
                                const lw_recognizer_options* options, lw_recognizer** out_recognizer,
                                lw_error* error) {
     lw_model_options model_options;
     lw_session_options session_options;
-    lw_tensor_desc input_desc;
-    lw_tensor_desc output_desc;
     lw_session_info session_info;
     lw_recognizer* recognizer = NULL;
     uint32_t target_width;
@@ -146,66 +351,23 @@ lw_status lw_recognizer_create(const char* model_path_utf8, const char* dictiona
     if (status != LW_STATUS_OK) {
         goto fail;
     }
-    lw_tensor_desc_init(&input_desc);
-    input_desc.dtype = LW_DTYPE_F32;
-    input_desc.rank = 4u;
-    input_desc.dimensions[0] = 1;
-    input_desc.dimensions[1] = 3;
-    input_desc.dimensions[2] = (int32_t)LW_REC_INPUT_HEIGHT;
-    input_desc.dimensions[3] = (int32_t)target_width;
-    status = lw_session_create(recognizer->model, &input_desc, 1u, &session_options,
-                               &recognizer->session, error);
+    recognizer->session_options = session_options;
+    status = configure_session(recognizer, target_width, &session_info, error);
     if (status != LW_STATUS_OK) {
-        goto fail;
-    }
-    lw_tensor_desc_init(&output_desc);
-    status = lw_session_get_output_desc(recognizer->session, 0u, &output_desc);
-    if (status != LW_STATUS_OK || output_desc.dtype != LW_DTYPE_F32 || output_desc.rank != 3u ||
-        output_desc.dimensions[0] != 1 || output_desc.dimensions[1] <= 0 ||
-        output_desc.dimensions[2] <= 0 ||
-        (uint32_t)output_desc.dimensions[2] !=
-            lw_rec_dictionary_class_count(recognizer->dictionary)) {
-        lw_set_error(error, LW_STATUS_INVALID_SHAPE,
-                     "recognizer model output and dictionary are incompatible");
-        status = LW_STATUS_INVALID_SHAPE;
-        goto fail;
-    }
-    recognizer->input_element_count = (uint64_t)3u * LW_REC_INPUT_HEIGHT * target_width;
-    recognizer->probability_element_count =
-        (uint64_t)(uint32_t)output_desc.dimensions[1] * (uint32_t)output_desc.dimensions[2];
-    if (recognizer->input_element_count > SIZE_MAX / sizeof(*recognizer->input) ||
-        recognizer->probability_element_count > SIZE_MAX / sizeof(*recognizer->probabilities)) {
-        lw_set_error(error, LW_STATUS_OUT_OF_BOUNDS, "recognizer buffer size overflows");
-        status = LW_STATUS_OUT_OF_BOUNDS;
-        goto fail;
-    }
-    recognizer->input =
-        (float*)malloc((size_t)recognizer->input_element_count * sizeof(*recognizer->input));
-    recognizer->probabilities = (float*)malloc((size_t)recognizer->probability_element_count *
-                                               sizeof(*recognizer->probabilities));
-    if (recognizer->input == NULL || recognizer->probabilities == NULL) {
-        lw_set_error(error, LW_STATUS_OUT_OF_MEMORY, "unable to allocate recognizer buffers");
-        status = LW_STATUS_OUT_OF_MEMORY;
         goto fail;
     }
     max_label_bytes = lw_rec_dictionary_max_label_byte_count(recognizer->dictionary);
     if (max_label_bytes == 0u ||
-        (uint64_t)(uint32_t)output_desc.dimensions[1] > (UINT64_MAX - 1u) / max_label_bytes) {
+        (uint64_t)recognizer->current_time_steps > (UINT64_MAX - 1u) / max_label_bytes) {
         lw_set_error(error, LW_STATUS_OUT_OF_BOUNDS, "recognizer maximum text capacity overflows");
         status = LW_STATUS_OUT_OF_BOUNDS;
-        goto fail;
-    }
-    lw_session_info_init(&session_info);
-    status = lw_session_get_info(recognizer->session, &session_info);
-    if (status != LW_STATUS_OK) {
-        lw_set_error(error, status, "unable to read recognizer session information");
         goto fail;
     }
     lw_recognizer_info_init(&recognizer->info);
     recognizer->info.target_width = target_width;
     recognizer->info.input_height = LW_REC_INPUT_HEIGHT;
-    recognizer->info.time_steps = (uint32_t)output_desc.dimensions[1];
-    recognizer->info.class_count = (uint32_t)output_desc.dimensions[2];
+    recognizer->info.time_steps = recognizer->current_time_steps;
+    recognizer->info.class_count = lw_rec_dictionary_class_count(recognizer->dictionary);
     recognizer->info.max_text_capacity =
         (uint64_t)recognizer->info.time_steps * max_label_bytes + 1u;
     recognizer->info.workspace_size = session_info.workspace_size;
@@ -225,6 +387,7 @@ void lw_recognizer_free(lw_recognizer* recognizer) {
     free(recognizer->probabilities);
     free(recognizer->input);
     lw_session_free(recognizer->session);
+    release_cached_session(recognizer);
     lw_rec_dictionary_free(recognizer->dictionary);
     lw_model_free(recognizer->model);
     free(recognizer);
@@ -250,6 +413,7 @@ static lw_status recognizer_recognize_bgr_u8_impl(lw_recognizer* recognizer, con
     uint64_t required_capacity = 0u;
     float score = 0.0f;
     uint32_t emitted_count = 0u;
+    uint32_t target_width;
     uint64_t started;
     lw_status status;
     if (recognizer == NULL || source == NULL || result == NULL ||
@@ -268,10 +432,17 @@ static lw_status recognizer_recognize_bgr_u8_impl(lw_recognizer* recognizer, con
         lw_set_error(error, LW_STATUS_MEMORY_LIMIT, "source image exceeds max_image_pixels");
         return LW_STATUS_MEMORY_LIMIT;
     }
+    target_width = lw_recognizer_target_width_for_image(recognizer, source_width, source_height);
+    if (target_width != recognizer->current_target_width) {
+        status = configure_session(recognizer, target_width, NULL, error);
+        if (status != LW_STATUS_OK) {
+            return status;
+        }
+    }
     started = lw_pipeline_profile_now(profile);
     status =
         lw_rec_preprocess_bgr_u8(source, source_byte_count, source_width, source_height,
-                                 source_stride, recognizer->info.target_width, recognizer->input,
+                                 source_stride, recognizer->current_target_width, recognizer->input,
                                  recognizer->input_element_count, &resized_width);
     if (status != LW_STATUS_OK) {
         lw_set_error(error, status, "BGR source layout is invalid");
@@ -297,20 +468,20 @@ static lw_status recognizer_recognize_bgr_u8_impl(lw_recognizer* recognizer, con
     if (text_utf8 != NULL && text_capacity >= recognizer->info.max_text_capacity) {
         status = lw_rec_ctc_decode_known_capacity_f32(
             recognizer->dictionary, recognizer->probabilities,
-            recognizer->probability_element_count, recognizer->info.time_steps,
+            recognizer->probability_element_count, recognizer->current_time_steps,
             recognizer->info.class_count, text_utf8, text_capacity, &required_capacity, &score,
             &emitted_count, error);
     } else {
         status = lw_rec_ctc_decode_f32(recognizer->dictionary, recognizer->probabilities,
                                        recognizer->probability_element_count,
-                                       recognizer->info.time_steps, recognizer->info.class_count,
+                                       recognizer->current_time_steps, recognizer->info.class_count,
                                        text_utf8, text_capacity, &required_capacity, &score,
                                        &emitted_count, error);
     }
     result->emitted_count = emitted_count;
     result->score = score;
     result->resized_width = resized_width;
-    result->time_steps = recognizer->info.time_steps;
+    result->time_steps = recognizer->current_time_steps;
     result->required_text_capacity = required_capacity;
     lw_pipeline_profile_add_elapsed(profile == NULL ? NULL : &profile->postprocess_nanoseconds,
                                     started, profile);

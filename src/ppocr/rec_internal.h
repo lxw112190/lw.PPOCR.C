@@ -11,6 +11,15 @@
 
 typedef struct lw_rec_dictionary lw_rec_dictionary;
 
+/* Full OCR may treat the public REC target width as a maximum and select a
+ * smaller graph width for short crops. These helpers stay private so the
+ * stable C ABI and recognition-only behavior remain unchanged. */
+lw_status lw_recognizer_enable_adaptive_width(lw_recognizer* recognizer, uint32_t enabled,
+                                              lw_error* error);
+uint32_t lw_recognizer_target_width_for_image(const lw_recognizer* recognizer,
+                                              uint32_t source_width, uint32_t source_height);
+uint32_t lw_recognizer_current_target_width(const lw_recognizer* recognizer);
+
 lw_status lw_rec_preprocess_bgr_u8(const uint8_t* source, uint64_t source_byte_count,
                                    uint32_t source_width, uint32_t source_height,
                                    uint32_t source_stride, uint32_t target_width, float* output,

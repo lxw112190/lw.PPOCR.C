@@ -409,8 +409,8 @@ accepts an optional final `rec-target-width` argument and reports it as
 clamping. Worker-local counters are merged after joining; the public C ABI is
 unchanged.
 
-With `REC target_width = 960`, ten repeated requests produced these per-image
-distributions:
+With adaptive REC enabled and `target_width = 960` as the maximum, repeated
+requests produced these per-image distributions:
 
 | Width range | Bundled 500x500 sample (16 lines) | Article screenshot (8 lines) |
 |---|---:|---:|
@@ -422,22 +422,44 @@ distributions:
 | 641 to 800 | 2 | 1 |
 | 801 to 960 | 1 | 5 |
 | Mean resized width | 491.5 | 729.0 |
-| Mean right-padding ratio | 48.80% | 24.06% |
+| Mean right-padding ratio | 15.26% | 5.08% |
 
-For a proposed 192/320/480/640/960 policy, the bundled sample falls from
+For the implemented 192/320/480/640/960 policy, the bundled sample falls from
 15,360 fixed-width units to 9,280 (-39.6%), while the long-line-heavy article
-falls from 7,680 to 6,144 (-20.0%). These are workload estimates rather than
-latency claims, but they justify an adaptive-width prototype while showing that
-the 960 bucket remains necessary for five of the article's eight detected
-lines.
+falls from 7,680 to 6,144 (-20.0%). The 960 bucket remains necessary for five
+of the article's eight detected lines, so simply lowering the global width
+would lose long-line capacity.
 
-The same Windows x64 Release measurements (three alternating runs, ten images
-per run) were:
+Full OCR now treats a configured width above 320 as the maximum, selects the
+smallest 192/320/480/640/maximum bucket that fits each crop, and sorts crop
+indices by selected width before filling worker batches. Results are still
+written to their original line slots, preserving reading order. Actual crop
+pixels remain limited to one worker batch rather than caching every crop on a
+page.
 
-| 960-width input | 1 worker median | 4 workers median | Parallel speedup |
-|---|---:|---:|---:|
-| Bundled sample | 595.51 ms | 205.05 ms | 2.90x |
-| Article screenshot | 325.31 ms | 136.88 ms | 2.38x |
+Each recognizer keeps its active session plus one previous concrete width. A
+cache hit swaps the two slots; a miss discards only the inactive slot and builds
+the candidate transactionally, leaving the active session usable on failure.
+This avoids five persistent sessions per worker while covering common
+short/long two-width pages. Standalone recognition remains fixed-width, and no
+public C ABI or LWM model change is introduced.
+
+Three alternating eight-request Windows x64 Release profiles compared the same
+candidate with adaptive selection disabled or enabled:
+
+| Input | Workers | Fixed 960 | Adaptive 960 max | Change |
+|---|---:|---:|---:|---:|
+| Bundled sample | 1 | 579.86 ms | 399.58 ms | -31.09% |
+| Bundled sample | 4 | 208.96 ms | 172.62 ms | -17.39% |
+| Article screenshot | 1 | 334.00 ms | 289.31 ms | -13.38% |
+| Article screenshot | 4 | 146.28 ms | 138.07 ms | -5.61% |
+
+Every pair retained checksum `0ebf8b448ab7df47` for the bundled sample and
+`d4a3997f630e5719` for the article. A separate process working-set observation
+on the four-worker bundled run measured about 108.0 MiB peak for fixed 960 and
+136.3 MiB for adaptive width. The roughly 28.3 MiB increase is the bounded
+second-session cache; it is an explicit latency/memory tradeoff and should be
+remeasured on other models and architectures.
 
 ## Fixed-pool DET output-channel parallelism
 

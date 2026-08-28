@@ -11,6 +11,7 @@
 #include "det_internal.h"
 #include "error_internal.h"
 #include "profile_internal.h"
+#include "rec_internal.h"
 
 #include <math.h>
 #include <stddef.h>
@@ -41,6 +42,8 @@ typedef struct lw_ocr_crop {
     uint32_t width;
     uint32_t height;
     uint32_t box_index;
+    uint32_t target_width;
+    uint8_t scheduled;
 } lw_ocr_crop;
 
 typedef struct lw_ocr_worker_task {
@@ -78,7 +81,6 @@ struct lw_ocr {
     uint8_t* worker_started;
     uint8_t* crop;
     uint64_t crop_capacity;
-    uint32_t recognizer_target_width;
     uint64_t max_crop_pixels;
     uint64_t text_capacity_per_line;
     float classifier_threshold;
@@ -228,6 +230,12 @@ lw_status lw_ocr_create(const char* detector_model_path_utf8,
                                      &values.recognizer, &ocr->recognizers[worker_index], error);
             if (status != LW_STATUS_OK)
                 goto fail;
+            if (values.recognizer.target_width > 320u) {
+                status =
+                    lw_recognizer_enable_adaptive_width(ocr->recognizers[worker_index], 1u, error);
+                if (status != LW_STATUS_OK)
+                    goto fail;
+            }
         }
     }
     lw_detector_info_init(&detector_info);
@@ -269,7 +277,6 @@ lw_status lw_ocr_create(const char* detector_model_path_utf8,
     }
     ocr->max_crop_pixels = values.max_crop_pixels;
     ocr->text_capacity_per_line = recognizer_info.max_text_capacity;
-    ocr->recognizer_target_width = recognizer_info.target_width;
     ocr->classifier_threshold = values.classifier_threshold;
     lw_ocr_info_init(&ocr->info);
     ocr->info.use_direction_classification = values.use_direction_classification;
@@ -398,7 +405,9 @@ static void process_worker_task(lw_ocr_worker_task* task) {
             uint32_t bucket = lw_rec_width_histogram_bucket(recognition.resized_width);
             lw_profile_add_value(&task->rec_width_sample_count, 1u);
             lw_profile_add_value(&task->rec_resized_width_sum, recognition.resized_width);
-            lw_profile_add_value(&task->rec_target_width_sum, ocr->recognizer_target_width);
+            lw_profile_add_value(
+                &task->rec_target_width_sum,
+                lw_recognizer_current_target_width(ocr->recognizers[task->worker_index]));
             lw_profile_add_value(&task->rec_width_histogram[bucket], 1u);
         }
 
@@ -440,45 +449,72 @@ static void* worker_entry(void* context) {
 }
 #endif
 
-static lw_status run_worker_tasks(lw_ocr* ocr, uint32_t first_crop, uint32_t crop_count,
+static lw_status run_worker_tasks(lw_ocr* ocr, const uint32_t* crop_indices, uint32_t crop_count,
                                   lw_ocr_execution_profile* profile, lw_error* error) {
-    uint32_t active_workers = crop_count < ocr->worker_count ? crop_count : ocr->worker_count;
-    uint32_t base_count;
-    uint32_t remainder;
-    uint32_t begin = first_crop;
-    uint32_t worker_index;
+    uint32_t assigned_workers[LW_OCR_MAX_WORKER_COUNT];
+    uint8_t worker_used[LW_OCR_MAX_WORKER_COUNT];
+    uint32_t slot;
     uint64_t started = lw_ocr_profile_now(profile);
     uint64_t critical_nanoseconds = 0u;
     lw_status status = LW_STATUS_OK;
-    if (active_workers == 0u)
+    if (crop_count == 0u)
         return LW_STATUS_OK;
-    base_count = crop_count / active_workers;
-    remainder = crop_count % active_workers;
+    if (crop_indices == NULL || crop_count > ocr->worker_count) {
+        lw_set_error(error, LW_STATUS_INVALID_ARGUMENT, "invalid OCR worker crop batch");
+        return LW_STATUS_INVALID_ARGUMENT;
+    }
     memset(ocr->worker_started, 0, ocr->worker_count * sizeof(*ocr->worker_started));
-    for (worker_index = 0u; worker_index < active_workers; ++worker_index) {
-        uint32_t count = base_count + (worker_index < remainder ? 1u : 0u);
-        lw_ocr_worker_task* task = &ocr->worker_tasks[worker_index];
-        memset(task, 0, sizeof(*task));
-        task->ocr = ocr;
-        task->worker_index = worker_index;
-        task->begin = begin;
-        task->end = begin + count;
-        task->profile_enabled = 0u;
-        task->wall_nanoseconds = 0u;
-        if (profile != NULL) {
-            task->profile_enabled = 1u;
-            lw_pipeline_component_profile_reset(&task->classifier_profile, profile->clock,
-                                                profile->clock_context);
-            lw_pipeline_component_profile_reset(&task->recognizer_profile, profile->clock,
-                                                profile->clock_context);
+    memset(worker_used, 0, sizeof(worker_used));
+    for (slot = 0u; slot < crop_count; ++slot) {
+        uint32_t crop_index = crop_indices[slot];
+        uint32_t target_width = ocr->crops[crop_index].target_width;
+        uint32_t worker_index = ocr->worker_count;
+        uint32_t candidate;
+        for (candidate = 0u; candidate < ocr->worker_count; ++candidate) {
+            if (worker_used[candidate] == 0u &&
+                lw_recognizer_current_target_width(ocr->recognizers[candidate]) == target_width) {
+                worker_index = candidate;
+                break;
+            }
         }
-        begin += count;
+        if (worker_index == ocr->worker_count) {
+            for (candidate = 0u; candidate < ocr->worker_count; ++candidate) {
+                if (worker_used[candidate] == 0u) {
+                    worker_index = candidate;
+                    break;
+                }
+            }
+        }
+        if (worker_index == ocr->worker_count) {
+            lw_set_error(error, LW_STATUS_INVALID_SHAPE, "unable to assign OCR worker");
+            return LW_STATUS_INVALID_SHAPE;
+        }
+        worker_used[worker_index] = 1u;
+        assigned_workers[slot] = worker_index;
+        {
+            lw_ocr_worker_task* task = &ocr->worker_tasks[worker_index];
+            memset(task, 0, sizeof(*task));
+            task->ocr = ocr;
+            task->worker_index = worker_index;
+            task->begin = crop_index;
+            task->end = crop_index + 1u;
+            task->profile_enabled = 0u;
+            task->wall_nanoseconds = 0u;
+            if (profile != NULL) {
+                task->profile_enabled = 1u;
+                lw_pipeline_component_profile_reset(&task->classifier_profile, profile->clock,
+                                                    profile->clock_context);
+                lw_pipeline_component_profile_reset(&task->recognizer_profile, profile->clock,
+                                                    profile->clock_context);
+            }
+        }
     }
 
-    /* Keep worker zero on the calling thread and launch the remaining ranges.
+    /* Keep the first assigned worker on the calling thread and launch the rest.
      * If a platform thread cannot be created, execute that range synchronously
      * so the request remains correct instead of returning a partial result. */
-    for (worker_index = 1u; worker_index < active_workers; ++worker_index) {
+    for (slot = 1u; slot < crop_count; ++slot) {
+        uint32_t worker_index = assigned_workers[slot];
 #if defined(_WIN32)
         ocr->worker_threads[worker_index] = (HANDLE)_beginthreadex(
             NULL, 0u, worker_entry, &ocr->worker_tasks[worker_index], 0u, NULL);
@@ -498,8 +534,9 @@ static lw_status run_worker_tasks(lw_ocr* ocr, uint32_t first_crop, uint32_t cro
         execute_worker_task(&ocr->worker_tasks[worker_index]);
 #endif
     }
-    execute_worker_task(&ocr->worker_tasks[0]);
-    for (worker_index = 1u; worker_index < active_workers; ++worker_index) {
+    execute_worker_task(&ocr->worker_tasks[assigned_workers[0]]);
+    for (slot = 1u; slot < crop_count; ++slot) {
+        uint32_t worker_index = assigned_workers[slot];
         if (ocr->worker_started[worker_index] == 0u)
             continue;
 #if defined(_WIN32)
@@ -513,7 +550,8 @@ static lw_status run_worker_tasks(lw_ocr* ocr, uint32_t first_crop, uint32_t cro
     if (profile != NULL) {
         uint64_t finished = lw_ocr_profile_now(profile);
         uint64_t batch_nanoseconds = finished >= started ? finished - started : 0u;
-        for (worker_index = 0u; worker_index < active_workers; ++worker_index) {
+        for (slot = 0u; slot < crop_count; ++slot) {
+            uint32_t worker_index = assigned_workers[slot];
             if (ocr->worker_tasks[worker_index].wall_nanoseconds > critical_nanoseconds) {
                 critical_nanoseconds = ocr->worker_tasks[worker_index].wall_nanoseconds;
             }
@@ -525,7 +563,8 @@ static lw_status run_worker_tasks(lw_ocr* ocr, uint32_t first_crop, uint32_t cro
                                  batch_nanoseconds - critical_nanoseconds);
         }
     }
-    for (worker_index = 0u; worker_index < active_workers; ++worker_index) {
+    for (slot = 0u; slot < crop_count; ++slot) {
+        uint32_t worker_index = assigned_workers[slot];
         if (profile != NULL) {
             uint32_t bucket;
             lw_pipeline_component_profile_accumulate(
@@ -552,6 +591,83 @@ static lw_status run_worker_tasks(lw_ocr* ocr, uint32_t first_crop, uint32_t cro
     return status;
 }
 
+static lw_status crop_and_run_adaptive(lw_ocr* ocr, const uint8_t* source,
+                                       uint64_t source_byte_count, uint32_t source_width,
+                                       uint32_t source_height, uint32_t source_stride,
+                                       uint32_t line_count, lw_ocr_execution_profile* profile,
+                                       lw_error* error) {
+    uint32_t crop_indices[LW_OCR_MAX_WORKER_COUNT];
+    uint32_t scheduled_count = 0u;
+    while (scheduled_count < line_count) {
+        uint32_t batch_count = 0u;
+        uint64_t crop_used = 0u;
+        while (batch_count < ocr->worker_count && scheduled_count < line_count) {
+            uint32_t selected_index = UINT32_MAX;
+            uint32_t selected_width = UINT32_MAX;
+            uint32_t index;
+            lw_ocr_crop* crop;
+            lw_detection_box* box;
+            uint32_t crop_width;
+            uint32_t crop_height;
+            uint64_t crop_bytes;
+            uint64_t crop_started;
+            lw_status status;
+            for (index = 0u; index < line_count; ++index) {
+                const lw_ocr_crop* candidate = &ocr->crops[index];
+                if (candidate->scheduled == 0u &&
+                    (candidate->target_width < selected_width ||
+                     (candidate->target_width == selected_width && index < selected_index))) {
+                    selected_index = index;
+                    selected_width = candidate->target_width;
+                }
+            }
+            if (selected_index == UINT32_MAX) {
+                lw_set_error(error, LW_STATUS_INVALID_SHAPE,
+                             "adaptive REC width scheduling is incomplete");
+                return LW_STATUS_INVALID_SHAPE;
+            }
+            crop = &ocr->crops[selected_index];
+            if (crop_used > UINT64_MAX - crop->byte_count) {
+                lw_set_error(error, LW_STATUS_OUT_OF_BOUNDS, "aggregate OCR crop size overflows");
+                return LW_STATUS_OUT_OF_BOUNDS;
+            }
+            status = ensure_crop_capacity(ocr, crop_used + crop->byte_count, error);
+            if (status != LW_STATUS_OK) {
+                return status;
+            }
+            box = &ocr->detected_boxes[crop->box_index];
+            crop_width = crop->width;
+            crop_height = crop->height;
+            crop_bytes = crop->byte_count;
+            crop_started = lw_ocr_profile_now(profile);
+            status = lw_crop_quad_bgr_u8(source, source_byte_count, source_width, source_height,
+                                         source_stride, box, ocr->crop + (size_t)crop_used,
+                                         crop_bytes, &crop_width, &crop_height, &crop_bytes);
+            lw_ocr_profile_add_elapsed(profile == NULL ? NULL : &profile->crop_nanoseconds,
+                                       crop_started, profile);
+            if (status != LW_STATUS_OK) {
+                lw_set_error(error, status, "OCR perspective crop failed");
+                return status;
+            }
+            crop->offset = crop_used;
+            crop->byte_count = crop_bytes;
+            crop->width = crop_width;
+            crop->height = crop_height;
+            crop->scheduled = 1u;
+            crop_indices[batch_count++] = selected_index;
+            crop_used += crop_bytes;
+            ++scheduled_count;
+        }
+        {
+            lw_status status = run_worker_tasks(ocr, crop_indices, batch_count, profile, error);
+            if (status != LW_STATUS_OK) {
+                return status;
+            }
+        }
+    }
+    return LW_STATUS_OK;
+}
+
 static lw_status ocr_run_bgr_u8_impl(lw_ocr* ocr, const uint8_t* source, uint64_t source_byte_count,
                                      uint32_t source_width, uint32_t source_height,
                                      uint32_t source_stride, lw_ocr_line* lines,
@@ -560,9 +676,7 @@ static lw_status ocr_run_bgr_u8_impl(lw_ocr* ocr, const uint8_t* source, uint64_
                                      lw_ocr_execution_profile* profile, lw_error* error) {
     lw_detection_result detection;
     uint32_t line_count = 0u;
-    uint32_t batch_begin = 0u;
     uint64_t text_used = 0u;
-    uint64_t crop_used = 0u;
     uint64_t total_started;
     uint64_t output_started;
     uint32_t index;
@@ -596,8 +710,9 @@ static lw_status ocr_run_bgr_u8_impl(lw_ocr* ocr, const uint8_t* source, uint64_
     result->detector_resized_height = detection.resized_height;
     if (status != LW_STATUS_OK)
         return status;
-    /* Crop all boxes first. Offsets, rather than raw pointers, survive realloc
-     * while the aggregate crop buffer grows. */
+    /* Resolve crop geometry before running REC. This lets the private scheduler
+     * group lines by adaptive REC width, while actual crop pixels are still
+     * materialized only one worker batch at a time. */
     for (index = 0u; index < detection.box_count; ++index) {
         lw_detection_box* box = &ocr->detected_boxes[index];
         lw_ocr_crop* crop;
@@ -621,47 +736,21 @@ static lw_status ocr_run_bgr_u8_impl(lw_ocr* ocr, const uint8_t* source, uint64_
             lw_set_error(error, LW_STATUS_OUT_OF_BOUNDS, "OCR crop row stride overflows");
             return LW_STATUS_OUT_OF_BOUNDS;
         }
-        if (crop_used > UINT64_MAX - crop_bytes) {
-            lw_set_error(error, LW_STATUS_OUT_OF_BOUNDS, "aggregate OCR crop size overflows");
-            return LW_STATUS_OUT_OF_BOUNDS;
-        }
-        status = ensure_crop_capacity(ocr, crop_used + crop_bytes, error);
-        if (status != LW_STATUS_OK)
-            return status;
-        {
-            uint64_t crop_started = lw_ocr_profile_now(profile);
-            status = lw_crop_quad_bgr_u8(source, source_byte_count, source_width, source_height,
-                                         source_stride, box, ocr->crop + (size_t)crop_used,
-                                         crop_bytes, &crop_width, &crop_height, &crop_bytes);
-            lw_ocr_profile_add_elapsed(profile == NULL ? NULL : &profile->crop_nanoseconds,
-                                       crop_started, profile);
-        }
-        if (status == LW_STATUS_INVALID_SHAPE)
-            continue;
-        if (status != LW_STATUS_OK) {
-            lw_set_error(error, status, "OCR perspective crop failed");
-            return status;
-        }
         crop = &ocr->crops[line_count];
-        crop->offset = crop_used;
+        crop->offset = 0u;
         crop->byte_count = crop_bytes;
         crop->width = crop_width;
         crop->height = crop_height;
         crop->box_index = index;
-        crop_used += crop_bytes;
+        crop->target_width =
+            lw_recognizer_target_width_for_image(ocr->recognizers[0], crop_width, crop_height);
+        crop->scheduled = 0u;
         ++line_count;
-        if (line_count - batch_begin == ocr->worker_count) {
-            status = run_worker_tasks(ocr, batch_begin, line_count - batch_begin, profile, error);
-            if (status != LW_STATUS_OK)
-                return status;
-            batch_begin = line_count;
-            crop_used = 0u;
-        }
     }
-    if (line_count != batch_begin) {
-        status = run_worker_tasks(ocr, batch_begin, line_count - batch_begin, profile, error);
-        if (status != LW_STATUS_OK)
-            return status;
+    status = crop_and_run_adaptive(ocr, source, source_byte_count, source_width, source_height,
+                                   source_stride, line_count, profile, error);
+    if (status != LW_STATUS_OK) {
+        return status;
     }
     /* Workers write fixed-size text slots to avoid synchronization. Compact
      * those slots in reading order before publishing the public result. */
