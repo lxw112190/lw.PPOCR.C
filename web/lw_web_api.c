@@ -21,6 +21,12 @@
 #include <string.h>
 
 #define LW_WEB_ABI_VERSION 1u
+/* Article screenshots and mobile captures often contain one text line much
+ * wider than the native 320-pixel REC preset. The converted REC graph accepts
+ * dynamic widths, so the offline page keeps up to 960 pixels of horizontal
+ * detail instead of shrinking those lines to 320. Short lines are still
+ * aspect-ratio-preserved and padded on the right by the shared preprocessor. */
+#define LW_WEB_REC_TARGET_WIDTH 960u
 
 typedef struct lw_web_info {
     uint32_t abi_version;
@@ -106,6 +112,7 @@ LW_WEB_API int lw_web_init(int use_classifier) {
     lw_error_init(&g_error);
     lw_ocr_options_init(&options);
     options.use_direction_classification = use_classifier ? 1u : 0u;
+    options.recognizer.target_width = LW_WEB_REC_TARGET_WIDTH;
     status = lw_ocr_create("/models/det.lwm", use_classifier ? "/models/cls.lwm" : NULL,
                            "/models/rec.lwm", "/models/ppocr_keys.txt", &options, &g_ocr,
                            &g_error);
