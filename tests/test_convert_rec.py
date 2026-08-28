@@ -25,8 +25,8 @@ class ConvertRecTests(unittest.TestCase):
 
         self.assertEqual(first_bytes, second_bytes)
         self.assertEqual(first_info, second_info)
-        self.assertEqual(first_info.tensor_count, 282)
-        self.assertEqual(first_info.node_count, 161)
+        self.assertEqual(first_info.tensor_count, 274)
+        self.assertEqual(first_info.node_count, 159)
         self.assertEqual(first_info.input_count, 1)
         self.assertEqual(first_info.output_count, 1)
         self.assertEqual(first_info.file_size, len(first_bytes))
@@ -37,9 +37,10 @@ class ConvertRecTests(unittest.TestCase):
         node_count = header[6]
         node_offset = header[12]
         op_counts = Counter(struct.unpack_from("<H", first_bytes, node_offset + index * 72)[0] for index in range(node_count))
-        self.assertEqual(sum(op_counts.values()), 161)
+        self.assertEqual(sum(op_counts.values()), 159)
         self.assertEqual(op_counts[1], 37)  # Conv
-        self.assertEqual(op_counts[7], 4)  # BatchNormalization is intentionally retained.
+        # Two source pairs are safely folded; two unshareable BN nodes remain.
+        self.assertEqual(op_counts[7], 2)
 
         checksum_copy = bytearray(first_bytes)
         checksum = struct.unpack_from("<Q", checksum_copy, CHECKSUM_OFFSET)[0]

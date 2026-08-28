@@ -787,8 +787,17 @@ lw_status lw_scalar_conv_transpose2d_f32(
     if (groups == 1u && kernel[0] == 2 && kernel[1] == 2 && strides[0] == 2 && strides[1] == 2 &&
         dilations[0] == 1 && dilations[1] == 1 && pads[0] == 0 && pads[1] == 0 && pads[2] == 0 &&
         pads[3] == 0) {
-        conv_transpose2x2_stride2_f32(input, weights, bias, output, input_dimensions,
-                                      output_dimensions);
+        lw_simd_level simd_level = lw_detect_simd_level();
+        if (simd_level >= LW_SIMD_LEVEL_AVX2) {
+            lw_avx2_conv_transpose2x2_stride2_f32(input, weights, bias, output, input_dimensions,
+                                                   output_dimensions);
+        } else if (simd_level >= LW_SIMD_LEVEL_SSE2) {
+            lw_sse2_conv_transpose2x2_stride2_f32(input, weights, bias, output, input_dimensions,
+                                                   output_dimensions);
+        } else {
+            conv_transpose2x2_stride2_f32(input, weights, bias, output, input_dimensions,
+                                          output_dimensions);
+        }
         return LW_STATUS_OK;
     }
     for (batch = 0u; batch < (uint32_t)output_dimensions[0]; ++batch) {

@@ -149,11 +149,12 @@ SHA-256 hashes.
   ONNX opset 11;
 - rejects every operator outside its exact supported set;
 - removes 58 one-input/one-output Identity aliases;
-- emits 161 executable nodes and 282 tensors;
-- retains all four BatchNormalization nodes;
+- emits 159 executable nodes and 274 tensors;
+- folds the two safe Conv + BatchNormalization pairs; the two remaining
+  BatchNormalization nodes are not eligible because their Conv output is shared;
 - keeps canonical little-endian FP32 weights;
-- does not fuse operators, pack weights, retain names, or embed a width-specific
-  workspace plan; session creation plans it from the resolved runtime width.
+- does not pack weights, retain names, or embed a width-specific workspace plan;
+  session creation plans it from the resolved runtime width.
 
 These choices deliberately avoid numerical graph rewrites before golden
 reference tests exist.
@@ -167,9 +168,9 @@ reference tests exist.
 - removes seven Identity aliases and the fixed Shape/Slice/Concat metadata
   chain used only to construct the flatten shape;
 - rewrites three GlobalAveragePool nodes to equivalent ReduceMean records;
-- emits 133 executable nodes, 281 tensors, and one static Reshape node;
-- retains all 27 BatchNormalization nodes and canonical little-endian FP32
-  weights.
+- folds all 27 safe Conv + BatchNormalization pairs, then emits 106 executable
+  nodes, 173 tensors, and one static Reshape node;
+- keeps canonical little-endian FP32 weights.
 
 The complete converted graph and public BGR-to-orientation path are compared
 with the original ONNX model. These rewrites remain exact-model transformations,

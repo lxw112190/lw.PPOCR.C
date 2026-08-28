@@ -34,7 +34,7 @@ static int create_and_check(const lw_model* model, int32_t batch, int32_t width,
     lw_tensor_desc_init(&output);
     if (lw_session_get_info(session, &info) != LW_STATUS_OK ||
         lw_session_get_output_desc(session, 0u, &output) != LW_STATUS_OK ||
-        info.tensor_count != 282u || info.input_count != 1u || info.output_count != 1u ||
+        info.tensor_count != 274u || info.input_count != 1u || info.output_count != 1u ||
         info.workspace_size == 0u || (info.workspace_size & 63u) != 0u ||
         output.dtype != LW_DTYPE_F32 || output.rank != 3u || output.dimensions[0] != batch ||
         output.dimensions[1] != expected_steps || output.dimensions[2] != 6906) {

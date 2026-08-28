@@ -23,7 +23,7 @@ class RecProfileTest(unittest.TestCase):
         self.assertEqual(report["iterations"], 2)
         operators = report["operators"]
         self.assertEqual(len(operators), 15)
-        self.assertEqual(sum(item["invocations"] for item in operators), 161 * 2)
+        self.assertEqual(sum(item["invocations"] for item in operators), 159 * 2)
         self.assertGreater(sum(item["nanoseconds"] for item in operators), 0)
         self.assertEqual(
             {item["name"] for item in operators if item["invocations"] > 0},

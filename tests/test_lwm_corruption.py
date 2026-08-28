@@ -76,7 +76,7 @@ class CorruptModelTests(unittest.TestCase):
                 check=False,
             )
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn('"nodes":161', result.stdout)
+        self.assertIn('"nodes":159', result.stdout)
 
 
 if __name__ == "__main__":

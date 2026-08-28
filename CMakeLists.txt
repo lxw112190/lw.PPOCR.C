@@ -132,6 +132,7 @@ set(LW_PPOCR_C_SOURCES
     src/simd/avx2_conv1x1.c
     src/simd/avx2_conv2x2.c
     src/simd/avx2_conv3x3.c
+    src/simd/avx2_convtranspose2x2.c
     src/simd/avx2_depthwise3x3.c
     src/simd/avx2_depthwise5x5.c
     src/simd/avx2_erf.c
@@ -142,6 +143,7 @@ set(LW_PPOCR_C_SOURCES
     src/simd/sse2_conv1x1.c
     src/simd/sse2_conv2x2.c
     src/simd/sse2_conv3x3.c
+    src/simd/sse2_convtranspose2x2.c
     src/simd/sse2_depthwise3x3.c
     src/simd/sse2_depthwise5x5.c
     src/simd/sse2_matmul.c
@@ -151,7 +153,8 @@ set(LW_PPOCR_C_SOURCES
 if(MSVC AND MSVC_C_ARCHITECTURE_ID MATCHES "^(x64|X86)$")
     set_property(SOURCE src/simd/avx2_binary.c src/simd/avx2_conv1x1.c
         src/simd/avx2_conv2x2.c
-        src/simd/avx2_conv3x3.c src/simd/avx2_depthwise3x3.c
+        src/simd/avx2_conv3x3.c src/simd/avx2_convtranspose2x2.c
+        src/simd/avx2_depthwise3x3.c
         src/simd/avx2_depthwise5x5.c
         src/simd/avx2_erf.c src/simd/avx2_matmul.c
         src/simd/avx2_packed_conv1x1.c APPEND PROPERTY
@@ -528,6 +531,13 @@ if(BUILD_TESTING AND NOT EMSCRIPTEN)
         COMMAND "${Python3_EXECUTABLE}" -m unittest -v
                 tests.test_analyze_conv_shapes)
     set_tests_properties(conv_shape_analysis PROPERTIES
+        WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
+
+    add_test(
+        NAME conv_bn_fusion
+        COMMAND "${Python3_EXECUTABLE}" -m unittest -v
+                tests.test_conv_bn_fusion)
+    set_tests_properties(conv_bn_fusion PROPERTIES
         WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
 
     add_test(

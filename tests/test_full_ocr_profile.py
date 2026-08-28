@@ -102,7 +102,7 @@ class FullOcrProfileTest(unittest.TestCase):
                 )
                 self.assertEqual(
                     sum(item["invocations"] for item in operators),
-                    242 + 16 * (133 + 161),
+                    242 + 16 * (106 + 159),
                 )
                 self.assertGreater(report["graph_work_nanoseconds"], 0)
                 self.assertAlmostEqual(

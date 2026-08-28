@@ -95,6 +95,9 @@ int main(void) {
     const int32_t transpose_conv_output_dimensions[4] = {1, 1, 4, 4};
     const int32_t transpose_conv_kernel[2] = {2, 2};
     const int32_t transpose_conv_strides[2] = {2, 2};
+    const int32_t transpose_conv_simd_input_dimensions[4] = {1, 2, 3, 8};
+    const int32_t transpose_conv_simd_weight_dimensions[4] = {2, 3, 2, 2};
+    const int32_t transpose_conv_simd_output_dimensions[4] = {1, 3, 6, 16};
     const float normal_bias[3] = {0.25f, -0.5f, 1.0f};
     const float stride2_bias[3] = {-0.125f, 0.625f, -0.875f};
     const float stride2_four_bias[4] = {-0.125f, 0.625f, -0.875f, 0.375f};
@@ -108,6 +111,7 @@ int main(void) {
     const float batch_norm_variance[3] = {0.5f, 2.0f, 0.25f};
     const float invalid_variance[3] = {0.5f, -1.0f, 0.25f};
     const float transpose_conv_bias[1] = {0.125f};
+    const float transpose_conv_simd_bias[3] = {0.125f, -0.25f, 0.5f};
     float normal_input[80];
     float normal_weights[54];
     float normal_output[36];
@@ -163,6 +167,11 @@ int main(void) {
     float transpose_conv_input[8];
     float transpose_conv_weights[8];
     float transpose_conv_output[16];
+    float transpose_conv_simd_input[48];
+    float transpose_conv_simd_weights[24];
+    float transpose_conv_simd_output[288];
+    float transpose_conv_sse2_output[288];
+    float transpose_conv_avx2_output[288];
     lw_simd_level simd_level;
     lw_status status;
 
@@ -500,6 +509,41 @@ int main(void) {
         unit_dilations, no_pads, 1u);
     if (!expect_status("transpose conv", status, LW_STATUS_OK)) {
         return 1;
+    }
+
+    /* Width eight exercises the vector body of both dedicated transpose-Conv
+     * kernels; compare each implementation with the dispatched result. */
+    fill_values(transpose_conv_simd_input, 48u, 17u, 37u, 18, 9.0f);
+    fill_values(transpose_conv_simd_weights, 24u, 11u, 29u, 14, 7.0f);
+    status = lw_scalar_conv_transpose2d_f32(
+        transpose_conv_simd_input, transpose_conv_simd_weights, transpose_conv_simd_bias, 3u,
+        transpose_conv_simd_output, transpose_conv_simd_input_dimensions,
+        transpose_conv_simd_weight_dimensions, transpose_conv_simd_output_dimensions,
+        transpose_conv_kernel, transpose_conv_strides, unit_dilations, no_pads, 1u);
+    if (!expect_status("transpose conv SIMD shape", status, LW_STATUS_OK)) {
+        return 1;
+    }
+    if (simd_level >= LW_SIMD_LEVEL_SSE2) {
+        lw_sse2_conv_transpose2x2_stride2_f32(
+            transpose_conv_simd_input, transpose_conv_simd_weights, transpose_conv_simd_bias,
+            transpose_conv_sse2_output, transpose_conv_simd_input_dimensions,
+            transpose_conv_simd_output_dimensions);
+        if (memcmp(transpose_conv_simd_output, transpose_conv_sse2_output,
+                   sizeof(transpose_conv_simd_output)) != 0) {
+            fprintf(stderr, "SSE2 transpose Conv differs from dispatched output\n");
+            return 1;
+        }
+    }
+    if (simd_level >= LW_SIMD_LEVEL_AVX2) {
+        lw_avx2_conv_transpose2x2_stride2_f32(
+            transpose_conv_simd_input, transpose_conv_simd_weights, transpose_conv_simd_bias,
+            transpose_conv_avx2_output, transpose_conv_simd_input_dimensions,
+            transpose_conv_simd_output_dimensions);
+        if (memcmp(transpose_conv_simd_output, transpose_conv_avx2_output,
+                   sizeof(transpose_conv_simd_output)) != 0) {
+            fprintf(stderr, "AVX2 transpose Conv differs from dispatched output\n");
+            return 1;
+        }
     }
     print_values("conv_transpose", transpose_conv_output, 16u);
 

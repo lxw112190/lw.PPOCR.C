@@ -25,11 +25,11 @@ class ConvertClsTests(unittest.TestCase):
 
         self.assertEqual(first_bytes, second_bytes)
         self.assertEqual(first_info, second_info)
-        self.assertEqual(first_info.tensor_count, 281)
-        self.assertEqual(first_info.node_count, 133)
+        self.assertEqual(first_info.tensor_count, 173)
+        self.assertEqual(first_info.node_count, 106)
         self.assertEqual(first_info.input_count, 1)
         self.assertEqual(first_info.output_count, 1)
-        self.assertEqual(first_info.weight_size, 982000)
+        self.assertEqual(first_info.weight_size, 965488)
         self.assertEqual(first_info.file_size, len(first_bytes))
 
         header = struct.unpack_from("<4sHH6I13Q3Q", first_bytes)
@@ -42,6 +42,8 @@ class ConvertClsTests(unittest.TestCase):
             for index in range(node_count)
         )
         self.assertEqual(sum(op_counts.values()), first_info.node_count)
+        self.assertEqual(op_counts[1], 32)  # Conv; all 27 eligible BN nodes are folded.
+        self.assertEqual(op_counts[7], 0)
         self.assertEqual(op_counts[8], 3)  # GlobalAveragePool -> ReduceMean.
         self.assertEqual(op_counts[16], 1)  # Static Reshape.
 

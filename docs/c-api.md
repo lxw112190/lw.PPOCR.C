@@ -64,7 +64,7 @@ spatial output is rejected with `LW_STATUS_INVALID_SHAPE`.
 Session creation performs all of the following before returning:
 
 1. validates descriptor size, dtype, rank, dimensions, and unused fields;
-2. propagates concrete shapes through all 161 nodes;
+2. propagates concrete shapes through all 159 nodes;
 3. checks every resolved tensor byte multiplication and `max_tensor_size`;
 4. computes tensor birth and last-use nodes;
 5. assigns reusable 64-byte-aligned workspace ranges with first-fit allocation;

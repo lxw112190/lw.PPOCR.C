@@ -22,8 +22,8 @@ interfaces; they are not part of the public C ABI yet.
 | Unsqueeze | 2 | Validated shape-only layout copy |
 | MatMul | 2 | Batched input matrices with one shared 2D weight matrix |
 | Conv | 37 | NCHW normal, grouped, and Depthwise convolution |
-| BatchNormalization | 4 | Inference-mode channel normalization |
-| **Total** | **161 / 161** | Kernel available and reference-tested |
+| BatchNormalization | 2 | Inference-mode channel normalization; two shared REC paths remain unfused |
+| **Total** | **159 / 159** | Kernel available and reference-tested |
 
 DET adds independently reference-tested `Concat`, `ConvTranspose`, `MaxPool`,
 nearest/asymmetric/floor `Resize`, and `Sigmoid` kernels. These are deliberately
@@ -80,7 +80,7 @@ verified until that workflow runs remotely.
 
 The public recognizer API now wraps the private executor, preprocessing, and
 CTC decoder without exposing kernel or tensor internals. The executor dispatches
-all 161 converted REC nodes, binds constants/workspace, and passes
+all 159 converted REC nodes, binds constants/workspace, and passes
 complete-output comparison. The MatMul contract deliberately
 matches the supported REC graph: one
 or more input matrices multiplied by one shared two-dimensional weight matrix.

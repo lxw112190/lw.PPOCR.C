@@ -399,6 +399,162 @@ def _write_model(
     )
 
 
+def _fold_conv_batch_normalization(model: onnx.ModelProto) -> onnx.ModelProto:
+    """Fold safe inference-mode Conv -> BatchNormalization pairs into Conv.
+
+    The source ONNX graph remains canonical.  The converted graph receives new
+    constant tensors for each folded pair, so a shared Conv weight or bias used
+    elsewhere can never be modified as a side effect.
+    """
+    converted = copy.deepcopy(model)
+    nodes = list(converted.graph.node)
+    initializer_protos = {item.name: item for item in converted.graph.initializer}
+    initializers = {
+        name: numpy_helper.to_array(item) for name, item in initializer_protos.items()
+    }
+    consumers: dict[str, int] = {}
+    producers: dict[str, int] = {}
+    graph_outputs = {item.name for item in converted.graph.output}
+    folds: dict[int, int] = {}
+
+    for index, node in enumerate(nodes):
+        for name in node.input:
+            if name:
+                consumers[name] = consumers.get(name, 0) + 1
+        for name in node.output:
+            if name:
+                producers[name] = index
+
+    for bn_index, batch_norm in enumerate(nodes):
+        attrs = _attribute_map(batch_norm)
+        if (
+            batch_norm.op_type != "BatchNormalization"
+            or len(batch_norm.input) != 5
+            or len(batch_norm.output) != 1
+            or attrs.get("training_mode", 0) != 0
+        ):
+            continue
+        conv_index = producers.get(batch_norm.input[0])
+        if conv_index is None or consumers.get(batch_norm.input[0]) != 1:
+            continue
+        conv = nodes[conv_index]
+        if (
+            conv.op_type != "Conv"
+            or len(conv.input) not in (2, 3)
+            or len(conv.output) != 1
+            or conv.output[0] in graph_outputs
+            or any(
+                name not in initializers
+                for name in (*conv.input[1:], *batch_norm.input[1:])
+            )
+            or any(
+                initializer_protos[name].data_type != onnx.TensorProto.FLOAT
+                for name in (*conv.input[1:], *batch_norm.input[1:])
+            )
+        ):
+            continue
+        weights = np.asarray(initializers[conv.input[1]], dtype=np.float32)
+        gamma, beta, mean, variance = (
+            np.asarray(initializers[name], dtype=np.float32).reshape(-1)
+            for name in batch_norm.input[1:]
+        )
+        epsilon = float(attrs.get("epsilon", 1.0e-5))
+        if (
+            weights.ndim != 4
+            or weights.shape[0] != gamma.size
+            or gamma.shape != beta.shape
+            or gamma.shape != mean.shape
+            or gamma.shape != variance.shape
+            or not np.isfinite(epsilon)
+            or epsilon < 0.0
+            or not all(
+                np.all(np.isfinite(value))
+                for value in (weights, gamma, beta, mean, variance)
+            )
+            or np.any(variance < 0.0)
+        ):
+            continue
+        folds[conv_index] = bn_index
+
+    if not folds:
+        return converted
+
+    existing_names = {item.name for item in converted.graph.initializer}
+    folded_initializers: list[onnx.TensorProto] = []
+
+    def folded_name(base: str, suffix: str) -> str:
+        candidate = f"{base}__lw_{suffix}"
+        serial = 1
+        while candidate in existing_names:
+            candidate = f"{base}__lw_{suffix}_{serial}"
+            serial += 1
+        existing_names.add(candidate)
+        return candidate
+
+    rewritten_nodes: list[onnx.NodeProto] = []
+    folded_batch_norms = set(folds.values())
+    for index, node in enumerate(nodes):
+        if index in folded_batch_norms:
+            continue
+        replacement = copy.deepcopy(node)
+        if index in folds:
+            batch_norm = nodes[folds[index]]
+            attrs = _attribute_map(batch_norm)
+            weights = np.asarray(initializers[node.input[1]], dtype=np.float32)
+            gamma, beta, mean, variance = (
+                np.asarray(initializers[name], dtype=np.float32).reshape(-1)
+                for name in batch_norm.input[1:]
+            )
+            scale = gamma / np.sqrt(
+                variance + np.float32(attrs.get("epsilon", 1.0e-5))
+            )
+            if len(node.input) == 3:
+                bias = np.asarray(
+                    initializers[node.input[2]], dtype=np.float32
+                ).reshape(-1)
+            else:
+                bias = np.zeros_like(scale, dtype=np.float32)
+            folded_weights = np.ascontiguousarray(
+                weights * scale.reshape((-1, 1, 1, 1)), dtype=np.float32
+            )
+            folded_bias = np.ascontiguousarray(
+                (bias - mean) * scale + beta, dtype=np.float32
+            )
+            weight_name = folded_name(node.input[1], "folded_bn_weight")
+            bias_name = folded_name(node.name or node.output[0], "folded_bn_bias")
+            folded_initializers.append(
+                numpy_helper.from_array(folded_weights, name=weight_name)
+            )
+            folded_initializers.append(
+                numpy_helper.from_array(folded_bias, name=bias_name)
+            )
+            replacement.input[1] = weight_name
+            if len(replacement.input) == 2:
+                replacement.input.append(bias_name)
+            else:
+                replacement.input[2] = bias_name
+            replacement.output[0] = batch_norm.output[0]
+        rewritten_nodes.append(replacement)
+
+    del converted.graph.node[:]
+    converted.graph.node.extend(rewritten_nodes)
+    converted.graph.initializer.extend(folded_initializers)
+
+    # The source tensors for the removed BatchNormalization nodes (and the
+    # original Conv weights/biases) are now unreachable.  Besides keeping the
+    # LWM package compact, pruning them ensures _build_records never emits a
+    # constant that the rewritten execution graph cannot consume.
+    used_initializers = {
+        name for node in converted.graph.node for name in node.input if name
+    }
+    retained_initializers = [
+        item for item in converted.graph.initializer if item.name in used_initializers
+    ]
+    del converted.graph.initializer[:]
+    converted.graph.initializer.extend(retained_initializers)
+    return converted
+
+
 def convert_rec_model(input_path: Path, output_path: Path) -> ConversionInfo:
     digest = hashlib.sha256(input_path.read_bytes()).hexdigest()
     if digest != SUPPORTED_REC_SHA256:
@@ -414,7 +570,8 @@ def convert_rec_model(input_path: Path, output_path: Path) -> ConversionInfo:
     if len(model.graph.input) != 1 or len(model.graph.output) != 1:
         raise ValueError("REC converter requires exactly one graph input and one graph output")
 
-    return _write_model(model, output_path)
+    inferred = onnx.shape_inference.infer_shapes(model, strict_mode=True, data_prop=False)
+    return _write_model(_fold_conv_batch_normalization(model), output_path, inferred)
 
 
 def _prepare_cls_model(
@@ -495,7 +652,7 @@ def convert_cls_model(input_path: Path, output_path: Path) -> ConversionInfo:
     if len(model.graph.input) != 1 or len(model.graph.output) != 1:
         raise ValueError("CLS converter requires exactly one graph input and one graph output")
     converted, inferred = _prepare_cls_model(model)
-    return _write_model(converted, output_path, inferred)
+    return _write_model(_fold_conv_batch_normalization(converted), output_path, inferred)
 
 
 def _normalize_same_upper(node: onnx.NodeProto) -> onnx.NodeProto:

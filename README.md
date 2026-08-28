@@ -4,60 +4,51 @@
 
 Tiny pure-C inference runtime for PP-OCR.
 
-`lw.PPOCR.C` 是一个面向 PP-OCR 的轻量纯 C 推理 Runtime。部署端目标是不依赖
-Python、OpenCV、ONNX Runtime、OpenVINO、TensorRT 或 protobuf。
+`lw.PPOCR.C` runs PP-OCR without Python, OpenCV, ONNX Runtime, OpenVINO,
+TensorRT, protobuf, or any other deployment-time runtime dependency.
 
 > This is not a general-purpose ONNX Runtime.
 
 ## Current milestone
 
-Exact PP-OCRv6 tiny model analysis, deterministic REC/CLS/DET-to-LWM v0.1
-converters, the bounds-checked pure-C model loader, and runtime shape/workspace
-planning are implemented. Reference-tested scalar kernels cover all converted
-REC operators plus the static Reshape needed by CLS. A private, zero-allocation
-graph executor matches the original ONNX REC output at two dynamic widths and
-the fixed-batch CLS output. Pure-C BGR preprocessing, UTF-8 CTC decoding, and
-direction classification now provide real cropped-text REC and CLS paths.
-That path is regression-tested on ten real text-line crops against the original
-ONNX model and remains a mandatory gate during runtime-only optimization. The
-profile-directed scalar optimizations now cover general Conv address/bounds
-simplification, a cache-contiguous pointwise path, a spatially local 3x3
-downsampling path, and cache-contiguous row-blocked MatMul. Windows x64/x86 A/B
-measurements retain unchanged recognition results. On x86/x64, MatMul,
-pointwise Conv, ordinary stride-2 3x3 Conv, stride-1 3x3 Depthwise Conv, flat
-Add/Mul/Div, and single-axis binary broadcasts now use runtime-detected AVX2 or
-SSE2 with automatic scalar fallbacks.
-The DET graph produces its full dynamic-shape probability map and matches the
-original ONNX model at multiple input sizes. A public detector C API now owns
-DET resize/normalize, graph execution, bounded DB-style postprocessing,
-coordinate restoration, and reading-order quadrilateral output. Image-file
-decoding remains outside the core: applications provide decoded BGR8 pixels.
-A public full-OCR C API now composes detection, pure-C perspective cropping,
-optional direction classification/180-degree correction, and recognition. It
-returns one canonical quadrilateral per UTF-8 text line through caller-owned,
-capacity-checked buffers. Native 64-bit full OCR defaults to four independent
-CLS/REC workers after detection; x86 and WebAssembly default to one. The worker
-count is configurable without making one OCR handle reentrant.
-An optional .NET Framework 3.5 WinForms test tool demonstrates direct C# P/Invoke
-with local image decoding, result overlays, selectable OCR workers, and reusable
-mean/P95 performance history. A separate native C++
-`cpp-httplib` Demo provides the cross-platform HTTP API and browser UI; the
-browser converts selected images to P6 PPM before upload. The pure-C core
-remains dependency-free and continues to accept decoded BGR8 pixels only.
-An Emscripten build also packages the runtime, DET/CLS/REC models, dictionary,
-and browser workbench into one offline HTML file for full local OCR without a
-server.
+The project currently provides:
 
-Current scope:
+- Deterministic PP-OCRv6 tiny REC/CLS/DET-to-LWM v0.1 conversion.
+- Safe Conv + BatchNormalization folding during REC/CLS conversion.
+- A bounds-checked C11 model loader, dynamic shape propagation, and reusable
+  workspace planning.
+- Public C APIs for recognition, fixed-batch direction classification,
+  detection, and composed full OCR.
+- Pure-C BGR preprocessing, perspective crop, UTF-8 CTC decoding, DB-style
+  detection postprocessing, and reading-order quadrilateral output.
+- FP32 CPU inference with scalar fallback and runtime-dispatched SSE2/AVX2
+  kernels. DET and individual graph executions are single-threaded; full OCR
+  can recognize independent detected lines in parallel.
+- Optional .NET Framework 3.5 WinForms, native `cpp-httplib` HTTP/web, and
+  offline single-file WebAssembly demos.
 
-- PP-OCRv6 tiny;
-- public REC, fixed-batch CLS, DET, and composed full-OCR paths;
-- FP32, CPU, scalar/SSE2/AVX2 runtime dispatch; DET and individual graph runs
-  remain single-threaded, while full OCR can process independent lines in
-  parallel;
-- custom, non-frozen LWM v0.1 format;
-- Windows x64 and Linux x64 first;
-- Windows 7 x86 compatibility preserved by design.
+The deployment core accepts decoded BGR8 pixels. Image decoding remains an
+application concern, so the core itself stays dependency-free.
+
+### Platform focus
+
+- Primary targets: Windows x64 and Linux x64.
+- Windows 7 x86 compatibility is preserved by design.
+- The LWM v0.1 format is custom and not yet frozen.
+
+### Performance snapshot
+
+On the bundled 500×500 sample image, a Windows x64 release build measured:
+
+| Full OCR mode | Median latency |
+|---|---:|
+| 1 worker | 288.73 ms |
+| 4 workers | 117.92 ms |
+
+Four workers provide about **2.45×** throughput acceleration for this sample.
+Results vary with CPU, compiler, image content, and system load. The four-worker
+mode parallelizes independent CLS/REC line work after the single-threaded DET
+stage.
 
 ## Build, convert, and test
 
@@ -117,39 +108,21 @@ dictionary, and the page assets. It can be opened directly without the native
 HTTP Demo. The page queries the Web ABI for the actual output capacities and
 reuses its input/output buffers across repeated OCR runs.
 
-The human-readable result is in
-[`docs/SUPPORTED_OPS_V0.md`](docs/SUPPORTED_OPS_V0.md). The JSON report is the
-machine-readable source for future converter tests.
+## Documentation
 
-The experimental model/session API and ownership rules are documented in
-[`docs/c-api.md`](docs/c-api.md).
-The internal scalar-kernel scope and its test boundary are documented in
-[`docs/scalar-kernels.md`](docs/scalar-kernels.md).
-The private complete-graph execution gate is documented in
-[`docs/graph-executor.md`](docs/graph-executor.md).
-The private end-to-end REC preprocessing and decoding contract is documented in
-[`docs/rec-pipeline.md`](docs/rec-pipeline.md).
-The public CLS direction-classification contract and reference gates are documented in
-[`docs/cls-pipeline.md`](docs/cls-pipeline.md).
-The DET graph gate and public detection pipeline are documented in
-[`docs/det-graph.md`](docs/det-graph.md) and
-[`docs/det-pipeline.md`](docs/det-pipeline.md).
-The composed DET/optional-CLS/REC pipeline, output ownership, and crop
-correctness gates are documented in [`docs/full-ocr.md`](docs/full-ocr.md).
-The ten-crop ONNX-versus-pure-C correctness gate is documented in
-[`docs/rec-golden-corpus.md`](docs/rec-golden-corpus.md).
-The optimization baseline and benchmark protocol are documented in
-[`docs/performance-baseline.md`](docs/performance-baseline.md).
-The full DET/CLS/REC stage, operator, Conv-class, and worker-dispatch profile is
-documented in [`docs/full-ocr-profile.md`](docs/full-ocr-profile.md).
-The profile-directed kernel optimizations and their Windows x64/x86 A/B
-results are documented in
-[`docs/kernel-optimization.md`](docs/kernel-optimization.md).
-Development package contents and Demo commands are documented in
-[`docs/package.md`](docs/package.md).
-The C# WinForms and native HTTP/web integration, REST contract, build commands, and
-compatibility boundary are documented in
-[`docs/managed-demos.md`](docs/managed-demos.md).
+- [Supported operators and model analysis](docs/SUPPORTED_OPS_V0.md)
+- [C API and ownership rules](docs/c-api.md)
+- [Kernel scope and reference tests](docs/scalar-kernels.md)
+- [REC, CLS, DET, and full-OCR pipelines](docs/rec-pipeline.md),
+  [CLS](docs/cls-pipeline.md), [DET](docs/det-pipeline.md), and
+  [full OCR](docs/full-ocr.md)
+- [Golden corpus and graph-executor gates](docs/rec-golden-corpus.md) and
+  [graph executor](docs/graph-executor.md)
+- [Performance baseline, profile, and optimization notes](docs/performance-baseline.md),
+  [full-OCR profile](docs/full-ocr-profile.md), and
+  [kernel optimization](docs/kernel-optimization.md)
+- [Development package and managed demos](docs/package.md) and
+  [C#/HTTP/web integration](docs/managed-demos.md)
 
 ## Runtime dependency boundary
 

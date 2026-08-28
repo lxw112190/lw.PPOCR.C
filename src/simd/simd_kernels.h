@@ -70,5 +70,13 @@ void lw_sse2_conv3x3_stride2_pad1_f32(const float* input, const float* weights, 
 void lw_avx2_conv3x3_stride2_pad1_f32(const float* input, const float* weights, const float* bias,
                                       float* output, const int32_t input_dimensions[4],
                                       const int32_t output_dimensions[4]);
+void lw_avx2_conv_transpose2x2_stride2_f32(const float* input, const float* weights,
+                                           const float* bias, float* output,
+                                           const int32_t input_dimensions[4],
+                                           const int32_t output_dimensions[4]);
+void lw_sse2_conv_transpose2x2_stride2_f32(const float* input, const float* weights,
+                                           const float* bias, float* output,
+                                           const int32_t input_dimensions[4],
+                                           const int32_t output_dimensions[4]);
 
 #endif
