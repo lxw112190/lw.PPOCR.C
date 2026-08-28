@@ -7,6 +7,12 @@
 
 #include <stddef.h>
 
+#if defined(__EMSCRIPTEN__) && defined(__wasm_simd128__)
+#  define LW_EMSCRIPTEN_SIMD128 1
+#else
+#  define LW_EMSCRIPTEN_SIMD128 0
+#endif
+
 #if defined(_MSC_VER) && (defined(_M_IX86) || defined(_M_X64))
 #  include <intrin.h>
 #elif defined(__i386__) || defined(__x86_64__)
@@ -14,7 +20,10 @@
 #endif
 
 lw_simd_level lw_detect_simd_level(void) {
-#if defined(_MSC_VER) && (defined(_M_IX86) || defined(_M_X64))
+#if LW_EMSCRIPTEN_SIMD128
+    /* The module itself requires SIMD128, so no runtime CPUID probe exists. */
+    return LW_SIMD_LEVEL_SSE2;
+#elif defined(_MSC_VER) && (defined(_M_IX86) || defined(_M_X64))
     int registers[4];
     int maximum_leaf;
     int has_sse2;

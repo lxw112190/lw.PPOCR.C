@@ -1,17 +1,11 @@
 #include "simd_kernels.h"
+#include "simd_platform.h"
 
 #include <stddef.h>
 
-#if defined(_M_IX86) || defined(_M_X64) || defined(__i386__) || defined(__x86_64__)
-#  include <emmintrin.h>
-#  define LW_COMPILES_SSE2 1
-#else
-#  define LW_COMPILES_SSE2 0
-#endif
+#define LW_COMPILES_SSE2 LW_SIMD_HAS_SSE2_INTRINSICS
 
-#if LW_COMPILES_SSE2 && (defined(__GNUC__) || defined(__clang__))
-__attribute__((target("sse2")))
-#endif
+LW_SIMD_SSE2_TARGET
 void lw_sse2_matmul_shared_f32(
     const float* input,
     const float* weights,
