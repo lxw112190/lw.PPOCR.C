@@ -1,19 +1,13 @@
 #include "simd_kernels.h"
+#include "simd_platform.h"
 
 #include "scalar_kernels.h"
 
 #include <stddef.h>
 
-#if defined(_M_IX86) || defined(_M_X64) || defined(__i386__) || defined(__x86_64__)
-#  include <emmintrin.h>
-#  define LW_COMPILES_SSE2_CONV3X3 1
-#else
-#  define LW_COMPILES_SSE2_CONV3X3 0
-#endif
+#define LW_COMPILES_SSE2_CONV3X3 LW_SIMD_HAS_SSE2_INTRINSICS
 
-#if LW_COMPILES_SSE2_CONV3X3 && (defined(__GNUC__) || defined(__clang__))
-__attribute__((target("sse2")))
-#endif
+LW_SIMD_SSE2_TARGET
 void lw_sse2_conv3x3_unit_pad1_f32(const float* input, const float* weights, const float* bias,
                                    float* output, const int32_t input_dimensions[4],
                                    const int32_t output_dimensions[4]) {

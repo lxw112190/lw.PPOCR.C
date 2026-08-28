@@ -6,6 +6,8 @@ option(LW_BUILD_HTTP_DEMO
     "Build the cross-platform cpp-httplib HTTP OCR Demo" ON)
 option(LW_BUILD_CSHARP_DEMOS
     "Build the .NET Framework 3.5 WinForms Demo on Windows" OFF)
+option(LW_WASM_SIMD128
+    "Enable portable WebAssembly SIMD128 for the standalone OCR HTML" ON)
 
 if(LW_BUILD_HTTP_DEMO)
     enable_language(CXX)
@@ -178,6 +180,13 @@ function(lw_configure_runtime_target target)
             -Wall -Wextra -Wpedantic -Werror)
         target_link_libraries(${target} PUBLIC m)
     endif()
+    if(EMSCRIPTEN AND LW_WASM_SIMD128)
+        # Keep the offline single-HTML build single-threaded, but compile its
+        # scalar/SSE2-compatible kernels to portable WebAssembly SIMD128.
+        # -msse2 enables Emscripten's compatible <emmintrin.h> surface;
+        # -msimd128 lowers those intrinsics to portable WASM SIMD instructions.
+        target_compile_options(${target} PRIVATE -O3 -msimd128 -msse2)
+    endif()
 endfunction()
 
 add_library(lw_ppocr_c STATIC ${LW_PPOCR_C_SOURCES})
@@ -205,8 +214,13 @@ if(EMSCRIPTEN)
     target_link_libraries(lw_ppocr_web PRIVATE lw_ppocr_c)
     target_include_directories(lw_ppocr_web PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/include")
     target_compile_features(lw_ppocr_web PRIVATE c_std_11)
-    target_compile_options(lw_ppocr_web PRIVATE -Wall -Wextra -Wpedantic -Werror)
+    target_compile_options(lw_ppocr_web PRIVATE -O3 -Wall -Wextra -Wpedantic -Werror)
+    if(LW_WASM_SIMD128)
+        target_compile_options(lw_ppocr_web PRIVATE -msimd128 -msse2)
+        target_link_options(lw_ppocr_web PRIVATE -msimd128)
+    endif()
     target_link_options(lw_ppocr_web PRIVATE
+        -O3
         "-sMODULARIZE=1" "-sEXPORT_NAME=LwPpocrModule" "-sSINGLE_FILE=1"
         "-sFORCE_FILESYSTEM=1" "-sALLOW_MEMORY_GROWTH=1" "-sNO_EXIT_RUNTIME=1"
         "-sEXPORTED_RUNTIME_METHODS=['FS','HEAPU8','HEAPU32','HEAPF32']"
