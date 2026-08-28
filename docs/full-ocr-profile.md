@@ -360,8 +360,9 @@ piecewise degree-8 single-precision polynomials. They cover `|x| < 1`,
 then the input sign bit is restored. The implementation evaluates eight values
 at a time without FMA, preserves positive and negative zero, maps infinities to
 positive and negative one, and propagates NaNs. A scalar `erff` tail handles
-non-multiples of eight. Non-AVX2 and non-x86 targets continue to execute the
-existing scalar kernel.
+non-multiples of eight. The offline Emscripten build evaluates the same regions
+four values at a time with WASM SIMD128; other non-AVX2 targets continue to
+execute the existing scalar kernel.
 
 The direct kernel gate samples 4,099 evenly spaced values from -6 through 6,
 requires maximum absolute error no greater than `5e-7`, checks monotonicity and

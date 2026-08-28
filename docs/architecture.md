@@ -163,7 +163,8 @@ and architecture-specific kernels are isolated under `src/simd`.
     one, and the original sign is restored without branches. Dense numerical,
     special-value, graph, pipeline, Golden-corpus, x64 and x86 gates protect the
     approximation. SIMD capability is detected once per graph execution;
-    non-AVX2 and non-x86 targets retain the scalar `erff` path.
+    Emscripten SIMD128 uses the same piecewise algorithm through a four-lane
+    WASM kernel, while non-AVX2 native targets retain the scalar `erff` path.
 36. REC width-distribution profiling — complete locally; the private full-OCR
     profiler records actual resized width, target width, padding ratio and
     stable 64/96/128/160/192/256/320/overflow buckets without changing the

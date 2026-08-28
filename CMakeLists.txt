@@ -145,7 +145,8 @@ set(LW_PPOCR_C_SOURCES
     src/simd/sse2_depthwise3x3.c
     src/simd/sse2_depthwise5x5.c
     src/simd/sse2_matmul.c
-    src/simd/sse2_packed_conv1x1.c)
+    src/simd/sse2_packed_conv1x1.c
+    src/simd/wasm128_erf.c)
 
 if(MSVC AND MSVC_C_ARCHITECTURE_ID MATCHES "^(x64|X86)$")
     set_property(SOURCE src/simd/avx2_binary.c src/simd/avx2_conv1x1.c

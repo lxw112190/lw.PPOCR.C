@@ -331,6 +331,12 @@ static lw_status dispatch_node(lw_session* session, const uint8_t* node, uint32_
             lw_avx2_erf_f32(inputs[0], output, element_count);
             return LW_STATUS_OK;
         }
+#if defined(__EMSCRIPTEN__)
+        if (simd_level >= LW_SIMD_LEVEL_SSE2) {
+            lw_wasm128_erf_f32(inputs[0], output, element_count);
+            return LW_STATUS_OK;
+        }
+#endif
         return lw_scalar_erf_f32(inputs[0], output, element_count);
     }
     case LW_OP_HARD_SIGMOID:
