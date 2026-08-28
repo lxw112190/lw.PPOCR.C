@@ -3,6 +3,11 @@
 /*
  * One-time runtime CPU detection. Compiling AVX2 objects does not mean the host
  * CPU supports AVX2, so callers must always dispatch through this result.
+ *
+ * The probe result is cached after the first call: graph runs dispatch on
+ * every operator kernel, and repeating the CPUID/XGETBV probe on each call
+ * would be pure overhead with no change in the detected level. The cache is
+ * guarded by a one-time initializer so concurrent sessions stay race-free.
  */
 
 #include <stddef.h>
@@ -13,7 +18,11 @@
 #  include <cpuid.h>
 #endif
 
-lw_simd_level lw_detect_simd_level(void) {
+static lw_simd_level detect_simd_level(void);
+
+static lw_simd_level detect_cached_level = LW_SIMD_LEVEL_SCALAR;
+
+static lw_simd_level detect_simd_level(void) {
 #if defined(_MSC_VER) && (defined(_M_IX86) || defined(_M_X64))
     int registers[4];
     int maximum_leaf;
@@ -64,6 +73,41 @@ lw_simd_level lw_detect_simd_level(void) {
     return LW_SIMD_LEVEL_SCALAR;
 #endif
 }
+
+#if defined(_MSC_VER)
+#  include <windows.h>
+static BOOL CALLBACK run_detect(PINIT_ONCE once, PVOID parameter, PVOID* context) {
+    (void)once;
+    (void)parameter;
+    (void)context;
+    detect_cached_level = detect_simd_level();
+    return TRUE;
+}
+lw_simd_level lw_detect_simd_level(void) {
+    static INIT_ONCE detect_once = INIT_ONCE_STATIC_INIT;
+    (void)InitOnceExecuteOnce(&detect_once, run_detect, NULL, NULL);
+    return detect_cached_level;
+}
+#elif defined(__STDC_VERSION__) && __STDC_VERSION__ >= 201112L && !defined(__STDC_NO_THREADS__)
+#  include <threads.h>
+static void run_detect(void) {
+    detect_cached_level = detect_simd_level();
+}
+lw_simd_level lw_detect_simd_level(void) {
+    static once_flag detect_once = ONCE_FLAG_INIT;
+    call_once(&detect_once, run_detect);
+    return detect_cached_level;
+}
+#else
+lw_simd_level lw_detect_simd_level(void) {
+    static int detect_initialized = 0;
+    if (!detect_initialized) {
+        detect_cached_level = detect_simd_level();
+        detect_initialized = 1;
+    }
+    return detect_cached_level;
+}
+#endif
 
 const char* lw_simd_level_name(lw_simd_level level) {
     if (level >= LW_SIMD_LEVEL_AVX2) {
