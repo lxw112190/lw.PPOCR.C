@@ -9,9 +9,10 @@
 #  define LW_COMPILES_AVX2 0
 #endif
 
-#if LW_COMPILES_AVX2 && (defined(__GNUC__) || defined(__clang__))
+#if LW_COMPILES_AVX2
+#  if defined(__GNUC__) || defined(__clang__)
 __attribute__((target("avx2,no-fma")))
-#endif
+#  endif
 static void lw_avx2_matmul_rows4_tiled_f32(
     const float* input,
     const float* weights,
@@ -75,6 +76,7 @@ static void lw_avx2_matmul_rows4_tiled_f32(
         }
     }
 }
+#endif
 
 #if LW_COMPILES_AVX2 && (defined(__GNUC__) || defined(__clang__))
 __attribute__((target("avx2,no-fma")))
@@ -87,11 +89,13 @@ void lw_avx2_matmul_shared_f32(
     uint32_t rows,
     uint32_t inner_dimension,
     uint32_t columns) {
+#if LW_COMPILES_AVX2
     if (rows >= 4u && (rows % 4u) == 0u && inner_dimension >= 64u && columns >= 1024u) {
         lw_avx2_matmul_rows4_tiled_f32(input, weights, output, batch_count, rows,
                                        inner_dimension, columns);
         return;
     }
+#endif
     uint32_t batch;
     uint32_t row;
     for (batch = 0u; batch < batch_count; ++batch) {
