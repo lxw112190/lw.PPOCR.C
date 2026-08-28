@@ -34,7 +34,20 @@ static void lw_avx2_matmul_rows4_tiled_f32(
                 for (inner = 0u; inner < inner_dimension; ++inner) {
                     const uint64_t weight_base = (uint64_t)inner * columns + column;
                     const uint64_t input_base = ((uint64_t)batch * rows + row) * inner_dimension + inner;
-                    __m256 weight_values = _mm256_loadu_ps(weights + (size_t)weight_base);
+                    __m256 weight_values;
+                    if (width == 8u) {
+                        weight_values = _mm256_loadu_ps(weights + (size_t)weight_base);
+                    } else {
+                        /* The final tile may contain fewer than eight columns.
+                         * Copy only valid weights before loading the vector so
+                         * this fast path never reads past the matrix. */
+                        float weight_tail[8] = {0.0f, 0.0f, 0.0f, 0.0f,
+                                                0.0f, 0.0f, 0.0f, 0.0f};
+                        for (uint32_t lane = 0u; lane < width; ++lane) {
+                            weight_tail[lane] = weights[(size_t)weight_base + lane];
+                        }
+                        weight_values = _mm256_loadu_ps(weight_tail);
+                    }
                     uint32_t current_row;
                     for (current_row = 0u; current_row < 4u; ++current_row) {
                         __m256 input_value = _mm256_set1_ps(
