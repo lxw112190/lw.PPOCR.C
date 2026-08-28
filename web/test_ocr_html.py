@@ -61,6 +61,13 @@ def main() -> int:
             timeout=180_000,
         )
         page.locator("#file").set_input_files(str(sample))
+        page.wait_for_function(
+            "() => !document.querySelector('#run').disabled && "
+            "document.querySelector('#status').textContent.includes('点击')",
+            timeout=180_000,
+        )
+        assert page.locator("#results .line").count() == 0
+        page.locator("#run").click()
         snapshot = wait_for_run(page, 0)
 
         lines = page.locator("#results .line")

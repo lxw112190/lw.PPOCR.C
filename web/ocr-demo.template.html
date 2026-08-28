@@ -36,7 +36,14 @@
     .index { color: #8b99aa; font-variant-numeric: tabular-nums; }
     .text { overflow-wrap: anywhere; font-size: 14px; line-height: 1.5; }
     .score { margin-top: 3px; color: #8290a0; font-size: 11px; }
+    .support { display: flex; gap: 24px; align-items: center; margin-top: 18px; padding: 20px; }
+    .support h2 { margin: 0 0 8px; font-size: 16px; }
+    .support p { margin: 0 0 8px; color: #607086; font-size: 13px; line-height: 1.6; }
+    .support img { width: 150px; height: 150px; flex: 0 0 auto; border-radius: 8px; object-fit: cover; }
+    a { color: #2878d4; text-decoration: none; }
+    a:hover { text-decoration: underline; }
     footer { margin-top: 18px; color: #8491a2; font-size: 12px; text-align: right; }
+    @media (max-width: 480px) { .support { align-items: flex-start; } .support img { width: 112px; height: 112px; } }
     @media (max-width: 760px) { main { margin-top: 16px; } .grid { grid-template-columns: 1fr; } .preview { min-height: 280px; } }
   </style>
 </head>
@@ -67,7 +74,15 @@
         <div id="results"><div class="empty">选择图片后，这里会显示识别文本。</div></div>
       </section>
     </div>
-    <footer>lw.PPOCR.C · WebAssembly · 完整 DET → CLS → REC 流程</footer>
+    <section class="support card">
+      <img src="data:image/jpeg;base64,__LW_SPONSOR_IMAGE_BASE64__" alt="赞赏二维码">
+      <div>
+        <h2>联系与支持</h2>
+        <p>如果这个离线 OCR 工具对你有帮助，欢迎扫码支持项目维护。</p>
+        <p>项目地址：<a href="https://github.com/lxw112190/lw.PPOCR.C" target="_blank" rel="noopener noreferrer">github.com/lxw112190/lw.PPOCR.C</a></p>
+      </div>
+    </section>
+    <footer><a href="https://github.com/lxw112190/lw.PPOCR.C" target="_blank" rel="noopener noreferrer">lw.PPOCR.C</a> · WebAssembly · 完整 DET → CLS → REC 流程</footer>
   </main>
   <script>
     const MODEL_B64 = {
@@ -95,6 +110,8 @@
     let lineSize = 0;
     let resultSize = 0;
     let sourceCapacity = 0;
+    let selectedFile = null;
+    let previewSequence = 0;
     const buffers = {source: 0, lines: 0, text: 0, result: 0};
 
     function decodeBase64(value) {
@@ -195,10 +212,10 @@
         if (status !== 0) throw new Error("初始化失败：" + status);
         allocateOutputBuffers();
         loadMilliseconds = performance.now() - started;
-        runButton.disabled = !fileInput.files.length;
+        runButton.disabled = !selectedFile;
         clsInput.disabled = false;
         statsNode.textContent = `引擎已就绪 · 加载 ${(loadMilliseconds / 1000).toFixed(2)} s · 输出 ${maxLineCapacity} 行/${maxTextCapacity} 字节 · CLS ${clsInput.checked ? "开启" : "关闭"}`;
-        statusNode.textContent = "就绪，请选择图片。";
+        statusNode.textContent = selectedFile ? "图片已准备好，点击“开始识别”。" : "就绪，请选择图片。";
       } catch (error) {
         shutdownEngine();
         clsInput.disabled = false;
@@ -207,15 +224,54 @@
       }
     }
 
-    function drawResults(image, lines, width, height) {
+    function drawPreview(image, width, height) {
       canvas.width = width; canvas.height = height;
       const context = canvas.getContext("2d"); context.drawImage(image, 0, 0, width, height);
+    }
+
+    function drawResults(image, lines, width, height) {
+      drawPreview(image, width, height);
+      const context = canvas.getContext("2d");
       context.lineWidth = Math.max(2, canvas.width / 500); context.font = "16px sans-serif"; context.strokeStyle = "#e53935"; context.fillStyle = "#e53935";
       for (const line of lines) { const b = line.box; context.beginPath(); context.moveTo(b[0], b[1]); context.lineTo(b[2], b[3]); context.lineTo(b[4], b[5]); context.lineTo(b[6], b[7]); context.closePath(); context.stroke(); context.fillText(line.text, b[0], Math.max(16, b[1] - 3)); }
     }
 
+    async function previewSelectedFile() {
+      const file = fileInput.files[0];
+      const sequence = ++previewSequence;
+      selectedFile = file || null;
+      runButton.disabled = true;
+      if (!file) {
+        statusNode.textContent = "就绪，请选择图片。";
+        resultsNode.innerHTML = '<div class="empty">选择图片后，点击“开始识别”显示结果。</div>';
+        return;
+      }
+      try {
+        statusNode.textContent = "正在更新图片预览…";
+        const image = await createImageBitmap(file);
+        try {
+          if (sequence !== previewSequence) return;
+          const scale = Math.min(1, 1600 / Math.max(image.width, image.height));
+          const width = Math.max(1, Math.round(image.width * scale));
+          const height = Math.max(1, Math.round(image.height * scale));
+          drawPreview(image, width, height);
+          resultsNode.innerHTML = '<div class="empty">图片已准备好，点击“开始识别”执行 OCR。</div>';
+          statusNode.textContent = `已选择：${file.name}，点击“开始识别”。`;
+        } finally {
+          if (image.close) image.close();
+        }
+      } catch (error) {
+        if (sequence === previewSequence) {
+          selectedFile = null;
+          statusNode.textContent = "图片预览失败：" + error;
+        }
+      } finally {
+        if (sequence === previewSequence) runButton.disabled = !selectedFile || !moduleInstance;
+      }
+    }
+
     async function runOcr() {
-      const file = fileInput.files[0]; if (!file || !moduleInstance || running) return;
+      const file = selectedFile; if (!file || !moduleInstance || running) return;
       const totalStarted = performance.now();
       let image;
       running = true; runButton.disabled = true; clsInput.disabled = true; statusNode.textContent = "识别中…";
@@ -223,7 +279,7 @@
         const decodeStarted = performance.now();
         image = await createImageBitmap(file); const scale = Math.min(1, 1600 / Math.max(image.width, image.height));
         const width = Math.max(1, Math.round(image.width * scale)); const height = Math.max(1, Math.round(image.height * scale));
-        canvas.width = width; canvas.height = height; const context = canvas.getContext("2d"); context.drawImage(image, 0, 0, width, height);
+        drawPreview(image, width, height); const context = canvas.getContext("2d");
         const rgba = context.getImageData(0, 0, width, height).data; const bgr = new Uint8Array(width * height * 3);
         for (let i = 0, j = 0; i < rgba.length; i += 4) { bgr[j++] = rgba[i + 2]; bgr[j++] = rgba[i + 1]; bgr[j++] = rgba[i]; }
         const sourcePointer = ensureSourceCapacity(bgr.length);
@@ -234,18 +290,18 @@
         if (status !== 0) throw new Error("推理失败：" + status);
         const lineCount = readU32(buffers.result), lines = [];
         if (lineCount > maxLineCapacity) throw new Error("引擎返回的文字行数量超出容量");
-        for (let i = 0; i < lineCount; ++i) { const p = buffers.lines + i * lineSize, box = []; for (let k = 0; k < 8; ++k) box.push(readF32(p + k * 4)); const offset = readU32(p + 52), length = readU32(p + 56); if (offset > maxTextCapacity || length > maxTextCapacity - offset) throw new Error("引擎返回的文本范围无效"); lines.push({box, text: readUtf8(buffers.text + offset, length), detection: readF32(p + 32), recognition: readF32(p + 36), classification: readF32(p + 40), rotation: readU32(p + 48)}); }
+        for (let i = 0; i < lineCount; ++i) { const p = buffers.lines + i * lineSize, box = []; for (let k = 0; k < 8; ++k) box.push(readF32(p + k * 4)); const offset = readU32(p + 52), length = readU32(p + 56); if (offset > maxTextCapacity || length > maxTextCapacity - offset) throw new Error("引擎返回的文本范围无效"); lines.push({box, text: readUtf8(buffers.text + offset, length), detection: readF32(p + 32), recognition: readF32(p + 36)}); }
         drawResults(image, lines, width, height);
-        resultsNode.innerHTML = lines.length ? lines.map((line, index) => `<div class="line"><div class="index">${String(index + 1).padStart(2, "0")}</div><div class="text"><b>${escapeHtml(line.text)}</b><div class="score">检测 ${(line.detection * 100).toFixed(1)}% · 识别 ${(line.recognition * 100).toFixed(1)}% · 分类 ${(line.classification * 100).toFixed(1)}% · 旋转 ${line.rotation}°</div></div></div>`).join("") : '<div class="empty">未检测到文本。</div>';
+        resultsNode.innerHTML = lines.length ? lines.map((line, index) => `<div class="line"><div class="index">${String(index + 1).padStart(2, "0")}</div><div class="text"><b>${escapeHtml(line.text)}</b><div class="score">检测 ${(line.detection * 100).toFixed(1)}% · 识别 ${(line.recognition * 100).toFixed(1)}%</div></div></div>`).join("") : '<div class="empty">未检测到文本。</div>';
         const inferenceMilliseconds = performance.now() - inferenceStarted;
         const totalMilliseconds = performance.now() - totalStarted;
         runCount += 1;
         statsNode.textContent = `第 ${runCount} 次 · 引擎加载 ${(loadMilliseconds / 1000).toFixed(2)} s · 图像处理 ${decodeMilliseconds.toFixed(0)} ms · 推理 ${inferenceMilliseconds.toFixed(0)} ms · 总计 ${totalMilliseconds.toFixed(0)} ms · CLS ${clsInput.checked ? "开启" : "关闭"}`;
         statusNode.textContent = `完成：${lineCount} 行`;
-      } catch (error) { statusNode.textContent = "识别失败：" + error; console.error(error); } finally { if (image && image.close) image.close(); running = false; runButton.disabled = !fileInput.files.length; clsInput.disabled = false; }
+      } catch (error) { statusNode.textContent = "识别失败：" + error; console.error(error); } finally { if (image && image.close) image.close(); running = false; runButton.disabled = !selectedFile || !moduleInstance; clsInput.disabled = false; }
     }
-    fileInput.addEventListener("change", () => { runButton.disabled = !fileInput.files.length || !moduleInstance; if (fileInput.files.length) { statusNode.textContent = "已选择：" + fileInput.files[0].name + "，自动识别中…"; runOcr(); } });
-    clsInput.addEventListener("change", async () => { if (!moduleInstance || running) return; shutdownEngine(); runButton.disabled = true; statusNode.textContent = "正在切换 CLS 并重新加载引擎…"; await boot(); if (fileInput.files.length) runOcr(); });
+    fileInput.addEventListener("change", previewSelectedFile);
+    clsInput.addEventListener("change", async () => { if (!moduleInstance || running) return; shutdownEngine(); runButton.disabled = true; statusNode.textContent = "正在切换 CLS 并重新加载引擎…"; await boot(); });
     ["dragenter", "dragover"].forEach(event => dropzone.addEventListener(event, e => { e.preventDefault(); dropzone.classList.add("drag"); }));
     ["dragleave", "drop"].forEach(event => dropzone.addEventListener(event, e => { e.preventDefault(); dropzone.classList.remove("drag"); }));
     dropzone.addEventListener("drop", event => { if (event.dataTransfer.files.length) { fileInput.files = event.dataTransfer.files; fileInput.dispatchEvent(new Event("change")); } });

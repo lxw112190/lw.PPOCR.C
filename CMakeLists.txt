@@ -229,7 +229,8 @@ if(EMSCRIPTEN)
     set_target_properties(lw_ppocr_web PROPERTIES OUTPUT_NAME "lw_ppocr_web")
     set_property(TARGET lw_ppocr_web APPEND PROPERTY LINK_DEPENDS
         "${CMAKE_CURRENT_SOURCE_DIR}/web/ocr-demo.template.html"
-        "${CMAKE_CURRENT_SOURCE_DIR}/web/package_ocr_html.py")
+        "${CMAKE_CURRENT_SOURCE_DIR}/web/package_ocr_html.py"
+        "${CMAKE_CURRENT_SOURCE_DIR}/docs/assets/sponsor.jpg")
     add_dependencies(lw_ppocr_web convert_det_model convert_cls_model convert_rec_model)
     add_custom_command(TARGET lw_ppocr_web POST_BUILD
         COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/web/package_ocr_html.py"
@@ -238,6 +239,7 @@ if(EMSCRIPTEN)
             --det "${LW_PPOCR_C_DET_LWM}" --cls "${LW_PPOCR_C_CLS_LWM}"
             --rec "${LW_PPOCR_C_REC_LWM}"
             --dictionary "${CMAKE_CURRENT_SOURCE_DIR}/models/ppocrv6-tiny/ppocr_keys.txt"
+            --sponsor "${CMAKE_CURRENT_SOURCE_DIR}/docs/assets/sponsor.jpg"
             --output "$<TARGET_FILE_DIR:lw_ppocr_web>/ocr-demo.html"
         VERBATIM)
     add_custom_target(lw-ocr-html DEPENDS lw_ppocr_web)
