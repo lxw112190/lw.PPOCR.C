@@ -1,4 +1,6 @@
 #include "scalar_kernels.h"
+#include "cpu_features.h"
+#include "simd_kernels.h"
 
 /* Numerically stable softmax: subtract the row maximum before exponentiation. */
 
@@ -53,6 +55,10 @@ lw_status lw_scalar_softmax_f32(const float* input, float* output, uint32_t rank
      * pointers remove the general strided offset arithmetic while preserving
      * the maximum, expf, accumulation and division order exactly. */
     if (inner_count == 1u) {
+        if (axis_count >= 256u && lw_detect_simd_level() >= LW_SIMD_LEVEL_AVX2) {
+            lw_avx2_softmax_contiguous_f32(input, output, outer_count, axis_count);
+            return LW_STATUS_OK;
+        }
         for (outer = 0u; outer < outer_count; ++outer) {
             const float* input_row = input + (size_t)(outer * axis_count);
             float* output_row = output + (size_t)(outer * axis_count);

@@ -542,3 +542,45 @@ complete OCR from 291.24 ms to 286.10 ms. All baseline and candidate runs kept
 checksum `f7bf2108d8c44764`. These results justify retaining the general kernel,
 while also showing that four-worker wall latency is now dominated by the
 parallel REC phase rather than this DET node alone.
+
+## AVX2 long-axis Softmax
+
+REC Softmax uses a contiguous final axis of 6,906 classes, while CLS Softmax
+uses only a short class axis. The new AVX2 path is therefore enabled only for
+contiguous axes with at least 256 values. It subtracts the row maximum, uses a
+range-reduced FP32 exponential with a Taylor polynomial over the reduced
+interval, and keeps the original left-to-right scalar sum order before the
+normalization divide. This keeps the recognizer score contract stable while
+vectorizing the expensive exponential and normalization passes. Strided and
+short-axis Softmax calls retain the original implementation.
+
+Four alternating 20-request, four-worker profiles compared binaries that both
+included the regular 3x3 four-output kernel; only the long-axis Softmax path
+differed:
+
+| Metric | Scalar Softmax | AVX2 Softmax | Change |
+|---|---:|---:|---:|
+| Complete OCR | 103.67 ms | 101.57 ms | -2.03% |
+| CLS/REC line wall | 53.19 ms | 50.97 ms | -4.17% |
+| Accumulated REC graph work | 148.50 ms | 141.12 ms | -4.97% |
+
+All eight runs retained output checksum `f7bf2108d8c44764`. REC graph reference,
+REC pipeline reference, full-OCR reference/profile, scalar kernel, and the
+complete Windows x64 Release suite passed after enabling the path. The profile
+still reports Softmax as the same public operator, so no ABI or profile schema
+change is required.
+## REC four-row tiled MatMul
+
+The AVX2 MatMul backend now processes four REC rows together in eight-column tiles for wide
+terminal projections. This keeps one weight vector live while applying four broadcast inputs,
+reducing repeated weight loads without changing accumulation order.
+
+On the Windows x64 Release sample (20 iterations, four OCR workers), alternating A/B runs were:
+
+| configuration | run 1 | run 2 | run 3 | run 4 | median |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| previous MatMul path | 106.53 ms | 109.64 ms | 109.22 ms | 108.17 ms | 109.22 ms |
+| tiled four-row path | 103.90 ms | 104.34 ms | 103.93 ms | 106.39 ms | 104.34 ms |
+
+The median end-to-end improvement is approximately **4.5%**. The output checksum remained
+`f7bf2108d8c44764`; the full Windows x64 Release suite passed 34/34 tests.
