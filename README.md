@@ -144,9 +144,6 @@ PP-OCR ONNX
     -> REC / CLS / DET / full OCR
 ```
 
-The full, non-frozen design is recorded in
-[`docs/PROJECT_DESIGN.md`](docs/PROJECT_DESIGN.md).
-
 Direct converter/model dependencies are recorded in `dependencies.lock.json`.
 The pure-C libraries have no third-party deployment runtime dependency; the
 optional native HTTP executable embeds the vendored header-only cpp-httplib.

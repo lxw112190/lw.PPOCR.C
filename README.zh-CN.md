@@ -221,7 +221,6 @@ HTTP Demo 和正式发布包均不链接、加载或携带 OpenCV。
 
 ## 进一步阅读
 
-- [项目设计](docs/PROJECT_DESIGN.md)
 - [架构和兼容性边界](docs/architecture.md)
 - [公共 C API](docs/c-api.md)
 - [完整 OCR 流程](docs/full-ocr.md)
