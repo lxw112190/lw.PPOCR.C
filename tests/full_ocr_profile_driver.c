@@ -150,6 +150,7 @@ int main(int argc, char** argv) {
     char* reference_text = NULL;
     uint32_t iterations;
     uint32_t workers;
+    uint32_t rec_target_width = 320u;
     uint32_t iteration;
     uint32_t reference_line_count;
     uint32_t det_width;
@@ -173,10 +174,12 @@ int main(int argc, char** argv) {
 #endif
 
     memset(&image, 0, sizeof(image));
-    if (argc != 8 || !parse_positive_u32(argv[6], &iterations) || iterations > 100u ||
-        !parse_positive_u32(argv[7], &workers) || workers > 16u) {
+    if ((argc != 8 && argc != 9) || !parse_positive_u32(argv[6], &iterations) ||
+        iterations > 100u || !parse_positive_u32(argv[7], &workers) || workers > 16u ||
+        (argc == 9 && !parse_positive_u32(argv[8], &rec_target_width))) {
         fprintf(stderr, "usage: full-ocr-profile-driver <det.lwm> <cls.lwm> <rec.lwm> "
-                        "<dictionary.txt> <image.ppm> <iterations> <workers>\n");
+                        "<dictionary.txt> <image.ppm> <iterations> <workers> "
+                        "[rec-target-width]\n");
         return 2;
     }
     if (!lw_example_ppm_image_load_bgr(argv[5], &image) || image.width > UINT32_MAX / 3u) {
@@ -185,6 +188,7 @@ int main(int argc, char** argv) {
     }
     lw_ocr_options_init(&options);
     options.worker_count = workers;
+    options.recognizer.target_width = rec_target_width;
     status = lw_det_compute_size(image.width, image.height, options.detector.limit_side_length,
                                  &det_width, &det_height, &det_width_ratio, &det_height_ratio);
     if (status != LW_STATUS_OK) {
@@ -298,9 +302,9 @@ int main(int argc, char** argv) {
 
     printf("{\"schema_version\":1,\"image_width\":%u,\"image_height\":%u,", image.width,
            image.height);
-    printf("\"iterations\":%u,\"workers\":%u,\"lines\":%u,"
+    printf("\"iterations\":%u,\"workers\":%u,\"rec_target_width\":%u,\"lines\":%u,"
            "\"output_checksum\":\"%016llx\",",
-           iterations, workers, reference_line_count,
+           iterations, workers, rec_target_width, reference_line_count,
            (unsigned long long)hash_bytes((const uint8_t*)reference_text,
                                           reference_text_capacity));
     printf("\"wall_nanoseconds\":{");
@@ -361,7 +365,7 @@ int main(int argc, char** argv) {
            mean_rec_padding_ratio);
     {
         static const uint32_t upper_bounds[LW_REC_WIDTH_HISTOGRAM_BUCKET_COUNT] = {
-            64u, 96u, 128u, 160u, 192u, 256u, 320u, UINT32_MAX};
+            192u, 256u, 320u, 480u, 640u, 800u, 960u, UINT32_MAX};
         for (index = 0u; index < LW_REC_WIDTH_HISTOGRAM_BUCKET_COUNT; ++index) {
             if (index != 0u) {
                 putchar(',');

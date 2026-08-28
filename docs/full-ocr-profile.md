@@ -403,28 +403,41 @@ graph, full-OCR, Golden-corpus, ABI/export and staged-package coverage.
 The private full-OCR profile now records the actual aspect-ratio-preserving REC
 width before right padding. Its JSON report includes the sample count, resized
 and target width sums, mean resized width, mean padding ratio, and stable
-64/96/128/160/192/256/320/overflow histogram buckets. Worker-local counters are
-merged after joining, so profiling remains race-free. Ordinary OCR calls do not
-collect these values, and the public C ABI is unchanged.
+192/256/320/480/640/800/960/overflow histogram buckets. The profile driver
+accepts an optional final `rec-target-width` argument and reports it as
+`rec_target_width`, so a 960 run no longer loses every width above 320 to
+clamping. Worker-local counters are merged after joining; the public C ABI is
+unchanged.
 
-On the bundled 500x500/16-line fixture, three repeated requests produced 48
-samples with the same distribution for one and four workers:
+With `REC target_width = 960`, ten repeated requests produced these per-image
+distributions:
 
-| Metric | Observation |
-|---|---:|
-| Mean resized width | 299.5625 |
-| Mean right-padding ratio | 6.39% |
-| Width <= 256 | 9 / 48 |
-| 256 < width <= 320 | 39 / 48 |
-| Width <= 192 | 0 / 48 |
+| Width range | Bundled 500x500 sample (16 lines) | Article screenshot (8 lines) |
+|---|---:|---:|
+| <= 192 | 0 | 2 |
+| 193 to 256 | 3 | 0 |
+| 257 to 320 | 2 | 0 |
+| 321 to 480 | 2 | 0 |
+| 481 to 640 | 6 | 0 |
+| 641 to 800 | 2 | 1 |
+| 801 to 960 | 1 | 5 |
+| Mean resized width | 491.5 | 729.0 |
+| Mean right-padding ratio | 48.80% | 24.06% |
 
-The ten-crop REC Golden corpus is similarly wide: its estimated mean resized
-width is 313.7 and mean padding ratio is about 1.97%. These fixtures therefore
-do not support immediately adding multiple REC width sessions: their maximum
-theoretical width-work reduction is small compared with the extra session and
-workspace memory. Broader customer-image profiling should precede a width-bucket
-implementation; the current evidence instead keeps DET parallelism as the next
-high-potential latency experiment.
+For a proposed 192/320/480/640/960 policy, the bundled sample falls from
+15,360 fixed-width units to 9,280 (-39.6%), while the long-line-heavy article
+falls from 7,680 to 6,144 (-20.0%). These are workload estimates rather than
+latency claims, but they justify an adaptive-width prototype while showing that
+the 960 bucket remains necessary for five of the article's eight detected
+lines.
+
+The same Windows x64 Release measurements (three alternating runs, ten images
+per run) were:
+
+| 960-width input | 1 worker median | 4 workers median | Parallel speedup |
+|---|---:|---:|---:|
+| Bundled sample | 595.51 ms | 205.05 ms | 2.90x |
+| Article screenshot | 325.31 ms | 136.88 ms | 2.38x |
 
 ## Fixed-pool DET output-channel parallelism
 

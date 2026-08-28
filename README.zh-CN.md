@@ -60,6 +60,14 @@ PP-OCR ONNX 模型
 所有发行版和硬件都已经得到验证。具体说明请查看
 [`docs/package.md`](docs/package.md) 和 [`docs/architecture.md`](docs/architecture.md)。
 
+## 性能口径说明
+
+README 英文版中的原生性能快照使用 `REC target_width = 320`。为保证新闻正文等长文字行的
+识别精度，离线 HTML 与 C# Demo 当前使用 `REC target_width = 960`；在同一张 500×500、
+16 行样本上，当前 Windows x64 Release 构建实测单工作器中位耗时 595.51 ms，四工作器
+205.05 ms（三组交替测试，每组 10 次）。960 模式计算量更大，项目正在评估按文字行宽高比
+自动选择 192/320/480/640/960 Session 的自适应宽度方案。
+
 ## 目录说明
 
 ```text

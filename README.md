@@ -38,7 +38,8 @@ application concern, so the core itself stays dependency-free.
 
 ### Performance snapshot
 
-On the bundled 500×500 sample image, a Windows x64 release build measured:
+On the bundled 500×500 sample image, a Windows x64 release build measured the
+following native baseline with `REC target_width = 320`:
 
 | Full OCR mode | Median latency |
 |---|---:|
@@ -49,6 +50,13 @@ Four workers provide about **2.50×** throughput acceleration for this sample.
 Results vary with CPU, compiler, image content, and system load. The four-worker
 mode applies DET output-channel parallelism before independent CLS/REC line
 work.
+
+Long-text clients such as the offline HTML and C# Demo use
+`REC target_width = 960` to preserve wide-line detail. On the same sample, the
+current build measured 595.51 ms with one worker and 205.05 ms with four
+workers (median of three alternating runs, ten images per run). This mode is
+more accurate for long lines but intentionally performs more REC work; an
+adaptive-width implementation is being evaluated.
 
 ## Build, convert, and test
 
