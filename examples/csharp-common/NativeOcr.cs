@@ -8,6 +8,14 @@ using System.Text;
 
 namespace LwPpocrCSharp
 {
+    // Preserve detail for wide document lines (news pages, receipts, tables).
+    // The native REC graph supports dynamic widths; 320 is faster but can
+    // compress a long line into too few pixels for reliable recognition.
+    internal static class OcrRecognitionDefaults
+    {
+        internal const uint LongTextTargetWidth = 960u;
+    }
+
     [StructLayout(LayoutKind.Sequential)]
     internal struct LwError
     {
@@ -217,7 +225,16 @@ namespace LwPpocrCSharp
                 dictionary = AllocUtf8(dictionaryPath);
                 LwOcrOptions options = new LwOcrOptions();
                 lw_ocr_options_init(ref options);
+                // Explicitly retain the C ABI size markers after changing a
+                // nested value. This also protects the .NET 3.5 P/Invoke path
+                // from value-type copy semantics when the REC width is set.
+                options.StructSize = (uint)Marshal.SizeOf(typeof(LwOcrOptions));
+                options.Recognizer.StructSize =
+                    (uint)Marshal.SizeOf(typeof(LwRecognizerOptions));
+                options.Recognizer.Reserved0 = 0u;
+                options.Recognizer.Reserved1 = 0u;
                 options.UseDirectionClassification = useDirectionClassification ? 1u : 0u;
+                options.Recognizer.TargetWidth = OcrRecognitionDefaults.LongTextTargetWidth;
                 if (workerCount != 0u) options.WorkerCount = workerCount;
                 LwError error = CreateError();
                 int status = lw_ocr_create(detector, classifier, recognizer, dictionary,
