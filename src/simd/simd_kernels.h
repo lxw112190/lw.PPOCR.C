@@ -16,6 +16,7 @@ void lw_avx2_binary_contiguous_f32(lw_scalar_binary_op operation, const float* l
 void lw_avx2_binary_right_scalar_f32(lw_scalar_binary_op operation, const float* left, float right,
                                      float* output, uint64_t element_count);
 void lw_avx2_erf_f32(const float* input, float* output, uint64_t element_count);
+void lw_avx2_gelu_f32(const float* input, float* output, uint64_t element_count);
 void lw_wasm128_erf_f32(const float* input, float* output, uint64_t element_count);
 
 void lw_sse2_matmul_shared_f32(const float* input, const float* weights, float* output,

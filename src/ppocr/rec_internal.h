@@ -27,5 +27,12 @@ lw_status lw_rec_ctc_decode_f32(const lw_rec_dictionary* dictionary, const float
                                 uint32_t class_count, char* text_utf8, uint64_t text_capacity,
                                 uint64_t* required_capacity, float* score, uint32_t* emitted_count,
                                 lw_error* error);
+lw_status lw_rec_ctc_decode_known_capacity_f32(const lw_rec_dictionary* dictionary,
+                                               const float* probabilities,
+                                               uint64_t probability_element_count,
+                                               uint32_t time_steps, uint32_t class_count,
+                                               char* text_utf8, uint64_t text_capacity,
+                                               uint64_t* required_capacity, float* score,
+                                               uint32_t* emitted_count, lw_error* error);
 
 #endif

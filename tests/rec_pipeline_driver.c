@@ -116,9 +116,13 @@ static int decode_to_file(const char* dictionary_path, const float* probabilitie
     lw_error error;
     lw_status status;
     uint64_t required = 0u;
+    uint64_t known_required = 0u;
     float score = 0.0f;
+    float known_score = 0.0f;
     uint32_t emitted = 0u;
+    uint32_t known_emitted = 0u;
     char* text = NULL;
+    char* known_text = NULL;
     int result = 1;
     lw_error_init(&error);
     status = lw_rec_dictionary_load(dictionary_path, &dictionary, &error);
@@ -139,7 +143,8 @@ static int decode_to_file(const char* dictionary_path, const float* probabilitie
         goto cleanup;
     }
     text = (char*)malloc((size_t)required);
-    if (text == NULL) {
+    known_text = (char*)malloc((size_t)required);
+    if (text == NULL || known_text == NULL) {
         fprintf(stderr, "CTC text allocation failed\n");
         goto cleanup;
     }
@@ -159,9 +164,28 @@ static int decode_to_file(const char* dictionary_path, const float* probabilitie
         fprintf(stderr, "CTC decode failed: %s: %s\n", lw_status_string(status), error.message);
         goto cleanup;
     }
+    lw_error_init(&error);
+    status = lw_rec_ctc_decode_known_capacity_f32(
+        dictionary, probabilities, probability_count, time_steps, class_count, known_text, required,
+        &known_required, &known_score, &known_emitted, &error);
+    if (status != LW_STATUS_OK || known_required != required || known_score != score ||
+        known_emitted != emitted || strcmp(text, known_text) != 0) {
+        fprintf(stderr, "known-capacity CTC decode differs: %s: %s\n", lw_status_string(status),
+                error.message);
+        goto cleanup;
+    }
+    lw_error_init(&error);
+    status = lw_rec_ctc_decode_known_capacity_f32(
+        dictionary, probabilities, probability_count, time_steps, class_count, known_text,
+        required - 1u, &known_required, &known_score, &known_emitted, &error);
+    if (status != LW_STATUS_OUT_OF_BOUNDS) {
+        fprintf(stderr, "known-capacity CTC decoder accepted an undersized buffer\n");
+        goto cleanup;
+    }
     printf("score=%.9g chars=%u bytes=%llu\n", score, emitted, (unsigned long long)(required - 1u));
     result = 0;
 cleanup:
+    free(known_text);
     free(text);
     lw_rec_dictionary_free(dictionary);
     return result;

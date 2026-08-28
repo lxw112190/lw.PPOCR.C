@@ -294,10 +294,19 @@ static lw_status recognizer_recognize_bgr_u8_impl(lw_recognizer* recognizer, con
         return status;
     }
     started = lw_pipeline_profile_now(profile);
-    status = lw_rec_ctc_decode_f32(
-        recognizer->dictionary, recognizer->probabilities, recognizer->probability_element_count,
-        recognizer->info.time_steps, recognizer->info.class_count, text_utf8, text_capacity,
-        &required_capacity, &score, &emitted_count, error);
+    if (text_utf8 != NULL && text_capacity >= recognizer->info.max_text_capacity) {
+        status = lw_rec_ctc_decode_known_capacity_f32(
+            recognizer->dictionary, recognizer->probabilities,
+            recognizer->probability_element_count, recognizer->info.time_steps,
+            recognizer->info.class_count, text_utf8, text_capacity, &required_capacity, &score,
+            &emitted_count, error);
+    } else {
+        status = lw_rec_ctc_decode_f32(recognizer->dictionary, recognizer->probabilities,
+                                       recognizer->probability_element_count,
+                                       recognizer->info.time_steps, recognizer->info.class_count,
+                                       text_utf8, text_capacity, &required_capacity, &score,
+                                       &emitted_count, error);
+    }
     result->emitted_count = emitted_count;
     result->score = score;
     result->resized_width = resized_width;

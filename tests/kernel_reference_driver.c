@@ -63,6 +63,9 @@ int main(void) {
     float activation_output[9];
     float erf_dense_input[ERF_DENSE_COUNT];
     float erf_dense_output[ERF_DENSE_COUNT];
+    float gelu_reference[ERF_DENSE_COUNT];
+    float gelu_output[ERF_DENSE_COUNT];
+    float gelu_temporary[ERF_DENSE_COUNT];
     float softmax_output[24];
     float softmax_in_place[24];
     lw_simd_level simd_level;
@@ -200,6 +203,26 @@ int main(void) {
         if (maximum_error > 5.0e-7f) {
             fprintf(stderr, "AVX2 Erf maximum absolute error %.9g exceeds limit\n",
                     (double)maximum_error);
+            return 1;
+        }
+        lw_avx2_binary_right_scalar_f32(LW_SCALAR_BINARY_DIV, erf_dense_input, 1.4142135381698608f,
+                                        gelu_temporary, ERF_DENSE_COUNT);
+        lw_avx2_erf_f32(gelu_temporary, gelu_reference, ERF_DENSE_COUNT);
+        lw_avx2_binary_right_scalar_f32(LW_SCALAR_BINARY_ADD, gelu_reference, 1.0f, gelu_temporary,
+                                        ERF_DENSE_COUNT);
+        lw_avx2_binary_contiguous_f32(LW_SCALAR_BINARY_MUL, erf_dense_input, gelu_temporary,
+                                      gelu_reference, ERF_DENSE_COUNT);
+        lw_avx2_binary_right_scalar_f32(LW_SCALAR_BINARY_MUL, gelu_reference, 0.5f, gelu_temporary,
+                                        ERF_DENSE_COUNT);
+        lw_avx2_gelu_f32(erf_dense_input, gelu_output, ERF_DENSE_COUNT);
+        if (memcmp(gelu_temporary, gelu_output, sizeof(gelu_output)) != 0) {
+            fprintf(stderr, "AVX2 fused GELU differs from its five-node graph\n");
+            return 1;
+        }
+        memcpy(gelu_reference, erf_dense_input, sizeof(gelu_reference));
+        lw_avx2_gelu_f32(gelu_reference, gelu_reference, ERF_DENSE_COUNT);
+        if (memcmp(gelu_reference, gelu_output, sizeof(gelu_output)) != 0) {
+            fprintf(stderr, "AVX2 fused GELU in-place output differs\n");
             return 1;
         }
         lw_avx2_erf_f32(special_input, special_output, 8u);

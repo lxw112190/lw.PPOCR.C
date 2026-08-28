@@ -465,3 +465,80 @@ Four workers therefore reduced complete OCR latency by 58.51%, delivered a
 2.41x speedup, and increased throughput by about 141%. The additional memory is
 primarily the existing independent CLS/REC worker sessions; the DET pool shares
 the detector model, weights, workspace, input, and output buffers.
+
+## Known-capacity CTC and AVX2 GELU fusion
+
+Full OCR allocates each line's text slot from
+`lw_recognizer_info.max_text_capacity`. The recognizer now uses that guarantee
+to collapse greedy CTC output once, writing UTF-8 text while computing the exact
+used capacity and score. Public size queries and calls with smaller buffers
+retain the original exact-capacity two-pass path. On the 16-line fixture, the
+accumulated CTC work fell from about 7.45 ms to 3.71 ms, but four-worker wall
+latency improved by only about 0.38 ms in the initial comparison. This is a
+small, low-risk cleanup rather than the main route to the 100 ms target.
+
+A more aggressive REC terminal-head prototype tiled
+`MatMul -> Softmax -> CTC` and avoided the full probability tensor. Six
+alternating 20-request pairs found only about 0.6 ms median wall improvement:
+the Softmax denominator still requires all 6,906 exponentials. The prototype
+was removed rather than retaining a second graph executor for that result.
+
+The retained superkernel instead targets the ten REC and three DET GELU chains:
+
+```text
+x / sqrt(2) -> Erf -> +1 -> *x -> *0.5
+```
+
+Fusion is enabled only on AVX2 when five consecutive nodes have the exact
+`sqrt(2)`, `1`, and `0.5` constants, identical FP32 tensor sizes, and four
+intermediate tensors whose final consumers are inside the chain. Every other
+model and backend continues through the ordinary node dispatcher. The kernel
+uses the existing three-region AVX2 Erf polynomial and preserves division,
+addition, and multiplication order. A dense 4,099-value test requires fused,
+unfused, separate-output, and in-place results to be byte-identical. Graph,
+pipeline, Golden-corpus, ABI, HTTP, and staged-package tests remain mandatory.
+
+Six alternating 20-request four-worker pairs used the same Release configuration,
+model files, and 500x500/16-line fixture. The baseline included known-capacity
+CTC but not GELU fusion:
+
+| Metric | Baseline median | GELU median | Change |
+|---|---:|---:|---:|
+| Complete OCR | 110.29 ms | 105.77 ms | -4.10% |
+| DET graph | 43.25 ms | 41.10 ms | -4.98% |
+| CLS/REC line wall | 55.76 ms | 53.55 ms | -3.96% |
+| Accumulated REC graph work | 155.84 ms | 150.59 ms | -3.37% |
+
+Every pair retained output checksum `f7bf2108d8c44764`; paired complete-OCR
+improvement ranged from 2.01 ms to 5.57 ms, with a 4.76 ms median. The complete
+Windows x64 Release suite passed 34/34 tests. In execution profiles, fused work
+is attributed to Erf because the stable public profile schema has no GELU
+operator; the four skipped semantic nodes retain invocation markers.
+
+## AVX2 regular 3x3 four-output blocking
+
+The detector's node 234 is a group-1 `64 -> 16` convolution with a 3x3 kernel,
+unit stride, pad one, and a 128x128 output. The former AVX2 implementation
+completed one output plane at a time, so it loaded the same input vectors once
+for every output channel. The new path keeps four independent accumulators and
+reuses each input vector across four output planes. It applies to any validated
+unit-stride 3x3 shape whose output-channel count is divisible by four; other
+shapes retain the previous kernel. A dedicated reference case covers vector
+interior pixels, scalar borders, bias, and byte-identical output.
+
+Four alternating pairs of 50-request, four-worker profiles were run under the
+same Release configuration. The longer run intentionally reports medians
+because the host was under higher sustained load than the earlier GELU test:
+
+| Metric | Previous kernel | Four-output kernel | Change |
+|---|---:|---:|---:|
+| Node 234 per invocation | 5.13 ms | 2.95 ms | -42.45% |
+| DET graph per request | 48.07 ms | 45.64 ms | -5.06% |
+| Complete OCR per request | 139.09 ms | 136.61 ms | -1.78% |
+
+The paired complete-OCR saving had a 2.15 ms median. A separate four-pair,
+12-request one-worker profile reduced node 234 from 14.00 ms to 7.48 ms and
+complete OCR from 291.24 ms to 286.10 ms. All baseline and candidate runs kept
+checksum `f7bf2108d8c44764`. These results justify retaining the general kernel,
+while also showing that four-worker wall latency is now dominated by the
+parallel REC phase rather than this DET node alone.

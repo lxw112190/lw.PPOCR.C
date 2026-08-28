@@ -87,6 +87,32 @@ erf_large_magnitude_f32(__m256 absolute) {
     return _mm256_add_ps(_mm256_set1_ps(9.9997793886838715e-1f),
                          _mm256_mul_ps(shifted, polynomial));
 }
+
+#  if defined(__GNUC__) || defined(__clang__)
+__attribute__((target("avx2,no-fma")))
+#  endif
+static __m256
+erf_approximation_f32(__m256 value) {
+    const __m256 absolute_mask = _mm256_castsi256_ps(_mm256_set1_epi32((int)UINT32_C(0x7fffffff)));
+    const __m256 sign_mask = _mm256_castsi256_ps(_mm256_set1_epi32((int)UINT32_C(0x80000000)));
+    const __m256 one = _mm256_set1_ps(1.0f);
+    __m256 absolute = _mm256_and_ps(value, absolute_mask);
+    __m256 squared = _mm256_mul_ps(absolute, absolute);
+    __m256 small = erf_small_magnitude_f32(absolute, squared);
+    __m256 middle = erf_middle_magnitude_f32(absolute);
+    __m256 large = erf_large_magnitude_f32(absolute);
+    __m256 mask;
+    __m256 result;
+    mask = _mm256_cmp_ps(absolute, _mm256_set1_ps(2.0f), _CMP_LT_OQ);
+    result = _mm256_blendv_ps(large, middle, mask);
+    mask = _mm256_cmp_ps(absolute, one, _CMP_LT_OQ);
+    result = _mm256_blendv_ps(result, small, mask);
+    mask = _mm256_cmp_ps(absolute, _mm256_set1_ps(4.0f), _CMP_GE_OQ);
+    result = _mm256_blendv_ps(result, one, mask);
+    result = _mm256_xor_ps(result, _mm256_and_ps(value, sign_mask));
+    mask = _mm256_cmp_ps(value, value, _CMP_UNORD_Q);
+    return _mm256_blendv_ps(result, value, mask);
+}
 #endif
 
 #if LW_COMPILES_AVX2_ERF && (defined(__GNUC__) || defined(__clang__))
@@ -94,32 +120,10 @@ __attribute__((target("avx2,no-fma")))
 #endif
 void lw_avx2_erf_f32(const float* input, float* output, uint64_t element_count) {
 #if LW_COMPILES_AVX2_ERF
-    const __m256 absolute_mask = _mm256_castsi256_ps(_mm256_set1_epi32((int)UINT32_C(0x7fffffff)));
-    const __m256 sign_mask = _mm256_castsi256_ps(_mm256_set1_epi32((int)UINT32_C(0x80000000)));
-    const __m256 one = _mm256_set1_ps(1.0f);
-    const __m256 two = _mm256_set1_ps(2.0f);
-    const __m256 four = _mm256_set1_ps(4.0f);
     uint64_t index = 0u;
     for (; index + 8u <= element_count; index += 8u) {
         __m256 value = _mm256_loadu_ps(input + (size_t)index);
-        __m256 absolute = _mm256_and_ps(value, absolute_mask);
-        __m256 squared = _mm256_mul_ps(absolute, absolute);
-        __m256 small = erf_small_magnitude_f32(absolute, squared);
-        __m256 middle = erf_middle_magnitude_f32(absolute);
-        __m256 large = erf_large_magnitude_f32(absolute);
-        __m256 mask;
-        __m256 result;
-
-        mask = _mm256_cmp_ps(absolute, two, _CMP_LT_OQ);
-        result = _mm256_blendv_ps(large, middle, mask);
-        mask = _mm256_cmp_ps(absolute, one, _CMP_LT_OQ);
-        result = _mm256_blendv_ps(result, small, mask);
-        mask = _mm256_cmp_ps(absolute, four, _CMP_GE_OQ);
-        result = _mm256_blendv_ps(result, one, mask);
-        result = _mm256_xor_ps(result, _mm256_and_ps(value, sign_mask));
-        mask = _mm256_cmp_ps(value, value, _CMP_UNORD_Q);
-        result = _mm256_blendv_ps(result, value, mask);
-        _mm256_storeu_ps(output + (size_t)index, result);
+        _mm256_storeu_ps(output + (size_t)index, erf_approximation_f32(value));
     }
     for (; index < element_count; ++index) {
         output[(size_t)index] = erff(input[(size_t)index]);
@@ -128,6 +132,41 @@ void lw_avx2_erf_f32(const float* input, float* output, uint64_t element_count) 
     uint64_t index;
     for (index = 0u; index < element_count; ++index) {
         output[(size_t)index] = erff(input[(size_t)index]);
+    }
+#endif
+}
+
+#if LW_COMPILES_AVX2_ERF && (defined(__GNUC__) || defined(__clang__))
+__attribute__((target("avx2,no-fma")))
+#endif
+void lw_avx2_gelu_f32(const float* input, float* output, uint64_t element_count) {
+#if LW_COMPILES_AVX2_ERF
+    const __m256 square_root_two = _mm256_set1_ps(1.4142135381698608f);
+    const __m256 one = _mm256_set1_ps(1.0f);
+    const __m256 half = _mm256_set1_ps(0.5f);
+    uint64_t index = 0u;
+    for (; index + 8u <= element_count; index += 8u) {
+        __m256 value = _mm256_loadu_ps(input + (size_t)index);
+        __m256 scaled = _mm256_div_ps(value, square_root_two);
+        __m256 activated = _mm256_add_ps(erf_approximation_f32(scaled), one);
+        activated = _mm256_mul_ps(value, activated);
+        _mm256_storeu_ps(output + (size_t)index, _mm256_mul_ps(activated, half));
+    }
+    for (; index < element_count; ++index) {
+        float value = input[(size_t)index];
+        float scaled = value / 1.4142135381698608f;
+        float activated = erff(scaled) + 1.0f;
+        activated = value * activated;
+        output[(size_t)index] = activated * 0.5f;
+    }
+#else
+    uint64_t index;
+    for (index = 0u; index < element_count; ++index) {
+        float value = input[(size_t)index];
+        float scaled = value / 1.4142135381698608f;
+        float activated = erff(scaled) + 1.0f;
+        activated = value * activated;
+        output[(size_t)index] = activated * 0.5f;
     }
 #endif
 }

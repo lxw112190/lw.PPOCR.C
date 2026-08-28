@@ -494,6 +494,85 @@ static lw_status dispatch_node(lw_session* session, const uint8_t* node, uint32_
     }
 }
 
+static int constant_scalar_f32(const lw_session* session, uint32_t tensor_index,
+                               uint32_t graph_input_index, const float* graph_input,
+                               float expected) {
+    const lw_runtime_tensor* tensor = &session->tensors[tensor_index];
+    const float* value;
+    if (tensor->dtype != LW_DTYPE_F32 || tensor->byte_size != sizeof(float) ||
+        (tensor->flags & LWM_V0_TENSOR_FLAG_CONSTANT) == 0u) {
+        return 0;
+    }
+    value = tensor_input_data(session, tensor_index, graph_input_index, graph_input);
+    return value != NULL && value[0] == expected;
+}
+
+static int match_avx2_gelu(lw_session* session, uint32_t node_index, uint32_t graph_input_index,
+                           const float* graph_input, const float** gelu_input, float** gelu_output,
+                           uint64_t* element_count) {
+    const lw_model* model = session->model;
+    const uint8_t* nodes[5];
+    uint32_t inputs[5][2];
+    uint32_t outputs[5];
+    uint32_t index;
+    const lw_runtime_tensor* source;
+    const lw_runtime_tensor* output;
+    if (node_index > model->info.node_count || model->info.node_count - node_index < 5u) {
+        return 0;
+    }
+    for (index = 0u; index < 5u; ++index) {
+        nodes[index] = model->bytes + (size_t)model->node_offset +
+                       (size_t)(node_index + index) * LWM_V0_NODE_SIZE;
+        if (lwm_read_u16(nodes[index] + 2u) != (index == 1u ? 1u : 2u) ||
+            lwm_read_u16(nodes[index] + 4u) != 1u) {
+            return 0;
+        }
+        inputs[index][0] = lwm_read_u32(nodes[index] + 8u);
+        inputs[index][1] = index == 1u ? UINT32_MAX : lwm_read_u32(nodes[index] + 12u);
+        outputs[index] = lwm_read_u32(nodes[index] + 40u);
+    }
+    if (lwm_read_u16(nodes[0]) != LW_OP_DIV || lwm_read_u16(nodes[1]) != LW_OP_ERF ||
+        lwm_read_u16(nodes[2]) != LW_OP_ADD || lwm_read_u16(nodes[3]) != LW_OP_MUL ||
+        lwm_read_u16(nodes[4]) != LW_OP_MUL || inputs[1][0] != outputs[0] ||
+        (inputs[2][0] != outputs[1] && inputs[2][1] != outputs[1]) ||
+        (inputs[3][0] != inputs[0][0] && inputs[3][1] != inputs[0][0]) ||
+        (inputs[3][0] != outputs[2] && inputs[3][1] != outputs[2]) ||
+        (inputs[4][0] != outputs[3] && inputs[4][1] != outputs[3])) {
+        return 0;
+    }
+    if (!constant_scalar_f32(session, inputs[0][1], graph_input_index, graph_input,
+                             1.4142135381698608f) ||
+        !constant_scalar_f32(session, inputs[2][0] == outputs[1] ? inputs[2][1] : inputs[2][0],
+                             graph_input_index, graph_input, 1.0f) ||
+        !constant_scalar_f32(session, inputs[4][0] == outputs[3] ? inputs[4][1] : inputs[4][0],
+                             graph_input_index, graph_input, 0.5f)) {
+        return 0;
+    }
+    /* Every skipped temporary must be private to this chain.  Otherwise a
+     * later node could observe a value that the fused execution never wrote. */
+    for (index = 0u; index < 4u; ++index) {
+        if (session->tensors[outputs[index]].last_use_node != (int32_t)(node_index + index + 1u)) {
+            return 0;
+        }
+    }
+    source = &session->tensors[inputs[0][0]];
+    output = &session->tensors[outputs[4]];
+    if (source->dtype != LW_DTYPE_F32 || output->dtype != LW_DTYPE_F32 || source->byte_size == 0u ||
+        source->byte_size != output->byte_size) {
+        return 0;
+    }
+    for (index = 0u; index < 4u; ++index) {
+        const lw_runtime_tensor* temporary = &session->tensors[outputs[index]];
+        if (temporary->dtype != LW_DTYPE_F32 || temporary->byte_size != source->byte_size) {
+            return 0;
+        }
+    }
+    *gelu_input = tensor_input_data(session, inputs[0][0], graph_input_index, graph_input);
+    *gelu_output = tensor_output_data(session, outputs[4]);
+    *element_count = source->byte_size / sizeof(float);
+    return *gelu_input != NULL && *gelu_output != NULL;
+}
+
 static uint32_t profile_conv_class(const lw_session* session, const uint8_t* node) {
     const lw_model* model = session->model;
     uint64_t param_offset = lwm_read_u64(node + 56);
@@ -521,6 +600,36 @@ static uint32_t profile_conv_class(const lw_session* session, const uint8_t* nod
         return LW_EXECUTION_PROFILE_CONV_3X3;
     }
     return LW_EXECUTION_PROFILE_CONV_OTHER;
+}
+
+static void profile_fused_gelu(lw_execution_profile* profile, const lw_session* session,
+                               uint32_t first_node_index, uint64_t elapsed) {
+    uint32_t offset;
+    if (profile == NULL) {
+        return;
+    }
+    /* The public profile schema has no fused-GELU operator. Attribute the
+     * combined work to Erf and retain one invocation for every semantic node;
+     * one-nanosecond placeholders keep existing per-node coverage checks useful. */
+    for (offset = 0u; offset < 5u; ++offset) {
+        uint32_t node_index = first_node_index + offset;
+        const uint8_t* node = session->model->bytes + (size_t)session->model->node_offset +
+                              (size_t)node_index * LWM_V0_NODE_SIZE;
+        uint32_t operation = (uint32_t)lwm_read_u16(node);
+        uint64_t node_elapsed = offset == 1u ? (elapsed == 0u ? 1u : elapsed) : 1u;
+        if (operation < LW_EXECUTION_PROFILE_OPERATOR_CAPACITY &&
+            profile->operator_nanoseconds[operation] <= UINT64_MAX - node_elapsed &&
+            profile->operator_invocations[operation] != UINT64_MAX) {
+            profile->operator_nanoseconds[operation] += node_elapsed;
+            profile->operator_invocations[operation] += 1u;
+        }
+        if (node_index < LW_EXECUTION_PROFILE_NODE_CAPACITY &&
+            profile->node_nanoseconds[node_index] <= UINT64_MAX - node_elapsed &&
+            profile->node_invocations[node_index] != UINT64_MAX) {
+            profile->node_nanoseconds[node_index] += node_elapsed;
+            profile->node_invocations[node_index] += 1u;
+        }
+    }
 }
 
 static lw_status execute_session_f32(lw_session* session, const float* input,
@@ -563,6 +672,28 @@ static lw_status execute_session_f32(lw_session* session, const float* input,
             model->bytes + (size_t)model->node_offset + (size_t)node_index * LWM_V0_NODE_SIZE;
         uint32_t operation = (uint32_t)lwm_read_u16(node);
         uint64_t started = 0u;
+        if (simd_level >= LW_SIMD_LEVEL_AVX2 && operation == LW_OP_DIV) {
+            const float* gelu_input;
+            float* gelu_output;
+            uint64_t gelu_element_count;
+            if (match_avx2_gelu(session, node_index, graph_input_index, input, &gelu_input,
+                                &gelu_output, &gelu_element_count)) {
+                uint64_t elapsed = 0u;
+                if (profile != NULL) {
+                    started = profile->clock(profile->clock_context);
+                }
+                lw_avx2_gelu_f32(gelu_input, gelu_output, gelu_element_count);
+                if (profile != NULL) {
+                    uint64_t finished = profile->clock(profile->clock_context);
+                    if (finished >= started) {
+                        elapsed = finished - started;
+                    }
+                }
+                profile_fused_gelu(profile, session, node_index, elapsed);
+                node_index += 4u;
+                continue;
+            }
+        }
         if (profile != NULL) {
             started = profile->clock(profile->clock_context);
         }

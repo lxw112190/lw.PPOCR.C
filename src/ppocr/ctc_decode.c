@@ -249,7 +249,8 @@ uint32_t lw_rec_dictionary_max_label_byte_count(const lw_rec_dictionary* diction
 
 static lw_status decode_pass(const lw_rec_dictionary* dictionary, const float* probabilities,
                              uint32_t time_steps, uint32_t class_count, char* text_utf8,
-                             uint64_t* text_bytes, float* score, uint32_t* emitted_count) {
+                             uint64_t text_capacity, uint64_t* text_bytes, float* score,
+                             uint32_t* emitted_count) {
     uint64_t bytes = 0u;
     double score_sum = 0.0;
     uint32_t emitted = 0u;
@@ -291,6 +292,12 @@ static lw_status decode_pass(const lw_rec_dictionary* dictionary, const float* p
                 return LW_STATUS_OUT_OF_BOUNDS;
             }
             if (text_utf8 != NULL) {
+                /* Reserve one byte for the trailing NUL before touching the
+                 * caller buffer.  This also keeps the known-capacity fast path
+                 * safe if its internal capacity guarantee is ever violated. */
+                if (bytes >= text_capacity || label_length >= text_capacity - bytes) {
+                    return LW_STATUS_OUT_OF_BOUNDS;
+                }
                 memcpy(text_utf8 + (size_t)bytes, label, label_length);
             }
             bytes += label_length;
@@ -343,7 +350,7 @@ lw_status lw_rec_ctc_decode_f32(const lw_rec_dictionary* dictionary, const float
         return LW_STATUS_INVALID_SHAPE;
     }
     /* First pass computes exact UTF-8 capacity without touching caller memory. */
-    status = decode_pass(dictionary, probabilities, time_steps, class_count, NULL, &text_bytes,
+    status = decode_pass(dictionary, probabilities, time_steps, class_count, NULL, 0u, &text_bytes,
                          &decoded_score, &decoded_count);
     if (status != LW_STATUS_OK) {
         lw_set_error(error, status, "CTC probabilities contain invalid values");
@@ -364,12 +371,68 @@ lw_status lw_rec_ctc_decode_f32(const lw_rec_dictionary* dictionary, const float
         lw_set_error(error, LW_STATUS_OUT_OF_BOUNDS, "CTC text buffer is too small");
         return LW_STATUS_OUT_OF_BOUNDS;
     }
-    status = decode_pass(dictionary, probabilities, time_steps, class_count, text_utf8, &text_bytes,
-                         &decoded_score, &decoded_count);
+    status = decode_pass(dictionary, probabilities, time_steps, class_count, text_utf8,
+                         text_capacity, &text_bytes, &decoded_score, &decoded_count);
     if (status != LW_STATUS_OK) {
         lw_set_error(error, status, "CTC decoding failed");
         return status;
     }
+    lw_set_error(error, LW_STATUS_OK, "");
+    return LW_STATUS_OK;
+}
+
+lw_status lw_rec_ctc_decode_known_capacity_f32(const lw_rec_dictionary* dictionary,
+                                               const float* probabilities,
+                                               uint64_t probability_element_count,
+                                               uint32_t time_steps, uint32_t class_count,
+                                               char* text_utf8, uint64_t text_capacity,
+                                               uint64_t* required_capacity, float* score,
+                                               uint32_t* emitted_count, lw_error* error) {
+    uint64_t expected_elements;
+    uint64_t text_bytes = 0u;
+    float decoded_score = 0.0f;
+    uint32_t decoded_count = 0u;
+    lw_status status;
+    if (required_capacity != NULL) {
+        *required_capacity = 0u;
+    }
+    if (score != NULL) {
+        *score = 0.0f;
+    }
+    if (emitted_count != NULL) {
+        *emitted_count = 0u;
+    }
+    if (dictionary == NULL || probabilities == NULL || text_utf8 == NULL || text_capacity == 0u ||
+        required_capacity == NULL || score == NULL || emitted_count == NULL || time_steps == 0u ||
+        class_count == 0u) {
+        lw_set_error(error, LW_STATUS_INVALID_ARGUMENT,
+                     "known-capacity CTC decode inputs are required");
+        return LW_STATUS_INVALID_ARGUMENT;
+    }
+    expected_elements = (uint64_t)time_steps * class_count;
+    if (probability_element_count != expected_elements ||
+        class_count != dictionary->entry_count + 2u ||
+        expected_elements > SIZE_MAX / sizeof(float)) {
+        lw_set_error(error, LW_STATUS_INVALID_SHAPE,
+                     "CTC probability shape or dictionary class count is invalid");
+        return LW_STATUS_INVALID_SHAPE;
+    }
+    status = decode_pass(dictionary, probabilities, time_steps, class_count, text_utf8,
+                         text_capacity, &text_bytes, &decoded_score, &decoded_count);
+    if (status != LW_STATUS_OK) {
+        lw_set_error(error, status,
+                     status == LW_STATUS_OUT_OF_BOUNDS
+                         ? "CTC text buffer is too small"
+                         : "CTC probabilities contain invalid values");
+        return status;
+    }
+    if (text_bytes >= SIZE_MAX) {
+        lw_set_error(error, LW_STATUS_OUT_OF_BOUNDS, "CTC text capacity overflows");
+        return LW_STATUS_OUT_OF_BOUNDS;
+    }
+    *required_capacity = text_bytes + 1u;
+    *score = decoded_score;
+    *emitted_count = decoded_count;
     lw_set_error(error, LW_STATUS_OK, "");
     return LW_STATUS_OK;
 }

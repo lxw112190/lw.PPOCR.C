@@ -52,6 +52,7 @@ int main(void) {
     const int32_t unit_conv_input_dimensions[4] = {1, 3, 5, 19};
     const int32_t unit_conv_weight_dimensions[4] = {2, 3, 3, 3};
     const int32_t unit_conv_output_dimensions[4] = {1, 2, 5, 19};
+    const int32_t unit_conv_four_output_dimensions[4] = {1, 4, 5, 19};
     const int32_t unit_conv2x2_weight_dimensions[4] = {2, 3, 2, 2};
     const int32_t unit_conv2x2_kernel[2] = {2, 2};
     const int32_t unit_conv2x2_pads[4] = {0, 0, 1, 1};
@@ -102,6 +103,7 @@ int main(void) {
     const float stride2_bias[3] = {-0.125f, 0.625f, -0.875f};
     const float stride2_four_bias[4] = {-0.125f, 0.625f, -0.875f, 0.375f};
     const float unit_conv_bias[2] = {0.375f, -0.625f};
+    const float unit_conv_four_bias[4] = {0.375f, -0.625f, 0.125f, -0.875f};
     const float unit_depthwise_bias[2] = {0.375f, -0.625f};
     const float pointwise_bias[6] = {0.25f, -0.5f, 1.0f, -1.25f, 0.75f, 0.5f};
     const float packed_pointwise_bias[7] = {0.25f, -0.5f, 1.0f, -1.25f, 0.75f, 0.5f, -0.125f};
@@ -128,6 +130,9 @@ int main(void) {
     float unit_conv_output[190];
     float unit_conv_dispatched_output[190];
     float unit_conv_simd_output[190];
+    float unit_conv_four_weights[108];
+    float unit_conv_four_output[380];
+    float unit_conv_four_simd_output[380];
     float unit_conv2x2_weights[24];
     float unit_conv2x2_output[190];
     float unit_conv2x2_dispatched_output[190];
@@ -270,6 +275,23 @@ int main(void) {
         return 1;
     }
     print_values("unit_stride_conv", unit_conv_output, 190u);
+
+    /* Four output channels exercise the AVX2 unit-stride kernel that reuses
+     * every input vector across four independent NCHW output planes. */
+    fill_values(unit_conv_four_weights, 108u, 23u, 47u, 23, 12.0f);
+    lw_scalar_conv3x3_unit_pad1_f32(unit_conv_input, unit_conv_four_weights, unit_conv_four_bias,
+                                    unit_conv_four_output, unit_conv_input_dimensions,
+                                    unit_conv_four_output_dimensions);
+    if (simd_level >= LW_SIMD_LEVEL_AVX2) {
+        lw_avx2_conv3x3_unit_pad1_f32(unit_conv_input, unit_conv_four_weights, unit_conv_four_bias,
+                                      unit_conv_four_simd_output, unit_conv_input_dimensions,
+                                      unit_conv_four_output_dimensions);
+        if (memcmp(unit_conv_four_output, unit_conv_four_simd_output,
+                   sizeof(unit_conv_four_output)) != 0) {
+            fprintf(stderr, "AVX2 four-output unit-stride Conv differs from scalar output\n");
+            return 1;
+        }
+    }
 
     fill_values(unit_conv2x2_weights, 24u, 23u, 41u, 20, 10.0f);
     lw_scalar_conv2x2_unit_pad_end1_f32(unit_conv_input, unit_conv2x2_weights, unit_conv_bias,

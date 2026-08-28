@@ -175,6 +175,20 @@ and architecture-specific kernels are isolated under `src/simd`.
     session-owned thread pool. Small convolutions stay serial, packed 1x1
     ranges remain four-channel aligned, and DET finishes before the existing
     CLS/REC line workers start, avoiding nested oversubscription.
+38. Known-capacity CTC decoding — complete locally; full OCR supplies the
+    recognizer's documented maximum text capacity, so greedy CTC collapse can
+    write text and compute its exact used capacity in one pass. Size queries
+    and smaller caller buffers retain the original two-pass public contract.
+39. AVX2 GELU superkernel — complete locally; an exact
+    `Div -> Erf -> Add -> Mul -> Mul` chain is fused only when its constants,
+    tensor shapes, private intermediate lifetimes, and AVX2 backend all match.
+    The fused kernel preserves the established piecewise Erf approximation and
+    floating-point operation order while removing four intermediate traversals.
+40. AVX2 unit-stride 3x3 output-channel blocking — complete locally; regular
+    group-1 convolutions with an output count divisible by four reuse each
+    contiguous eight-value input vector across four NCHW output planes. Border
+    pixels retain scalar bounds checks, non-multiple-of-four shapes retain the
+    previous output-stream kernel, and the public model and C ABI are unchanged.
 
 ## Compatibility claims
 

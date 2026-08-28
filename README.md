@@ -22,8 +22,8 @@ The project currently provides:
 - Pure-C BGR preprocessing, perspective crop, UTF-8 CTC decoding, DB-style
   detection postprocessing, and reading-order quadrilateral output.
 - FP32 CPU inference with scalar fallback and runtime-dispatched SSE2/AVX2
-  kernels. DET and individual graph executions are single-threaded; full OCR
-  can recognize independent detected lines in parallel.
+  kernels. Full OCR can use a fixed DET operator pool and then recognize
+  independent detected lines in parallel.
 - Optional .NET Framework 3.5 WinForms, native `cpp-httplib` HTTP/web, and
   offline single-file WebAssembly demos.
 
@@ -42,13 +42,13 @@ On the bundled 500×500 sample image, a Windows x64 release build measured:
 
 | Full OCR mode | Median latency |
 |---|---:|
-| 1 worker | 288.73 ms |
-| 4 workers | 117.92 ms |
+| 1 worker | 264.12 ms |
+| 4 workers | 105.77 ms |
 
-Four workers provide about **2.45×** throughput acceleration for this sample.
+Four workers provide about **2.50×** throughput acceleration for this sample.
 Results vary with CPU, compiler, image content, and system load. The four-worker
-mode parallelizes independent CLS/REC line work after the single-threaded DET
-stage.
+mode applies DET output-channel parallelism before independent CLS/REC line
+work.
 
 ## Build, convert, and test
 
