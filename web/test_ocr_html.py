@@ -76,17 +76,32 @@ def main() -> int:
         assert snapshot["maxLineCapacity"] == 1000, snapshot
         assert 0 < snapshot["maxTextCapacity"] < 1024 * 1024, snapshot
 
-        # The first run may grow WASM memory. Identical later runs must reuse
-        # the source/output buffers and keep the heap size unchanged.
-        stable_heap = snapshot["heapBytes"]
+        # Adaptive-width REC can construct more than one concrete graph width.
+        # Emscripten's linear memory never shrinks, so the first few identical
+        # runs may raise the heap high-water mark even though retired sessions
+        # have already been released. Require the heap to converge instead of
+        # assuming that the first inference is a complete allocator warm-up.
+        initial_heap = int(snapshot["heapBytes"])
+        heap_history = [initial_heap]
         stable_source = snapshot["sourceCapacity"]
-        for _ in range(4):
+        for _ in range(12):
             previous_count = int(snapshot["runCount"])
             page.locator("#run").click()
             snapshot = wait_for_run(page, previous_count)
-            assert snapshot["heapBytes"] == stable_heap, snapshot
             assert snapshot["sourceCapacity"] == stable_source, snapshot
             assert lines.count() == 16
+            heap_history.append(int(snapshot["heapBytes"]))
+
+        # Four unchanged final runs catch persistent heap growth while allowing the
+        # bounded high-water-mark expansion caused by allocator warm-up.
+        assert len(set(heap_history[-4:])) == 1, {
+            "snapshot": snapshot,
+            "heapHistory": heap_history,
+        }
+        assert heap_history[-1] <= initial_heap * 2, {
+            "snapshot": snapshot,
+            "heapHistory": heap_history,
+        }
 
         browser.close()
 
