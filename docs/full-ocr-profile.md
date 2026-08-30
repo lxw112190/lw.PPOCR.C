@@ -28,8 +28,8 @@ The JSON report separates latency from accumulated worker work:
 - `wall_nanoseconds.total` is observed full-request latency;
 - DET preprocess, graph, and postprocess are mutually sequential wall stages;
 - `crop` measures perspective pixel extraction;
-- `line_workers` is the wall time spent processing CLS/REC batches;
-- `line_worker_critical` is the sum of the slowest worker in each batch;
+- `line_workers` is the wall time spent processing the CLS/REC line queue;
+- `line_worker_critical` is the longest accumulated worker time in that queue;
 - `line_dispatch_overhead` is `line_workers - line_worker_critical`, an estimate
   of thread creation, scheduling, joining, and caller-side dispatch overhead;
 - `line_work_nanoseconds` sums CLS/REC work across workers and can exceed wall
@@ -430,12 +430,14 @@ falls from 7,680 to 6,144 (-20.0%). The 960 bucket remains necessary for five
 of the article's eight detected lines, so simply lowering the global width
 would lose long-line capacity.
 
-Full OCR now treats a configured width above 320 as the maximum, selects the
-smallest 192/320/480/640/maximum bucket that fits each crop, and sorts crop
-indices by selected width before filling worker batches. Results are still
-written to their original line slots, preserving reading order. Actual crop
-pixels remain limited to one worker batch rather than caching every crop on a
-page.
+The initial adaptive implementation treated a configured width above 320 as
+the maximum, selected the
+smallest 192/320/480/640/maximum bucket that fits each crop, and sorted crop
+indices by selected width before filling worker batches. Results were still
+written to their original line slots, preserving reading order. The initial
+scheduler limited actual crop pixels to one worker batch. The width-aware
+dynamic scheduler described below later replaced that batch barrier and retains
+all crops for the duration of one request.
 
 Each recognizer keeps its active session plus one previous concrete width. A
 cache hit swaps the two slots; a miss discards only the inactive slot and builds
@@ -698,3 +700,47 @@ AVX2 4x24 pointwise-convolution tile changed complete OCR from 156.42 ms to
 167.82 ms and REC Conv1x1 work from 99.97 ms to 140.11 ms. Both retained output
 checksum `0ebf8b448ab7df47`, but both implementations were removed because they
 made latency worse.
+
+## Width-aware dynamic line scheduling
+
+The adaptive-width OCR path no longer waits for an entire worker-sized crop
+batch before dispatching the next lines. It materializes the request's crops,
+orders them from the largest REC target width to the smallest, and lets each
+worker claim another crop as soon as it finishes. This removes the batch
+barrier that previously left faster workers idle behind the slowest line.
+Result and text slots remain indexed by detection order, so scheduling does
+not change the public result order.
+
+Each worker receives one initial crop whose width is matched to its current
+recognizer session when possible. That affinity preserves the two-session
+adaptive-width cache on pages whose line count does not exceed the worker
+count. The remaining queue uses a Windows interlocked counter, GCC/Clang
+relaxed atomic, or the existing single-worker WebAssembly path. Thread creation
+failure still falls back to synchronous execution, and neither the C ABI nor
+the LWM format changes.
+
+Three interleaved Windows x64 Release pairs used three warmups, twelve measured
+requests, maximum REC width 960, and the saved pre-change executable/DLL:
+
+| Input | Workers | Batch barrier | Dynamic queue | Change |
+|---|---:|---:|---:|---:|
+| Bundled 16-line sample | 4 | 156.43 ms | 141.09 ms | -9.80% |
+| Bundled 16-line sample | 8 | 120.55 ms | 111.05 ms | -7.88% |
+| Long-line article | 4 | 127.36 ms | 121.12 ms | -4.90% |
+| Long-line article | 8 | 108.23 ms | 107.37 ms | -0.80% |
+
+The 16-line sample's mean work after DET fell from 77.92 to 61.24 ms with four
+workers and from 39.83 to 30.66 ms with eight. Peak RSS was effectively flat
+with four workers and rose from 265.72 to 271.83 MiB with eight because all
+sixteen crop images remain available to the queue. On the article, four-worker
+peak RSS rose from 174.55 to 186.54 MiB; the eight-worker run remained flat at
+about 235.4 MiB after width affinity was added.
+
+The existing full-OCR profile and Golden corpus continue to require the
+16-line output, stable operator counts, adaptive-width histogram, and checksum
+`0ebf8b448ab7df47`. The long-line article retained eight lines and its
+previous text output. A proposed 8x8 AVX2 Conv1x1 spatial tile was also tested
+in this pass, but it slowed the isolated pointwise profile by about 5.1% and
+the REC graph by about 3.6%, so it was removed before this scheduler change.
+All 35 Windows x64 and all 35 Windows x86 Release tests passed. WebAssembly was
+left to CI because the local host does not have the WASM toolchain.
