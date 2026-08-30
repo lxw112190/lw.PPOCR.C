@@ -62,7 +62,7 @@ new image or OCR run invalidates the previous export snapshot until recognition
 succeeds. The status bar reports the process architecture and the actual loaded
 `lw_ppocr_c.dll` path, which helps diagnose x86/x64 or stale-DLL problems.
 
-For line-worker A/B tests, select `1`, `2`, or `4` workers, set warm-up and
+For line-worker A/B tests, select `1`, `2`, `4`, or `8` workers, set warm-up and
 measured iteration counts, and click **性能测试**. The image is decoded once;
 only native DET/CLS/REC calls are timed. The **性能记录** tab retains worker
 count, CLS state, line count, mean, P95, minimum, maximum, and decode time so
@@ -157,7 +157,7 @@ Errors contain the same API version/request ID plus stable `error_code` and
 MiB. OCR access is serialized because one native OCR handle is reused, while
 cpp-httplib can process unrelated HTTP work on its worker pool. Inside one OCR
 request, `--ocr-workers 1..16` controls independent CLS/REC line workers; x64
-defaults to 4 and x86 defaults to 1.
+uses the online logical-processor count capped at 8 and x86 uses 1.
 
 The Demo defaults to loopback and provides no TLS, authentication, CORS, rate
 limit, or production access log. Do not bind it to an untrusted network.

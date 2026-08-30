@@ -672,6 +672,11 @@ if(BUILD_TESTING AND NOT EMSCRIPTEN)
         WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
         TIMEOUT 240)
 
+    if(CMAKE_SIZEOF_VOID_P EQUAL 8)
+        set(LW_FULL_OCR_BENCH_WORKERS 8)
+    else()
+        set(LW_FULL_OCR_BENCH_WORKERS 1)
+    endif()
     add_test(
         NAME full_ocr_parallel_benchmark
         COMMAND lw-ocr-benchmark
@@ -680,7 +685,7 @@ if(BUILD_TESTING AND NOT EMSCRIPTEN)
                 "${LW_PPOCR_C_REC_LWM}"
                 "${CMAKE_CURRENT_SOURCE_DIR}/models/ppocrv6-tiny/ppocr_keys.txt"
                 "${LW_PPOCR_C_DET_DEMO_PPM}"
-                1 1 4)
+                1 1 "${LW_FULL_OCR_BENCH_WORKERS}" 960)
     set_tests_properties(full_ocr_parallel_benchmark PROPERTIES TIMEOUT 300)
 
     if(MSVC)

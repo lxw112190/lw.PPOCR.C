@@ -138,6 +138,13 @@ static int run_pipeline(int argc, char** argv) {
         use_classifier > 1u || !read_file(argv[6], &source, &source_bytes))
         return 2;
     lw_ocr_options_init(&options);
+#if INTPTR_MAX > INT32_MAX
+    if (options.worker_count == 0u || options.worker_count > 8u)
+        goto cleanup;
+#else
+    if (options.worker_count != 1u)
+        goto cleanup;
+#endif
     options.classifier.reserved = 1u;
     lw_error_init(&error);
     status = lw_ocr_create(argv[2], argv[3], argv[4], argv[5], &options, &rejected, &error);

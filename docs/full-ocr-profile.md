@@ -619,3 +619,44 @@ On the Windows x64 Release sample (20 iterations, four OCR workers), alternating
 
 The median end-to-end improvement is approximately **4.5%**. The output checksum remained
 `f7bf2108d8c44764`; the full Windows x64 Release suite passed 34/34 tests.
+
+## Hardware-aware native worker default
+
+The reusable full-OCR benchmark accepts a final REC maximum-width argument, so
+the application configuration can be measured directly instead of silently
+falling back to the 320-wide recognizer default:
+
+```text
+lw-ocr-benchmark det.lwm cls.lwm rec.lwm ppocr_keys.txt sample.ppm 3 20 8 960
+```
+
+On the Windows x64 host with 16 logical processors and 16 GiB RAM, one
+20-request pass over the 500x500/16-line fixture produced:
+
+| Workers | Mean OCR | P95 OCR | Throughput | Peak RSS |
+|---:|---:|---:|---:|---:|
+| 4 | 155.91 ms | 166.94 ms | 6.41/s | 162.31 MiB |
+| 6 | 137.60 ms | 144.41 ms | 7.27/s | 197.70 MiB |
+| 8 | 116.70 ms | 121.28 ms | 8.57/s | 231.90 MiB |
+| 10 | 117.12 ms | 126.71 ms | 8.54/s | 238.54 MiB |
+
+Eight workers reduced mean latency by 25.15% relative to four at a cost of
+69.59 MiB additional peak RSS. Ten workers did not improve mean or P95 latency.
+Native 64-bit defaults therefore use the online logical-processor count capped
+at eight; x86 and non-pthread WebAssembly remain at one. Explicit values in
+`1..16` remain supported for applications with different latency and memory
+budgets. The C# selector and HTTP Demo inherit the same default policy.
+
+After the final build, two additional interleaved 20-request checks measured
+4-worker means of 160.71/155.38 ms and 8-worker means of 115.06/115.32 ms.
+Their averages were 158.05 ms and 115.19 ms respectively, a 27.12% reduction;
+peak RSS remained approximately 162.3 MiB and 231.8 MiB. Omitting the benchmark
+worker argument resolved to eight on this 16-logical-processor host.
+
+Two wider-kernel experiments were also rejected during this pass. An AVX2
+eight-row REC MatMul tile changed four-worker complete OCR from 157.07 ms to
+157.45 ms and increased accumulated MatMul time from 54.96 ms to 57.08 ms. An
+AVX2 4x24 pointwise-convolution tile changed complete OCR from 156.42 ms to
+167.82 ms and REC Conv1x1 work from 99.97 ms to 140.11 ms. Both retained output
+checksum `0ebf8b448ab7df47`, but both implementations were removed because they
+made latency worse.

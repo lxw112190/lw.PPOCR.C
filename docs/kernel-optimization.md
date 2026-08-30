@@ -467,8 +467,8 @@ session-owned thread pool for large output-channel-parallel convolutions, then
 crops are processed in batches of at most `worker_count`; Windows uses native
 threads and Linux/macOS use pthreads. These phases never overlap, so DET
 operator parallelism is not nested inside line parallelism. WebAssembly and x86
-default to one worker, while native 64-bit builds default to four. The public
-OCR handle remains non-reentrant.
+default to one worker, while native 64-bit builds use the online logical-
+processor count capped at eight. The public OCR handle remains non-reentrant.
 
 The crop buffer holds only the active batch rather than every detected line,
 so peak crop memory scales with worker count instead of page line count. Thread

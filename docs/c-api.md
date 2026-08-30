@@ -274,11 +274,11 @@ precise implementation and correctness boundary are documented in
 `lw_ocr_create` composes a DET model, an optional CLS model, a REC model, and a
 UTF-8 dictionary. Initialized options enable direction classification, use a
 classifier threshold of `0.9`, limit one perspective crop to 16,000,000 pixels,
-and embed the normal DET/CLS/REC option structures. Native 64-bit builds default
-to four independent CLS/REC workers after DET; x86 and WebAssembly default to
-one. Set `worker_count` in `1..16` to override that policy. Initialize the outer
-and nested structures with `lw_ocr_options_init`; remaining reserved fields
-must stay zero.
+and embed the normal DET/CLS/REC option structures. Native 64-bit builds use
+the online logical-processor count capped at eight independent CLS/REC workers
+after DET; x86 and WebAssembly use one. Set `worker_count` in `1..16` to
+override that policy. Initialize the outer and nested structures with
+`lw_ocr_options_init`; remaining reserved fields must stay zero.
 
 Set `use_direction_classification` to zero to omit CLS. In that mode the CLS
 model path may be null, classification fields are zero, and no 180-degree

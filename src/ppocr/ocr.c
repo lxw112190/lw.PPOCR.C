@@ -25,16 +25,13 @@
 #  include <windows.h>
 #elif !defined(__EMSCRIPTEN__)
 #  include <pthread.h>
+#  include <unistd.h>
 #endif
 
 #define LW_OCR_DEFAULT_MAX_CROP_PIXELS UINT64_C(16000000)
 #define LW_OCR_MAX_WORKER_COUNT 16u
-
-#if INTPTR_MAX > INT32_MAX && !defined(__EMSCRIPTEN__)
-#  define LW_OCR_DEFAULT_WORKER_COUNT 4u
-#else
-#  define LW_OCR_DEFAULT_WORKER_COUNT 1u
-#endif
+#define LW_OCR_DEFAULT_NATIVE_WORKER_CAP 8u
+#define LW_OCR_DEFAULT_NATIVE_WORKER_FALLBACK 4u
 
 typedef struct lw_ocr_crop {
     uint64_t offset;
@@ -93,6 +90,30 @@ static int allocation_fits(uint64_t count, size_t element_size) {
     return element_size != 0u && count <= (uint64_t)(SIZE_MAX / element_size);
 }
 
+static uint32_t default_worker_count(void) {
+#if INTPTR_MAX <= INT32_MAX || defined(__EMSCRIPTEN__)
+    return 1u;
+#else
+    uint32_t processor_count = 0u;
+#  if defined(_WIN32)
+    SYSTEM_INFO system_info;
+    GetSystemInfo(&system_info);
+    processor_count = (uint32_t)system_info.dwNumberOfProcessors;
+#  else
+    long online_processors = sysconf(_SC_NPROCESSORS_ONLN);
+    if (online_processors > 0) {
+        processor_count = online_processors > (long)UINT32_MAX ? UINT32_MAX
+                                                               : (uint32_t)online_processors;
+    }
+#  endif
+    if (processor_count == 0u)
+        processor_count = LW_OCR_DEFAULT_NATIVE_WORKER_FALLBACK;
+    if (processor_count > LW_OCR_DEFAULT_NATIVE_WORKER_CAP)
+        processor_count = LW_OCR_DEFAULT_NATIVE_WORKER_CAP;
+    return processor_count;
+#endif
+}
+
 static void clear_result(lw_ocr_result* result) {
     memset(result, 0, sizeof(*result));
     result->struct_size = (uint32_t)sizeof(*result);
@@ -105,7 +126,7 @@ void lw_ocr_options_init(lw_ocr_options* options) {
     options->struct_size = (uint32_t)sizeof(*options);
     options->use_direction_classification = 1u;
     options->classifier_threshold = 0.9f;
-    options->worker_count = LW_OCR_DEFAULT_WORKER_COUNT;
+    options->worker_count = default_worker_count();
     options->max_crop_pixels = LW_OCR_DEFAULT_MAX_CROP_PIXELS;
     lw_detector_options_init(&options->detector);
     lw_classifier_options_init(&options->classifier);
@@ -175,7 +196,7 @@ lw_status lw_ocr_create(const char* detector_model_path_utf8,
     if (status != LW_STATUS_OK)
         return status;
     if (values.worker_count == 0u)
-        values.worker_count = LW_OCR_DEFAULT_WORKER_COUNT;
+        values.worker_count = default_worker_count();
 #if defined(__EMSCRIPTEN__)
     if (values.worker_count != 1u) {
         lw_set_error(error, LW_STATUS_UNSUPPORTED,

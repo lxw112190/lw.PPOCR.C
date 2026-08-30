@@ -132,7 +132,7 @@ line worker count:
   .\models\rec.lwm `
   .\models\ppocr_keys.txt `
   .\models\sample.ppm `
-  3 10 4
+  3 10 4 960
 ```
 
 ## Consume with CMake

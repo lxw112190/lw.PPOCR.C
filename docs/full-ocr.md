@@ -58,13 +58,14 @@ reused. The default maximum is 16,000,000 pixels per crop; exceeding it returns
 `LW_STATUS_MEMORY_LIMIT`. DET and each nested model retain their own image,
 tensor, workspace, and model-size limits.
 
-Native 64-bit builds default to four workers; x86 and WebAssembly default to
-one. `lw_ocr_options.worker_count` accepts `1..16`. The same budget is used by
-the detector's fixed thread pool for sufficiently large output-channel-parallel
+Native 64-bit builds default to the online logical-processor count capped at
+eight workers; x86 and WebAssembly default to one.
+`lw_ocr_options.worker_count` accepts `1..16`. The same budget is used by the
+detector's fixed thread pool for sufficiently large output-channel-parallel
 convolutions; DET completes before the independent CLS/REC line workers start,
 so these phases do not oversubscribe each other. More workers trade model,
 workspace, crop, and thread resources for lower latency, so applications should
-benchmark `1`, `2`, and `4` on their target CPU and memory budget.
+benchmark `1`, `2`, `4`, and `8` on their target CPU and memory budget.
 
 The detector's DB postprocessor may allocate bounded transient scratch. The
 full-OCR path therefore promises bounded resources and buffer reuse, not zero

@@ -123,7 +123,8 @@ namespace LwPpocrWinForms
             classifierCheck.AutoSize = true;
             classifierCheck.Margin = new Padding(12, 7, 3, 3);
 
-            ConfigureNumeric(workerCountInput, 1, 16, IntPtr.Size == 8 ? 4 : 1, 42);
+            ConfigureNumeric(workerCountInput, 1, 16,
+                IntPtr.Size == 8 ? Math.Min(8, Math.Max(1, Environment.ProcessorCount)) : 1, 42);
             ConfigureNumeric(warmupCountInput, 0, 20, 1, 42);
             ConfigureNumeric(iterationCountInput, 1, 100, 5, 48);
 

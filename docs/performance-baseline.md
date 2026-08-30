@@ -36,12 +36,15 @@ argument is `lw_ocr_options.worker_count`:
   .\build-ninja-c\models\rec.lwm `
   .\models\ppocrv6-tiny\ppocr_keys.txt `
   .\build-ninja-c\models\sample.ppm `
-  3 8 4
+  3 8 4 960
 ```
 
+The final two values select the line-worker count and maximum REC width. Values
+above 320 exercise the adaptive-width path used by the Web and C# applications.
 The JSON separates DET latency from full OCR latency and reports the derived
-crop/CLS/REC remainder, line count, selected worker count, throughput, and RSS.
-Every warm-up and measured call must return identical packed UTF-8 text.
+crop/CLS/REC remainder, line count, selected worker count and REC width,
+throughput, and RSS. Every warm-up and measured call must return identical
+packed UTF-8 text.
 
 The current fixed-pool DET plus line-worker implementation was measured on the
 same local Windows x64 host in five independent processes. Each process used

@@ -179,6 +179,7 @@ static int benchmark_main(int argc, char** argv) {
     uint32_t warmup_count = 2u;
     uint32_t iteration_count = 10u;
     uint32_t worker_count = 0u;
+    uint32_t rec_target_width = 320u;
     uint32_t index;
     uint32_t reference_line_count = 0u;
     uint64_t reference_text_capacity = 0u;
@@ -191,14 +192,15 @@ static int benchmark_main(int argc, char** argv) {
     int exit_code = 1;
 
     memset(&image, 0, sizeof(image));
-    if (argc < 6 || argc > 9 || (argc >= 7 && !parse_positive_u32(argv[6], &warmup_count)) ||
+    if (argc < 6 || argc > 10 || (argc >= 7 && !parse_positive_u32(argv[6], &warmup_count)) ||
         (argc >= 8 && !parse_positive_u32(argv[7], &iteration_count)) ||
         (argc >= 9 && !parse_positive_u32(argv[8], &worker_count)) ||
+        (argc >= 10 && !parse_positive_u32(argv[9], &rec_target_width)) ||
         warmup_count > LW_OCR_BENCHMARK_MAX_ITERATIONS ||
         iteration_count > LW_OCR_BENCHMARK_MAX_ITERATIONS) {
         fprintf(stderr, "usage: lw-ocr-benchmark <det.lwm> <cls.lwm> <rec.lwm> "
                         "<dictionary.txt> <image.ppm> [warmup=2] [iterations=10] "
-                        "[workers=platform-default]\n");
+                        "[workers=platform-default] [rec-target-width=320]\n");
         return 2;
     }
     if (!lw_example_ppm_image_load_bgr(argv[5], &image) || image.width > UINT32_MAX / 3u) {
@@ -226,6 +228,7 @@ static int benchmark_main(int argc, char** argv) {
         if (worker_count != 0u) {
             options.worker_count = worker_count;
         }
+        options.recognizer.target_width = rec_target_width;
         lw_error_init(&error);
         status = lw_ocr_create(argv[1], argv[2], argv[3], argv[4], &options, &ocr, &error);
     }
@@ -298,8 +301,10 @@ static int benchmark_main(int argc, char** argv) {
     memcpy(sorted, detector_times, (size_t)iteration_count * sizeof(*sorted));
     memory_final = process_memory();
     printf("{\"schema_version\":1,\"backend\":\"%s\",", lw_simd_level_name(lw_detect_simd_level()));
-    printf("\"image_width\":%u,\"image_height\":%u,\"lines\":%u,\"workers\":%u,", image.width,
-           image.height, reference_line_count, ocr_info.worker_count);
+    printf("\"image_width\":%u,\"image_height\":%u,\"lines\":%u,\"workers\":%u,"
+           "\"rec_target_width\":%u,",
+           image.width, image.height, reference_line_count, ocr_info.worker_count,
+           rec_target_width);
     printf("\"warmup\":%u,\"iterations\":%u,", warmup_count, iteration_count);
     printf("\"detector_ms\":{\"mean\":%.6f,\"p95\":%.6f},", detector_sum / iteration_count,
            percentile(sorted, iteration_count, 95u));

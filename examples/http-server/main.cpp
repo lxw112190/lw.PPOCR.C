@@ -48,6 +48,12 @@ bool AllocationFits(uint64_t count, size_t element_size) {
     return element_size != 0u && count <= static_cast<uint64_t>(SIZE_MAX / element_size);
 }
 
+uint32_t DefaultOcrWorkers() {
+    lw_ocr_options options;
+    lw_ocr_options_init(&options);
+    return options.worker_count;
+}
+
 struct Config {
     std::string host;
     int port;
@@ -57,7 +63,7 @@ struct Config {
     uint32_t ocr_workers;
 
     Config() : host("127.0.0.1"), port(8787), use_classifier(true),
-               ocr_workers(sizeof(void*) == 4u ? 1u : 4u) {}
+               ocr_workers(DefaultOcrWorkers()) {}
 };
 
 struct BgrImage {

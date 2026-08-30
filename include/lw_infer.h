@@ -229,7 +229,8 @@ typedef struct lw_ocr_options {
     uint32_t use_direction_classification;
     float classifier_threshold;
     /* Number of independent CLS/REC workers used after DET. Zero selects the
-     * platform default (4 on native 64-bit, 1 on x86 and WebAssembly). */
+     * platform default (online CPUs capped at 8 on native 64-bit, 1 on x86
+     * and WebAssembly). */
     uint32_t worker_count;
     uint64_t max_crop_pixels;
     lw_detector_options detector;
