@@ -744,3 +744,44 @@ in this pass, but it slowed the isolated pointwise profile by about 5.1% and
 the REC graph by about 3.6%, so it was removed before this scheduler change.
 All 35 Windows x64 and all 35 Windows x86 Release tests passed. WebAssembly was
 left to CI because the local host does not have the WASM toolchain.
+
+## DET 2x2 ConvTranspose output traffic
+
+The AVX2 `groups=1`, 2x2, stride-2, zero-padding ConvTranspose path now folds
+bias initialization into the first input-channel pass. Each eight-input block
+also keeps all four expanded output vectors in registers until both horizontal
+kernel taps have accumulated. This removes the separate output-plane fill,
+hoists four weight broadcasts out of the spatial loops, and halves repeated
+output loads and stores without using FMA or changing the input-channel
+accumulation order. Both DET ConvTranspose nodes continue to use the same
+general specialized path; the public C ABI and LWM format are unchanged.
+
+Five interleaved 12-request profiles compared the saved pre-change DLL with the
+candidate on the bundled 500x500/16-line sample, eight REC workers, and maximum
+REC width 960:
+
+| Metric per request | Previous path | Reduced-traffic path | Change |
+|---|---:|---:|---:|
+| DET node 236 | 2.18 ms | 1.41 ms | -35.43% |
+| DET graph | 36.51 ms | 35.55 ms | -2.62% |
+| Complete profiled OCR | 102.02 ms | 100.16 ms | -1.82% |
+
+Five additional uninstrumented 20-request pairs measured DET mean latency at
+78.64 ms versus 76.31 ms, a 2.96% reduction. Complete OCR mean changed from
+101.25 ms to 100.87 ms and P95 from 106.29 ms to 105.96 ms; the post-DET worker
+phase makes those smaller differences sensitive to host scheduling. Every run
+retained 16 lines and checksum `0ebf8b448ab7df47`.
+
+Two follow-up changes to regular 3x3 DET node 234 were rejected. Expanding the
+existing four-output AVX2 kernel from one to two spatial vectors slightly
+increased node time from 2.82 ms to 2.83 ms. Masked AVX2 handling of each row's
+right tail changed node time from 2.96 ms to 2.93 ms across seven interleaved
+15-request pairs, but DET graph time increased from 35.98 ms to 36.17 ms and
+complete profiled OCR increased from 102.23 ms to 102.86 ms. Both experiments
+preserved the output checksum, but neither cleared the retention gate, so both
+were removed. Node 234 therefore keeps the previously measured four-output
+kernel rather than accumulating unproven complexity.
+
+All 35 Windows x64 and all 35 Windows x86 Release tests passed with the final
+reduced-traffic implementation. WebAssembly remains covered by CI because the
+local host does not have the WASM toolchain.

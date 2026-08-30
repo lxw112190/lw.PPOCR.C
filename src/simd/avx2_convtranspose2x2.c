@@ -41,21 +41,19 @@ void lw_avx2_conv_transpose2x2_stride2_f32(
             float* output_channel_data =
                 batch_output + (size_t)((uint64_t)output_channel * output_plane);
             __m256 initial = _mm256_set1_ps(bias == NULL ? 0.0f : bias[output_channel]);
-            uint64_t output_index = 0u;
+            const float initial_scalar = bias == NULL ? 0.0f : bias[output_channel];
+            const __m256 zero = _mm256_setzero_ps();
             uint32_t input_channel;
-
-            for (; output_index + 8u <= output_plane; output_index += 8u) {
-                _mm256_storeu_ps(output_channel_data + (size_t)output_index, initial);
-            }
-            for (; output_index < output_plane; ++output_index) {
-                output_channel_data[(size_t)output_index] = bias == NULL ? 0.0f : bias[output_channel];
-            }
 
             for (input_channel = 0u; input_channel < input_channels; ++input_channel) {
                 const float* input_channel_data =
                     batch_input + (size_t)((uint64_t)input_channel * input_plane);
                 const float* channel_weights =
                     weights + (size_t)(((uint64_t)input_channel * output_channels + output_channel) * 4u);
+                const __m256 weight0 = _mm256_set1_ps(channel_weights[0]);
+                const __m256 weight1 = _mm256_set1_ps(channel_weights[1]);
+                const __m256 weight2 = _mm256_set1_ps(channel_weights[2]);
+                const __m256 weight3 = _mm256_set1_ps(channel_weights[3]);
                 uint32_t input_y;
                 for (input_y = 0u; input_y < input_height; ++input_y) {
                     const float* input_row =
@@ -66,7 +64,6 @@ void lw_avx2_conv_transpose2x2_stride2_f32(
                     uint32_t input_x = 0u;
                     for (; input_x + 8u <= input_width; input_x += 8u) {
                         __m256 values = _mm256_loadu_ps(input_row + input_x);
-                        __m256 zero = _mm256_setzero_ps();
                         __m256 even_lo_pairs = _mm256_unpacklo_ps(values, zero);
                         __m256 even_hi_pairs = _mm256_unpackhi_ps(values, zero);
                         __m256 odd_lo_pairs = _mm256_unpacklo_ps(zero, values);
@@ -82,60 +79,52 @@ void lw_avx2_conv_transpose2x2_stride2_f32(
                         __m256 odd_high =
                             _mm256_permute2f128_ps(odd_lo_pairs, odd_hi_pairs, 0x31);
                         uint32_t output_x = input_x * 2u;
-                        __m256 product_low;
-                        __m256 product_high;
+                        __m256 row0_low = input_channel == 0u
+                                              ? initial
+                                              : _mm256_loadu_ps(output_row0 + output_x);
+                        __m256 row0_high = input_channel == 0u
+                                               ? initial
+                                               : _mm256_loadu_ps(output_row0 + output_x + 8u);
+                        __m256 row1_low = input_channel == 0u
+                                              ? initial
+                                              : _mm256_loadu_ps(output_row1 + output_x);
+                        __m256 row1_high = input_channel == 0u
+                                               ? initial
+                                               : _mm256_loadu_ps(output_row1 + output_x + 8u);
 
-                        product_low = _mm256_mul_ps(
-                            even_low, _mm256_set1_ps(channel_weights[0]));
-                        product_high = _mm256_mul_ps(
-                            even_high, _mm256_set1_ps(channel_weights[0]));
-                        _mm256_storeu_ps(output_row0 + output_x,
-                                         _mm256_add_ps(_mm256_loadu_ps(output_row0 + output_x),
-                                                       product_low));
-                        _mm256_storeu_ps(output_row0 + output_x + 8u,
-                                         _mm256_add_ps(_mm256_loadu_ps(output_row0 + output_x + 8u),
-                                                       product_high));
+                        row0_low =
+                            _mm256_add_ps(row0_low, _mm256_mul_ps(even_low, weight0));
+                        row0_high =
+                            _mm256_add_ps(row0_high, _mm256_mul_ps(even_high, weight0));
+                        row0_low = _mm256_add_ps(row0_low, _mm256_mul_ps(odd_low, weight1));
+                        row0_high = _mm256_add_ps(row0_high, _mm256_mul_ps(odd_high, weight1));
+                        row1_low =
+                            _mm256_add_ps(row1_low, _mm256_mul_ps(even_low, weight2));
+                        row1_high =
+                            _mm256_add_ps(row1_high, _mm256_mul_ps(even_high, weight2));
+                        row1_low = _mm256_add_ps(row1_low, _mm256_mul_ps(odd_low, weight3));
+                        row1_high = _mm256_add_ps(row1_high, _mm256_mul_ps(odd_high, weight3));
 
-                        product_low = _mm256_mul_ps(
-                            odd_low, _mm256_set1_ps(channel_weights[1]));
-                        product_high = _mm256_mul_ps(
-                            odd_high, _mm256_set1_ps(channel_weights[1]));
-                        _mm256_storeu_ps(output_row0 + output_x,
-                                         _mm256_add_ps(_mm256_loadu_ps(output_row0 + output_x),
-                                                       product_low));
-                        _mm256_storeu_ps(output_row0 + output_x + 8u,
-                                         _mm256_add_ps(_mm256_loadu_ps(output_row0 + output_x + 8u),
-                                                       product_high));
-
-                        product_low = _mm256_mul_ps(
-                            even_low, _mm256_set1_ps(channel_weights[2]));
-                        product_high = _mm256_mul_ps(
-                            even_high, _mm256_set1_ps(channel_weights[2]));
-                        _mm256_storeu_ps(output_row1 + output_x,
-                                         _mm256_add_ps(_mm256_loadu_ps(output_row1 + output_x),
-                                                       product_low));
-                        _mm256_storeu_ps(output_row1 + output_x + 8u,
-                                         _mm256_add_ps(_mm256_loadu_ps(output_row1 + output_x + 8u),
-                                                       product_high));
-
-                        product_low = _mm256_mul_ps(
-                            odd_low, _mm256_set1_ps(channel_weights[3]));
-                        product_high = _mm256_mul_ps(
-                            odd_high, _mm256_set1_ps(channel_weights[3]));
-                        _mm256_storeu_ps(output_row1 + output_x,
-                                         _mm256_add_ps(_mm256_loadu_ps(output_row1 + output_x),
-                                                       product_low));
-                        _mm256_storeu_ps(output_row1 + output_x + 8u,
-                                         _mm256_add_ps(_mm256_loadu_ps(output_row1 + output_x + 8u),
-                                                       product_high));
+                        _mm256_storeu_ps(output_row0 + output_x, row0_low);
+                        _mm256_storeu_ps(output_row0 + output_x + 8u, row0_high);
+                        _mm256_storeu_ps(output_row1 + output_x, row1_low);
+                        _mm256_storeu_ps(output_row1 + output_x + 8u, row1_high);
                     }
                     for (; input_x < input_width; ++input_x) {
                         float value = input_row[input_x];
                         uint32_t output_x = input_x * 2u;
-                        output_row0[output_x] += value * channel_weights[0];
-                        output_row0[output_x + 1u] += value * channel_weights[1];
-                        output_row1[output_x] += value * channel_weights[2];
-                        output_row1[output_x + 1u] += value * channel_weights[3];
+                        float row00 =
+                            input_channel == 0u ? initial_scalar : output_row0[output_x];
+                        float row01 =
+                            input_channel == 0u ? initial_scalar : output_row0[output_x + 1u];
+                        float row10 =
+                            input_channel == 0u ? initial_scalar : output_row1[output_x];
+                        float row11 =
+                            input_channel == 0u ? initial_scalar : output_row1[output_x + 1u];
+                        output_row0[output_x] = row00 + value * channel_weights[0];
+                        output_row0[output_x + 1u] = row01 + value * channel_weights[1];
+                        output_row1[output_x] = row10 + value * channel_weights[2];
+                        output_row1[output_x + 1u] = row11 + value * channel_weights[3];
                     }
                 }
             }
