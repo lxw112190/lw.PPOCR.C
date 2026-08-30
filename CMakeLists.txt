@@ -877,6 +877,24 @@ if(BUILD_TESTING AND NOT EMSCRIPTEN)
         WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
         TIMEOUT 1200)
 
+    add_test(
+        NAME full_ocr_golden_corpus
+        COMMAND "${Python3_EXECUTABLE}"
+                "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_ocr_golden_corpus.py"
+                --driver "$<TARGET_FILE:ocr-pipeline-driver>"
+                --detector "${LW_PPOCR_C_DET_LWM}"
+                --classifier "${LW_PPOCR_C_CLS_LWM}"
+                --recognizer "${LW_PPOCR_C_REC_LWM}"
+                --dictionary "${CMAKE_CURRENT_SOURCE_DIR}/models/ppocrv6-tiny/ppocr_keys.txt"
+                --detector-source "${LW_PPOCR_C_DET_ONNX}"
+                --classifier-source "${LW_PPOCR_C_CLS_ONNX}"
+                --recognizer-source "${LW_PPOCR_C_REC_ONNX}"
+                --sample "${CMAKE_CURRENT_SOURCE_DIR}/models/ppocrv6-tiny/sample.jpg"
+                --corpus "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/ocr-golden-corpus.json")
+    set_tests_properties(full_ocr_golden_corpus PROPERTIES
+        WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+        TIMEOUT 1200)
+
     add_executable(cls-pipeline-driver tests/cls_pipeline_driver.c)
     target_link_libraries(cls-pipeline-driver PRIVATE lw_ppocr_c)
     if(WIN32)

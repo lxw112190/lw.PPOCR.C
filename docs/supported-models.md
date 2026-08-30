@@ -32,12 +32,13 @@ converted output shape remains `[1,1,H,W]`; every graph output value is compared
 with ONNX Runtime. Separate reference tests cover preprocessing, synthetic
 postprocessing geometry/capacity, and the public real-image box pipeline.
 
-The composed full-OCR gate verifies the sample's 16 reading-order text lines,
+The composed full-OCR gates verify the sample's 16 reading-order text lines,
 DET/CLS/REC metadata, the detected 180-degree correction, exact capacity-query
 semantics, unchanged output buffers on capacity failure, CLS-disabled creation,
-and crop-pixel resource rejection. OpenCV is used only by the test oracle for
-pixel-tolerance comparison of horizontal and tall perspective crops; it is not
-linked into or shipped with the runtime.
+and crop-pixel resource rejection. A separate seven-case versioned corpus adds
+deterministic scale, aspect-ratio, 90-degree rotation, and blank-image coverage,
+including tolerant original-image box coordinates. OpenCV is used only by the
+crop test oracle; it is not linked into or shipped with the runtime.
 
 The deterministic REC conversion currently produces a 4,455,632-byte LWM v0.1
 file with SHA-256

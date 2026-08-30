@@ -132,8 +132,9 @@ be copied as plain text or downloaded as UTF-8 TXT and versioned JSON; see the
 - [REC, CLS, DET, and full-OCR pipelines](docs/rec-pipeline.md),
   [CLS](docs/cls-pipeline.md), [DET](docs/det-pipeline.md), and
   [full OCR](docs/full-ocr.md)
-- [Golden corpus and graph-executor gates](docs/rec-golden-corpus.md) and
-  [graph executor](docs/graph-executor.md)
+- [REC and full-OCR Golden corpora](docs/rec-golden-corpus.md),
+  [full-OCR corpus](docs/full-ocr-golden-corpus.md), and
+  [graph-executor gates](docs/graph-executor.md)
 - [Performance baseline, profile, and optimization notes](docs/performance-baseline.md),
   [full-OCR profile](docs/full-ocr-profile.md), and
   [kernel optimization](docs/kernel-optimization.md)

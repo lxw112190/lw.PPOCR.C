@@ -82,8 +82,16 @@ reentrant: concurrent requests still require separate OCR handles.
 - direction classification disabled with a null CLS path;
 - nested option validation and crop-pixel resource rejection.
 
+`full_ocr_golden_corpus` separately runs seven versioned full-pipeline cases
+covering scale, non-square input, a 90-degree image rotation, classifier on/off,
+and a valid zero-line blank image. It pins the source/model/dictionary hashes,
+freezes exact text and ordering, and checks score thresholds, classifier
+metadata, coordinate bounds, polygon area, and tolerant original-image boxes.
+See [`full-ocr-golden-corpus.md`](full-ocr-golden-corpus.md).
+
 `c_demo_full_ocr` executes the public PPM Demo. `staged_package` installs the
 project into a clean directory, builds the standalone installed consumer, and
 runs the installed binary with installed models and data. These tests prove the
 current exact model/sample contract, not broad OCR accuracy across arbitrary
-documents or languages.
+documents or languages. The derived full-OCR corpus still has only one source
+image and does not change that limitation.

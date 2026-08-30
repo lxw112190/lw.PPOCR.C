@@ -261,6 +261,83 @@ cleanup:
     return return_code;
 }
 
+static int run_golden(int argc, char** argv) {
+    lw_ocr_options options;
+    lw_ocr_info info;
+    lw_ocr_result result;
+    lw_ocr* ocr = NULL;
+    lw_ocr_line* lines = NULL;
+    char* text = NULL;
+    uint8_t* source = NULL;
+    size_t source_bytes = 0u;
+    uint32_t width;
+    uint32_t height;
+    uint32_t stride;
+    uint32_t use_classifier;
+    uint32_t index;
+    lw_error error;
+    lw_status status;
+    int return_code = 1;
+    if (argc != 11 || !parse_u32(argv[7], &width) || !parse_u32(argv[8], &height) ||
+        !parse_u32(argv[9], &stride) || !parse_u32(argv[10], &use_classifier) ||
+        use_classifier > 1u || !read_file(argv[6], &source, &source_bytes))
+        return 2;
+
+    lw_ocr_options_init(&options);
+    options.use_direction_classification = use_classifier;
+    options.detector.limit_side_length = 320u;
+    lw_error_init(&error);
+    status = lw_ocr_create(argv[2], use_classifier != 0u ? argv[3] : NULL, argv[4], argv[5],
+                           &options, &ocr, &error);
+    if (status != LW_STATUS_OK) {
+        fprintf(stderr, "OCR create failed: %s: %s\n", lw_status_string(status), error.message);
+        goto cleanup;
+    }
+    lw_ocr_info_init(&info);
+    status = lw_ocr_get_info(ocr, &info);
+    if (status != LW_STATUS_OK || info.max_line_capacity == 0u ||
+        info.max_text_capacity == 0u || info.max_text_capacity > SIZE_MAX)
+        goto cleanup;
+    lines = (lw_ocr_line*)calloc(info.max_line_capacity, sizeof(*lines));
+    text = (char*)malloc((size_t)info.max_text_capacity);
+    if (lines == NULL || text == NULL)
+        goto cleanup;
+
+    lw_ocr_result_init(&result);
+    lw_error_init(&error);
+    status = lw_ocr_run_bgr_u8(ocr, source, source_bytes, width, height, stride, lines,
+                               info.max_line_capacity, text, info.max_text_capacity, &result,
+                               &error);
+    if (status != LW_STATUS_OK) {
+        fprintf(stderr, "OCR run failed: %s: %s\n", lw_status_string(status), error.message);
+        goto cleanup;
+    }
+    printf("lines=%u detected=%u text_bytes=%llu resized=%ux%u cls=%u\n", result.line_count,
+           result.detected_count, (unsigned long long)result.required_text_capacity,
+           result.detector_resized_width, result.detector_resized_height, use_classifier);
+    for (index = 0u; index < result.line_count; ++index) {
+        const lw_ocr_line* line = &lines[index];
+        if (line->text_offset + line->text_length >= result.required_text_capacity ||
+            text[line->text_offset + line->text_length] != '\0')
+            goto cleanup;
+        printf("line=%u det=%.9g rec=%.9g cls_label=%u cls=%.9g rotation=%u "
+               "box=%.9g,%.9g,%.9g,%.9g,%.9g,%.9g,%.9g,%.9g text=%s\n",
+               index, (double)line->box.score, (double)line->recognition_score,
+               line->classification_label, (double)line->classification_score,
+               line->applied_rotation_degrees, (double)line->box.x1, (double)line->box.y1,
+               (double)line->box.x2, (double)line->box.y2, (double)line->box.x3,
+               (double)line->box.y3, (double)line->box.x4, (double)line->box.y4,
+               text + line->text_offset);
+    }
+    return_code = 0;
+cleanup:
+    free(text);
+    free(lines);
+    free(source);
+    lw_ocr_free(ocr);
+    return return_code;
+}
+
 int main(int argc, char** argv) {
     if (argc < 2)
         return 2;
@@ -268,5 +345,7 @@ int main(int argc, char** argv) {
         return run_crop(argc, argv);
     if (strcmp(argv[1], "pipeline") == 0)
         return run_pipeline(argc, argv);
+    if (strcmp(argv[1], "golden") == 0)
+        return run_golden(argc, argv);
     return 2;
 }
