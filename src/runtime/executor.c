@@ -419,6 +419,19 @@ static lw_status dispatch_node(lw_session* session, const uint8_t* node, uint32_
         if (batch_count > UINT32_MAX) {
             return LW_STATUS_OUT_OF_BOUNDS;
         }
+        if (simd_level >= LW_SIMD_LEVEL_AVX2 && session->prepared_nodes != NULL &&
+            session->prepared_nodes[node_index].kind == LW_PREPARED_NODE_MATMUL_PACKED16) {
+            const lw_prepared_node* prepared = &session->prepared_nodes[node_index];
+            const float* packed_weights =
+                (const float*)(const void*)(session->packed_weights +
+                                            (size_t)prepared->packed_weight_offset);
+            lw_avx2_packed_matmul_shared_f32(
+                inputs[0], packed_weights, output, (uint32_t)batch_count,
+                (uint32_t)input_tensors[0]->dimensions[rank - 2u],
+                (uint32_t)input_tensors[0]->dimensions[rank - 1u],
+                (uint32_t)input_tensors[1]->dimensions[1]);
+            return LW_STATUS_OK;
+        }
         return lw_matmul_shared_f32(inputs[0], inputs[1], output, (uint32_t)batch_count,
                                     (uint32_t)input_tensors[0]->dimensions[rank - 2u],
                                     (uint32_t)input_tensors[0]->dimensions[rank - 1u],

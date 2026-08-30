@@ -620,6 +620,44 @@ On the Windows x64 Release sample (20 iterations, four OCR workers), alternating
 The median end-to-end improvement is approximately **4.5%**. The output checksum remained
 `f7bf2108d8c44764`; the full Windows x64 Release suite passed 34/34 tests.
 
+## Session-packed 16-column MatMul weights
+
+The recognizer's terminal projection multiplies `[1,120,80]` by one constant
+`[80,6906]` matrix. On x64 AVX2 sessions, that constant matrix is now packed
+once from canonical `[K][N]` order into 16-column panels. A 4x16 microkernel
+then loads each packed pair of AVX2 vectors once for four output rows. The
+inner-dimension accumulation order is unchanged and FMA remains disabled.
+Irregular, small, x86, non-AVX2, and WebAssembly sessions retain the canonical
+MatMul path; neither LWM nor the public C ABI changes.
+
+Seven interleaved width-960 REC profiles, five iterations per sample, measured:
+
+| Metric per recognition | Canonical B | Packed B | Change |
+|---|---:|---:|---:|
+| Mean MatMul node invocation | 2.10 ms | 0.83 ms | -60.5% |
+| Wide `80 x 6906` node | 4.10 ms | 1.55 ms | -62.2% |
+| Profiled REC graph total | 23.46 ms | 20.85 ms | -11.1% |
+
+Three additional interleaved full-OCR pairs used three warmups, ten measured
+requests, eight REC workers, target width 960, and the 500x500/16-line sample:
+
+| Metric | Canonical B | Packed B | Change |
+|---|---:|---:|---:|
+| Complete OCR mean | 117.01 ms | 109.42 ms | -6.49% |
+| Complete OCR P95 | 123.95 ms | 116.27 ms | -6.19% |
+| Work after DET | 38.65 ms | 30.81 ms | -20.28% |
+| Peak RSS | 231.96 MiB | 265.65 MiB | +33.69 MiB |
+
+Every run returned 16 lines. The packed scalar and AVX2 kernels are required
+to be byte-identical to canonical MatMul for a shape with a partial final
+panel. The REC graph/pipeline and full-OCR Golden corpus passed, as did all
+35 Windows x64 and all 35 Windows x86 Release tests.
+
+A cache-level Conv1x1 spatial-blocking prototype was evaluated immediately
+before this change. It reduced the isolated pointwise operator by about 13.3%
+but improved full OCR by only about 0.35%, below the 2% retention gate, so the
+prototype was removed.
+
 ## Hardware-aware native worker default
 
 The reusable full-OCR benchmark accepts a final REC maximum-width argument, so

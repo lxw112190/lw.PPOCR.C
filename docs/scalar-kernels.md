@@ -89,18 +89,24 @@ then scans each shared weight row contiguously across columns. This reuses the
 weight row across the block while preserving the inner-dimension accumulation
 order for every output element. It adds no allocation or threads.
 
-The executor now dispatches this MatMul contract through isolated AVX2 and SSE2
-kernels on x86/x64 CPUs. The AVX2 and SSE2 loops process eight and four
-independent columns per instruction respectively and use the same scalar tail.
-AVX2 selection requires the CPUID AVX/OSXSAVE bits, XGETBV confirmation that the
-operating system saves XMM/YMM state, and the CPUID AVX2 bit. x64 selects SSE2
-as its minimum SIMD level; x86 validates SSE2 with CPUID; non-x86 and
-unsupported x86 CPUs retain the scalar implementation. The AVX2 kernel uses
-separate multiply and add instructions rather than FMA, preserving the inner
-dimension accumulation order. All three paths are allocation-free and
-single-threaded. On supported test hardware, the reference driver executes the
-scalar, SSE2, AVX2, and automatic-dispatch paths and requires byte-identical
-output before comparing it with NumPy.
+The executor dispatches this MatMul contract through isolated AVX2 and SSE2
+kernels on x86/x64 CPUs. The canonical AVX2 and SSE2 loops process eight and
+four independent columns per instruction respectively and use the same scalar
+tail. AVX2 selection requires the CPUID AVX/OSXSAVE bits, XGETBV confirmation
+that the operating system saves XMM/YMM state, and the CPUID AVX2 bit. x64
+selects SSE2 as its minimum SIMD level; x86 validates SSE2 with CPUID; non-x86
+and unsupported x86 CPUs retain the scalar implementation.
+
+For an x64 AVX2 MatMul with a constant B matrix, at least four rows, K at least
+64, N at least 1024, and a row count divisible by four, session construction
+packs B once into `[ceil(N/16)][K][16]`. The execution kernel accumulates four
+rows and 16 columns together. Padding exists only in the private session cache;
+the canonical LWM payload remains unchanged. Other targets and shapes allocate
+no MatMul cache and use the canonical path. Both kernels use separate multiply
+and add instructions rather than FMA, preserving inner-dimension accumulation
+order. A partial-panel direct test requires canonical, scalar-packed, and AVX2
+packed output to be byte-identical before the graph, pipeline, and Golden-corpus
+tests run.
 
 The Conv implementation is a direct scalar loop with no im2col allocation. A
 single grouped implementation covers the model's normal, grouped, and

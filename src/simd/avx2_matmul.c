@@ -1,5 +1,7 @@
 #include "simd_kernels.h"
 
+#include "packed_matmul_internal.h"
+
 #include <stddef.h>
 
 #if defined(_M_IX86) || defined(_M_X64) || defined(__i386__) || defined(__x86_64__)
@@ -138,4 +140,109 @@ void lw_avx2_matmul_shared_f32(
             row = row_end;
         }
     }
+}
+
+#if LW_COMPILES_AVX2 && (defined(__GNUC__) || defined(__clang__))
+__attribute__((target("avx2,no-fma")))
+#endif
+void lw_avx2_packed_matmul_shared_f32(
+    const float* input,
+    const float* packed_weights,
+    float* output,
+    uint32_t batch_count,
+    uint32_t rows,
+    uint32_t inner_dimension,
+    uint32_t columns) {
+#if LW_COMPILES_AVX2 && (defined(_M_X64) || defined(__x86_64__))
+    uint32_t batch;
+    const uint32_t column_panels =
+        (columns + LW_PACKED_MATMUL_COLUMN_TILE - 1u) / LW_PACKED_MATMUL_COLUMN_TILE;
+    if (rows < 4u || rows % 4u != 0u) {
+        lw_scalar_packed_matmul_shared_f32(input, packed_weights, output, batch_count, rows,
+                                           inner_dimension, columns);
+        return;
+    }
+    for (batch = 0u; batch < batch_count; ++batch) {
+        uint32_t row;
+        for (row = 0u; row + 4u <= rows; row += 4u) {
+            uint32_t column_panel;
+            for (column_panel = 0u; column_panel < column_panels; ++column_panel) {
+                __m256 accumulator0_low = _mm256_setzero_ps();
+                __m256 accumulator0_high = _mm256_setzero_ps();
+                __m256 accumulator1_low = _mm256_setzero_ps();
+                __m256 accumulator1_high = _mm256_setzero_ps();
+                __m256 accumulator2_low = _mm256_setzero_ps();
+                __m256 accumulator2_high = _mm256_setzero_ps();
+                __m256 accumulator3_low = _mm256_setzero_ps();
+                __m256 accumulator3_high = _mm256_setzero_ps();
+                uint32_t inner;
+                for (inner = 0u; inner < inner_dimension; ++inner) {
+                    const float* packed =
+                        packed_weights +
+                        (size_t)(((uint64_t)column_panel * inner_dimension + inner) *
+                                 LW_PACKED_MATMUL_COLUMN_TILE);
+                    const uint64_t input_base =
+                        ((uint64_t)batch * rows + row) * inner_dimension + inner;
+                    const __m256 weight_low = _mm256_loadu_ps(packed);
+                    const __m256 weight_high = _mm256_loadu_ps(packed + 8u);
+                    __m256 input_value = _mm256_set1_ps(input[(size_t)input_base]);
+                    accumulator0_low = _mm256_add_ps(
+                        accumulator0_low, _mm256_mul_ps(input_value, weight_low));
+                    accumulator0_high = _mm256_add_ps(
+                        accumulator0_high, _mm256_mul_ps(input_value, weight_high));
+                    input_value =
+                        _mm256_set1_ps(input[(size_t)(input_base + inner_dimension)]);
+                    accumulator1_low = _mm256_add_ps(
+                        accumulator1_low, _mm256_mul_ps(input_value, weight_low));
+                    accumulator1_high = _mm256_add_ps(
+                        accumulator1_high, _mm256_mul_ps(input_value, weight_high));
+                    input_value =
+                        _mm256_set1_ps(input[(size_t)(input_base + 2u * inner_dimension)]);
+                    accumulator2_low = _mm256_add_ps(
+                        accumulator2_low, _mm256_mul_ps(input_value, weight_low));
+                    accumulator2_high = _mm256_add_ps(
+                        accumulator2_high, _mm256_mul_ps(input_value, weight_high));
+                    input_value =
+                        _mm256_set1_ps(input[(size_t)(input_base + 3u * inner_dimension)]);
+                    accumulator3_low = _mm256_add_ps(
+                        accumulator3_low, _mm256_mul_ps(input_value, weight_low));
+                    accumulator3_high = _mm256_add_ps(
+                        accumulator3_high, _mm256_mul_ps(input_value, weight_high));
+                }
+                {
+                    const uint32_t column_base = column_panel * LW_PACKED_MATMUL_COLUMN_TILE;
+                    const uint32_t valid_columns =
+                        columns - column_base < LW_PACKED_MATMUL_COLUMN_TILE
+                            ? columns - column_base
+                            : LW_PACKED_MATMUL_COLUMN_TILE;
+                    __m256 accumulators[8] = {
+                        accumulator0_low, accumulator0_high, accumulator1_low, accumulator1_high,
+                        accumulator2_low, accumulator2_high, accumulator3_low, accumulator3_high};
+                    uint32_t current_row;
+                    for (current_row = 0u; current_row < 4u; ++current_row) {
+                        float* destination =
+                            output + (size_t)(((uint64_t)batch * rows + row + current_row) *
+                                                  columns +
+                                              column_base);
+                        if (valid_columns == LW_PACKED_MATMUL_COLUMN_TILE) {
+                            _mm256_storeu_ps(destination, accumulators[current_row * 2u]);
+                            _mm256_storeu_ps(destination + 8u,
+                                             accumulators[current_row * 2u + 1u]);
+                        } else {
+                            float values[LW_PACKED_MATMUL_COLUMN_TILE];
+                            _mm256_storeu_ps(values, accumulators[current_row * 2u]);
+                            _mm256_storeu_ps(values + 8u, accumulators[current_row * 2u + 1u]);
+                            for (uint32_t lane = 0u; lane < valid_columns; ++lane) {
+                                destination[lane] = values[lane];
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+#else
+    lw_scalar_packed_matmul_shared_f32(input, packed_weights, output, batch_count, rows,
+                                       inner_dimension, columns);
+#endif
 }

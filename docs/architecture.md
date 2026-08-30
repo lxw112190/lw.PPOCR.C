@@ -194,6 +194,14 @@ and architecture-specific kernels are isolated under `src/simd`.
     established left-to-right sum order for score compatibility. Short axes,
     strided axes, non-AVX2 hosts, and all public ABI contracts retain the
     original scalar implementation.
+42. REC MatMul four-row tiling — complete locally; the x64 AVX2 wide-matrix
+    path applies each loaded eight-column weight vector to four output rows,
+    preserving the established inner-dimension accumulation order.
+43. Session-packed wide MatMul weights — complete locally; eligible constant B
+    matrices are packed once into 16-column panels and consumed by an x64 AVX2
+    4x16 microkernel. x86, non-AVX2, small and irregular shapes retain the
+    canonical layout. The cache is session-owned and changes neither LWM nor
+    the public C ABI.
 
 ## Compatibility claims
 
@@ -205,10 +213,3 @@ Win7-compatible cpp-httplib header. These new binaries are not themselves
 claimed as Win7-verified until the same physical-machine checks are repeated.
 Windows x64 and Linux x64 are the first implementation targets. Linux ARM64 is
 a planned primary target, not yet CI-verified.
-### 42. REC MatMul four-row tiled AVX2 path
-
-For the recognizer's wide terminal matrix multiplication (large class dimension), the AVX2
-backend now tiles eight output columns while accumulating four rows together. Each weight vector
-is loaded once for four rows, reducing repeated weight traffic while preserving the original
-left-to-right accumulation order. Smaller or irregular matrix shapes continue to use the generic
-kernel.

@@ -1,5 +1,6 @@
 #include "scalar_kernels.h"
 #include "cpu_features.h"
+#include "packed_matmul_internal.h"
 #include "simd_kernels.h"
 
 #include <inttypes.h>
@@ -97,6 +98,11 @@ int main(void) {
     float matmul_output[30];
     float matmul_dispatched_output[30];
     float matmul_simd_output[30];
+    float packed_matmul_input[256];
+    float packed_matmul_weights[1088];
+    float packed_matmul_weights_buffer[2048];
+    float packed_matmul_reference[68];
+    float packed_matmul_output[68];
     uint32_t index;
     lw_simd_level simd_level;
     lw_status status;
@@ -262,6 +268,37 @@ int main(void) {
         return 1;
     }
     print_values("matmul_dispatched", matmul_dispatched_output, 30u);
+
+    for (index = 0u; index < 256u; ++index) {
+        packed_matmul_input[index] = (float)((int32_t)((index * 11u) % 29u) - 14) / 13.0f;
+    }
+    for (index = 0u; index < 1088u; ++index) {
+        packed_matmul_weights[index] =
+            (float)((int32_t)((index * 17u) % 37u) - 18) / 19.0f;
+    }
+    status = lw_scalar_matmul_shared_f32(packed_matmul_input, packed_matmul_weights,
+                                         packed_matmul_reference, 1u, 4u, 64u, 17u);
+    if (!expect_status("packed matmul reference", status, LW_STATUS_OK)) {
+        return 1;
+    }
+    lw_pack_matmul_weights_f32(packed_matmul_weights, 64u, 17u,
+                               packed_matmul_weights_buffer);
+    lw_scalar_packed_matmul_shared_f32(packed_matmul_input, packed_matmul_weights_buffer,
+                                       packed_matmul_output, 1u, 4u, 64u, 17u);
+    if (memcmp(packed_matmul_reference, packed_matmul_output,
+               sizeof(packed_matmul_reference)) != 0) {
+        fprintf(stderr, "scalar packed MatMul differs from canonical output\n");
+        return 1;
+    }
+    if (simd_level >= LW_SIMD_LEVEL_AVX2) {
+        lw_avx2_packed_matmul_shared_f32(packed_matmul_input, packed_matmul_weights_buffer,
+                                         packed_matmul_output, 1u, 4u, 64u, 17u);
+        if (memcmp(packed_matmul_reference, packed_matmul_output,
+                   sizeof(packed_matmul_reference)) != 0) {
+            fprintf(stderr, "AVX2 packed MatMul differs from canonical output\n");
+            return 1;
+        }
+    }
 
     status = lw_scalar_transpose_f32(tensor_input, transpose_output, 3u, transpose_input_dimensions,
                                      3u, permutation, invalid_transpose_output);

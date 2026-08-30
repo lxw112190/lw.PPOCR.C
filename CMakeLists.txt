@@ -103,6 +103,7 @@ add_custom_target(convert_det_model ALL
 
 set(LW_PPOCR_C_SOURCES
     src/kernels/packed_conv.c
+    src/kernels/packed_matmul.c
     src/kernels/scalar_activation.c
     src/kernels/scalar_conv.c
     src/kernels/scalar_elementwise.c

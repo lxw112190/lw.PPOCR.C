@@ -13,7 +13,8 @@
 
 typedef enum lw_prepared_node_kind {
     LW_PREPARED_NODE_NONE = 0,
-    LW_PREPARED_NODE_CONV1X1_PACKED4 = 1
+    LW_PREPARED_NODE_CONV1X1_PACKED4 = 1,
+    LW_PREPARED_NODE_MATMUL_PACKED16 = 2
 } lw_prepared_node_kind;
 
 typedef struct lw_prepared_node {

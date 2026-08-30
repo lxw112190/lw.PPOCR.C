@@ -7,6 +7,7 @@
  */
 #include "lwm_read.h"
 #include "packed_conv_internal.h"
+#include "packed_matmul_internal.h"
 #include "parallel_internal.h"
 #include "cpu_features.h"
 
@@ -20,6 +21,7 @@
 #define LW_DEFAULT_MAX_WORKSPACE_SIZE (UINT64_C(512) * UINT64_C(1024) * UINT64_C(1024))
 #define LW_DEFAULT_MAX_TENSOR_SIZE (UINT64_C(256) * UINT64_C(1024) * UINT64_C(1024))
 #define LW_OP_CONV 1u
+#define LW_OP_MATMUL 14u
 
 static void* workspace_allocate(size_t size) {
 #if defined(_WIN32)
@@ -119,6 +121,60 @@ static int prepared_pointwise_node(const lw_session* session, lw_simd_level simd
     return 1;
 }
 
+static int prepared_matmul_node(const lw_session* session, lw_simd_level simd_level,
+                                uint32_t node_index, uint32_t* weight_tensor_index,
+                                uint64_t* packed_weight_count) {
+#if defined(_M_X64) || defined(__x86_64__)
+    const lw_model* model = session->model;
+    const uint8_t* node =
+        model->bytes + (size_t)model->node_offset + (size_t)node_index * LWM_V0_NODE_SIZE;
+    uint32_t input_index;
+    uint32_t weights_index;
+    uint32_t output_index;
+    const lw_runtime_tensor* input;
+    const lw_runtime_tensor* weights;
+    const lw_runtime_tensor* output;
+    uint32_t rows;
+    uint32_t inner_dimension;
+    uint32_t columns;
+    if (simd_level < LW_SIMD_LEVEL_AVX2 || lwm_read_u16(node) != LW_OP_MATMUL ||
+        lwm_read_u16(node + 2u) != 2u) {
+        return 0;
+    }
+    input_index = lwm_read_u32(node + 8u);
+    weights_index = lwm_read_u32(node + 12u);
+    output_index = lwm_read_u32(node + 40u);
+    input = &session->tensors[input_index];
+    weights = &session->tensors[weights_index];
+    output = &session->tensors[output_index];
+    if (input->dtype != LW_DTYPE_F32 || input->rank < 2u ||
+        weights->dtype != LW_DTYPE_F32 || weights->rank != 2u ||
+        (weights->flags & LWM_V0_TENSOR_FLAG_CONSTANT) == 0u || output->dtype != LW_DTYPE_F32 ||
+        output->rank != input->rank) {
+        return 0;
+    }
+    rows = (uint32_t)input->dimensions[input->rank - 2u];
+    inner_dimension = (uint32_t)input->dimensions[input->rank - 1u];
+    columns = (uint32_t)weights->dimensions[1];
+    if (rows < 4u || rows % 4u != 0u || inner_dimension < 64u || columns < 1024u ||
+        weights->dimensions[0] != (int32_t)inner_dimension ||
+        output->dimensions[output->rank - 2u] != (int32_t)rows ||
+        output->dimensions[output->rank - 1u] != (int32_t)columns ||
+        !lw_packed_matmul_weight_count(inner_dimension, columns, packed_weight_count)) {
+        return 0;
+    }
+    *weight_tensor_index = weights_index;
+    return 1;
+#else
+    (void)session;
+    (void)simd_level;
+    (void)node_index;
+    (void)weight_tensor_index;
+    (void)packed_weight_count;
+    return 0;
+#endif
+}
+
 static const float* constant_f32_data(const lw_session* session, uint32_t tensor_index) {
     const lw_model* model = session->model;
     const uint8_t* disk =
@@ -127,7 +183,7 @@ static const float* constant_f32_data(const lw_session* session, uint32_t tensor
     return (const float*)(const void*)(model->bytes + (size_t)data_offset);
 }
 
-static lw_status prepare_pointwise_weights(lw_session* session, lw_error* error) {
+static lw_status prepare_constant_weights(lw_session* session, lw_error* error) {
     const lw_model* model = session->model;
     const lw_simd_level simd_level = lw_detect_simd_level();
     uint64_t total_bytes = 0u;
@@ -146,22 +202,26 @@ static lw_status prepare_pointwise_weights(lw_session* session, lw_error* error)
         uint64_t packed_weight_count;
         uint64_t packed_bytes;
         lw_prepared_node* prepared = &session->prepared_nodes[node_index];
-        if (!prepared_pointwise_node(session, simd_level, node_index, &weight_tensor_index,
-                                     &packed_weight_count)) {
+        if (prepared_pointwise_node(session, simd_level, node_index, &weight_tensor_index,
+                                    &packed_weight_count)) {
+            prepared->kind = LW_PREPARED_NODE_CONV1X1_PACKED4;
+        } else if (prepared_matmul_node(session, simd_level, node_index, &weight_tensor_index,
+                                        &packed_weight_count)) {
+            prepared->kind = LW_PREPARED_NODE_MATMUL_PACKED16;
+        } else {
             continue;
         }
         (void)weight_tensor_index;
         packed_bytes = packed_weight_count * sizeof(float);
         if (!align_up_64(total_bytes, &total_bytes)) {
-            lw_set_error(error, LW_STATUS_OUT_OF_BOUNDS, "packed pointwise alignment overflows");
+            lw_set_error(error, LW_STATUS_OUT_OF_BOUNDS, "packed weight alignment overflows");
             return LW_STATUS_OUT_OF_BOUNDS;
         }
         if (total_bytes > UINT64_MAX - packed_bytes ||
             !uint64_fits_size_t(total_bytes + packed_bytes)) {
-            lw_set_error(error, LW_STATUS_OUT_OF_BOUNDS, "packed pointwise weights overflow");
+            lw_set_error(error, LW_STATUS_OUT_OF_BOUNDS, "packed weights overflow");
             return LW_STATUS_OUT_OF_BOUNDS;
         }
-        prepared->kind = LW_PREPARED_NODE_CONV1X1_PACKED4;
         prepared->packed_weight_offset = total_bytes;
         prepared->packed_weight_count = packed_weight_count;
         total_bytes += packed_bytes;
@@ -170,12 +230,12 @@ static lw_status prepare_pointwise_weights(lw_session* session, lw_error* error)
         return LW_STATUS_OK;
     }
     if (!align_up_64(total_bytes, &total_bytes) || !uint64_fits_size_t(total_bytes)) {
-        lw_set_error(error, LW_STATUS_OUT_OF_BOUNDS, "packed pointwise allocation overflows");
+        lw_set_error(error, LW_STATUS_OUT_OF_BOUNDS, "packed weight allocation overflows");
         return LW_STATUS_OUT_OF_BOUNDS;
     }
     session->packed_weights = (uint8_t*)workspace_allocate((size_t)total_bytes);
     if (session->packed_weights == NULL) {
-        lw_set_error(error, LW_STATUS_OUT_OF_MEMORY, "unable to allocate packed pointwise weights");
+        lw_set_error(error, LW_STATUS_OUT_OF_MEMORY, "unable to allocate packed weights");
         return LW_STATUS_OUT_OF_MEMORY;
     }
     session->packed_weight_bytes = (size_t)total_bytes;
@@ -186,20 +246,30 @@ static lw_status prepare_pointwise_weights(lw_session* session, lw_error* error)
         const uint8_t* node;
         uint32_t input_index;
         uint32_t output_index;
-        if (prepared->kind != LW_PREPARED_NODE_CONV1X1_PACKED4 ||
-            !prepared_pointwise_node(session, simd_level, node_index, &weight_tensor_index,
-                                     &packed_weight_count) ||
-            packed_weight_count != prepared->packed_weight_count) {
-            continue;
-        }
         node = model->bytes + (size_t)model->node_offset + (size_t)node_index * LWM_V0_NODE_SIZE;
-        input_index = lwm_read_u32(node + 8u);
-        output_index = lwm_read_u32(node + 40u);
-        lw_pack_conv1x1_weights_f32(
-            constant_f32_data(session, weight_tensor_index),
-            (uint32_t)session->tensors[input_index].dimensions[1],
-            (uint32_t)session->tensors[output_index].dimensions[1],
-            (float*)(void*)(session->packed_weights + (size_t)prepared->packed_weight_offset));
+        if (prepared->kind == LW_PREPARED_NODE_CONV1X1_PACKED4 &&
+            prepared_pointwise_node(session, simd_level, node_index, &weight_tensor_index,
+                                    &packed_weight_count) &&
+            packed_weight_count == prepared->packed_weight_count) {
+            input_index = lwm_read_u32(node + 8u);
+            output_index = lwm_read_u32(node + 40u);
+            lw_pack_conv1x1_weights_f32(
+                constant_f32_data(session, weight_tensor_index),
+                (uint32_t)session->tensors[input_index].dimensions[1],
+                (uint32_t)session->tensors[output_index].dimensions[1],
+                (float*)(void*)(session->packed_weights +
+                                (size_t)prepared->packed_weight_offset));
+        } else if (prepared->kind == LW_PREPARED_NODE_MATMUL_PACKED16 &&
+                   prepared_matmul_node(session, simd_level, node_index, &weight_tensor_index,
+                                        &packed_weight_count) &&
+                   packed_weight_count == prepared->packed_weight_count) {
+            const lw_runtime_tensor* weights = &session->tensors[weight_tensor_index];
+            lw_pack_matmul_weights_f32(
+                constant_f32_data(session, weight_tensor_index),
+                (uint32_t)weights->dimensions[0], (uint32_t)weights->dimensions[1],
+                (float*)(void*)(session->packed_weights +
+                                (size_t)prepared->packed_weight_offset));
+        }
     }
     return LW_STATUS_OK;
 }
@@ -398,7 +468,7 @@ lw_status lw_session_create(const lw_model* model, const lw_tensor_desc* inputs,
             return LW_STATUS_OUT_OF_MEMORY;
         }
     }
-    status = prepare_pointwise_weights(session, error);
+    status = prepare_constant_weights(session, error);
     if (status != LW_STATUS_OK) {
         lw_session_free(session);
         return status;
