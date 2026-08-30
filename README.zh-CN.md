@@ -187,11 +187,13 @@ WinForms Demo 面向 .NET Framework 3.5，通过 `DllImport` 直接调用公共 
 
 ```powershell
 cmake -S . -B build -DLW_BUILD_CSHARP_DEMOS=ON
-cmake --build build --config Release --target lw_csharp_demos
+cmake --build build --config Release --target lw-csharp-demos
 ```
 
 项目文件位于 [`examples/csharp-winforms`](examples/csharp-winforms)。运行时请确保 EXE、
-对应架构的 `lw_ppocr_c.dll` 和 `models` 目录来自同一次构建或同一个安装包。
+对应架构的 `lw_ppocr_c.dll` 和 `models` 目录来自同一次构建或同一个安装包。识别成功后可在
+结果页复制纯文本，或保存 UTF-8 TXT 和与 Web Demo 一致的版本化 JSON；字段定义见
+[`docs/ocr-export-schema.md`](docs/ocr-export-schema.md)。
 
 ## C API 使用要点
 

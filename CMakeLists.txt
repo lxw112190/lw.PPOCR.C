@@ -513,6 +513,7 @@ if(LW_BUILD_CSHARP_DEMOS)
             "${CMAKE_CURRENT_SOURCE_DIR}/examples/csharp-common/NativeOcr.cs"
             "${CMAKE_CURRENT_SOURCE_DIR}/examples/csharp-common/OcrModels.cs"
             "${CMAKE_CURRENT_SOURCE_DIR}/examples/csharp-winforms/MainForm.cs"
+            "${CMAKE_CURRENT_SOURCE_DIR}/examples/csharp-winforms/OcrResultExporter.cs"
         COMMENT "Building .NET Framework 3.5 WinForms OCR Demo"
         VERBATIM)
 endif()

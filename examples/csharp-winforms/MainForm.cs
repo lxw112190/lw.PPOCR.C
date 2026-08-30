@@ -41,6 +41,8 @@ namespace LwPpocrWinForms
         private readonly Button benchmarkButton = new Button();
         private readonly Button releaseButton = new Button();
         private readonly Button copyButton = new Button();
+        private readonly Button exportTxtButton = new Button();
+        private readonly Button exportJsonButton = new Button();
         private readonly Button clearHistoryButton = new Button();
         private readonly Button browseModelsButton = new Button();
         private readonly CheckBox classifierCheck = new CheckBox();
@@ -60,6 +62,7 @@ namespace LwPpocrWinForms
         private string imagePath;
         private Bitmap originalImage;
         private Bitmap annotatedImage;
+        private OcrExportSnapshot lastExport;
         private bool busy;
 
         public MainForm(string modelDirectory)
@@ -81,6 +84,8 @@ namespace LwPpocrWinForms
             benchmarkButton.Click += delegate { StartRecognition(true); };
             releaseButton.Click += delegate { ReleaseEngine(); };
             copyButton.Click += CopyResult;
+            exportTxtButton.Click += ExportTxt;
+            exportJsonButton.Click += ExportJson;
             clearHistoryButton.Click += delegate { performanceHistory.Items.Clear(); };
             browseModelsButton.Click += BrowseModelDirectory;
             DragEnter += OnImageDragEnter;
@@ -111,7 +116,6 @@ namespace LwPpocrWinForms
             benchmarkButton.Text = "性能测试";
             benchmarkButton.Width = 82;
             releaseButton.Text = "释放模型";
-            copyButton.Text = "复制结果";
             clearHistoryButton.Text = "清空记录";
 
             classifierCheck.Text = "方向分类";
@@ -135,7 +139,6 @@ namespace LwPpocrWinForms
             actions.Controls.Add(warmupCountInput);
             actions.Controls.Add(CreateToolbarLabel("次数"));
             actions.Controls.Add(iterationCountInput);
-            actions.Controls.Add(copyButton);
             actions.Controls.Add(clearHistoryButton);
 
             TableLayoutPanel modelRow = new TableLayoutPanel();
@@ -202,11 +205,28 @@ namespace LwPpocrWinForms
             TabPage resultPage = new TabPage("识别结果");
             TabPage performancePage = new TabPage("性能记录");
 
+            FlowLayoutPanel resultActions = new FlowLayoutPanel();
+            resultActions.Dock = DockStyle.Top;
+            resultActions.Height = 38;
+            resultActions.Padding = new Padding(4, 4, 4, 2);
+            resultActions.WrapContents = false;
+            copyButton.Text = "复制全文";
+            exportTxtButton.Text = "保存 TXT";
+            exportJsonButton.Text = "保存 JSON";
+            copyButton.AutoSize = true;
+            exportTxtButton.AutoSize = true;
+            exportJsonButton.AutoSize = true;
+            resultActions.Controls.Add(copyButton);
+            resultActions.Controls.Add(exportTxtButton);
+            resultActions.Controls.Add(exportJsonButton);
+
             output.Dock = DockStyle.Fill;
             output.Font = new Font("Consolas", 10F);
             output.ReadOnly = true;
             output.WordWrap = false;
             resultPage.Controls.Add(output);
+            resultPage.Controls.Add(resultActions);
+            UpdateExportButtons();
 
             ConfigurePerformanceHistory();
             performancePage.Controls.Add(performanceHistory);
@@ -298,6 +318,7 @@ namespace LwPpocrWinForms
             annotatedImage = new Bitmap(originalImage);
             picture.Image = annotatedImage;
             imagePath = path;
+            ClearLastExport();
             output.Clear();
             statusLabel.Text = "已选择: " + path + " | " + originalImage.Width + "x" +
                 originalImage.Height;
@@ -372,6 +393,8 @@ namespace LwPpocrWinForms
                     MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
             }
+
+            ClearLastExport();
 
             double initializationMilliseconds;
             try
@@ -495,6 +518,7 @@ namespace LwPpocrWinForms
         private void ShowResult(
             RecognitionTestResult test, double initializationMilliseconds, bool performanceTest)
         {
+            Stopwatch renderWatch = Stopwatch.StartNew();
             OcrResponse response = test.Response;
             DrawResult(response);
 
@@ -536,6 +560,12 @@ namespace LwPpocrWinForms
                 serializer.Serialize(response);
 
             if (performanceTest) AddPerformanceRecord(test, minimum, maximum, mean, p95);
+            renderWatch.Stop();
+            double exportElapsedMilliseconds = test.DecodeMilliseconds +
+                test.OcrMilliseconds[test.OcrMilliseconds.Length - 1] +
+                renderWatch.Elapsed.TotalMilliseconds;
+            lastExport = OcrResultExporter.Create(imagePath, response,
+                test.ClassifierEnabled, exportElapsedMilliseconds);
             statusLabel.Text = (performanceTest ? "性能测试完成" : "识别成功") +
                 " | 工作器=" + test.WorkerCount + " | " + response.result.Count +
                 " 行 | 平均 " + mean.ToString("F1") + " ms";
@@ -606,16 +636,81 @@ namespace LwPpocrWinForms
 
         private void CopyResult(object sender, EventArgs e)
         {
-            if (String.IsNullOrEmpty(output.Text)) return;
+            if (lastExport == null) return;
             try
             {
-                Clipboard.SetText(output.Text);
-                statusLabel.Text = "识别结果已复制到剪贴板";
+                if (lastExport.PlainText.Length == 0)
+                {
+                    statusLabel.Text = "识别结果为空，没有可复制的文本";
+                    return;
+                }
+                Clipboard.SetText(lastExport.PlainText);
+                statusLabel.Text = "已复制 " + lastExport.LineCount + " 行识别文本";
             }
             catch (Exception ex)
             {
-                ShowFailure("复制失败", ex);
+                ShowExportFailure("复制失败", ex);
             }
+        }
+
+        private void ExportTxt(object sender, EventArgs e)
+        {
+            if (lastExport == null) return;
+            string content = lastExport.PlainText.Length == 0
+                ? String.Empty
+                : lastExport.PlainText + Environment.NewLine;
+            SaveExport("txt", "文本文件|*.txt|所有文件|*.*", content, "TXT");
+        }
+
+        private void ExportJson(object sender, EventArgs e)
+        {
+            if (lastExport == null) return;
+            SaveExport("json", "JSON 文件|*.json|所有文件|*.*",
+                lastExport.Json, "JSON");
+        }
+
+        private void SaveExport(string extension, string filter, string content, string label)
+        {
+            try
+            {
+                using (SaveFileDialog dialog = new SaveFileDialog())
+                {
+                    dialog.AddExtension = true;
+                    dialog.DefaultExt = extension;
+                    dialog.Filter = filter;
+                    dialog.FileName = lastExport.BaseName + "." + extension;
+                    dialog.RestoreDirectory = true;
+                    if (dialog.ShowDialog(this) != DialogResult.OK) return;
+                    File.WriteAllText(dialog.FileName, content, new UTF8Encoding(false));
+                    statusLabel.Text = "已导出 " + lastExport.LineCount + " 行 " + label +
+                        "：" + dialog.FileName;
+                }
+            }
+            catch (Exception ex)
+            {
+                ShowExportFailure("导出 " + label + " 失败", ex);
+            }
+        }
+
+        private void ClearLastExport()
+        {
+            lastExport = null;
+            UpdateExportButtons();
+        }
+
+        private void UpdateExportButtons()
+        {
+            bool enabled = !busy && lastExport != null;
+            copyButton.Enabled = enabled;
+            exportTxtButton.Enabled = enabled;
+            exportJsonButton.Enabled = enabled;
+        }
+
+        private void ShowExportFailure(string title, Exception error)
+        {
+            statusLabel.Text = title + ": " + error.Message;
+            MessageBox.Show(this, error.Message, title,
+                MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
 
         private void ShowFailure(string title, Exception error)
@@ -640,6 +735,7 @@ namespace LwPpocrWinForms
             iterationCountInput.Enabled = !value;
             modelDirectoryInput.Enabled = !value;
             browseModelsButton.Enabled = !value;
+            UpdateExportButtons();
             UseWaitCursor = value;
         }
 

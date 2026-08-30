@@ -55,9 +55,12 @@ Run:
 The application supports common `System.Drawing` image formats, file drag and
 drop, a selectable model directory, optional classification, background OCR,
 original-image quadrilateral drawing, per-line text/scores/rotation, and
-complete JSON output. The status bar reports the process architecture and the
-actual loaded `lw_ppocr_c.dll` path, which helps diagnose x86/x64 or stale-DLL
-problems.
+complete JSON output. After a successful run, the result tab can copy plain
+recognized text or save UTF-8 TXT and versioned JSON using the same
+[OCR export schema](ocr-export-schema.md) as the standalone browser page. A
+new image or OCR run invalidates the previous export snapshot until recognition
+succeeds. The status bar reports the process architecture and the actual loaded
+`lw_ppocr_c.dll` path, which helps diagnose x86/x64 or stale-DLL problems.
 
 For line-worker A/B tests, select `1`, `2`, or `4` workers, set warm-up and
 measured iteration counts, and click **性能测试**. The image is decoded once;

@@ -47,6 +47,7 @@
     <Compile Include="..\csharp-common\NativeOcr.cs"><Link>NativeOcr.cs</Link></Compile>
     <Compile Include="..\csharp-common\OcrModels.cs"><Link>OcrModels.cs</Link></Compile>
     <Compile Include="MainForm.cs"><SubType>Form</SubType></Compile>
+    <Compile Include="OcrResultExporter.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>

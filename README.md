@@ -27,6 +27,10 @@ The project currently provides:
 - Optional .NET Framework 3.5 WinForms, native `cpp-httplib` HTTP/web, and
   offline single-file WebAssembly demos.
 
+The WinForms and standalone browser Demos can copy recognized text and export
+UTF-8 TXT or versioned JSON using the shared
+[OCR result export schema](docs/ocr-export-schema.md).
+
 The deployment core accepts decoded BGR8 pixels. Image decoding remains an
 application concern, so the core itself stays dependency-free.
 
@@ -118,7 +122,7 @@ dictionary, and the page assets. It can be opened directly without the native
 HTTP Demo. The page queries the Web ABI for the actual output capacities and
 reuses its input/output buffers across repeated OCR runs. Completed results can
 be copied as plain text or downloaded as UTF-8 TXT and versioned JSON; see the
-[offline OCR export schema](docs/ocr-export-schema.md).
+[OCR result export schema](docs/ocr-export-schema.md).
 
 ## Documentation
 
