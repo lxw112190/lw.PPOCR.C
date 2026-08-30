@@ -176,7 +176,9 @@ Windows 下可在 emsdk 目录运行 `emsdk_env.bat`，或按 emsdk 文档使用
 
 生成的 `build-wasm/ocr-demo.html` 已内嵌 WASM、三个 LWM 模型和字典，可以直接双击打开
 并选择图片进行完整 OCR，不需要启动 HTTP 服务。页面在初始化时按照 Runtime 返回的真实
-容量分配输出缓冲区，后续识别会复用这些缓冲区；输入缓冲区只在图片变大时扩容。
+容量分配输出缓冲区，后续识别会复用这些缓冲区；输入缓冲区只在图片变大时扩容。识别完成后
+可以复制全文，或导出 UTF-8 TXT 和带版本号的结构化 JSON；字段定义见
+[`docs/ocr-export-schema.md`](docs/ocr-export-schema.md)。
 
 ### C# WinForms Demo
 

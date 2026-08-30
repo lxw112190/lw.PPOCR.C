@@ -116,7 +116,9 @@ cmake --build build-wasm --target lw-ocr-html
 `build-wasm/ocr-demo.html` embeds the WASM runtime, all three LWM models, the
 dictionary, and the page assets. It can be opened directly without the native
 HTTP Demo. The page queries the Web ABI for the actual output capacities and
-reuses its input/output buffers across repeated OCR runs.
+reuses its input/output buffers across repeated OCR runs. Completed results can
+be copied as plain text or downloaded as UTF-8 TXT and versioned JSON; see the
+[offline OCR export schema](docs/ocr-export-schema.md).
 
 ## Documentation
 

@@ -1,4 +1,4 @@
-"""Run the standalone OCR page in Chromium and verify repeated inference."""
+"""Run the standalone OCR page and verify inference, exports, and memory reuse."""
 
 from __future__ import annotations
 
@@ -41,6 +41,15 @@ def main() -> int:
             args=["--allow-file-access-from-files"],
         )
         page = browser.new_page()
+        page.add_init_script(
+            """
+            window.__lwCopiedText = null;
+            Object.defineProperty(navigator, "clipboard", {
+              configurable: true,
+              value: {writeText: async value => { window.__lwCopiedText = value; }}
+            });
+            """
+        )
 
         def capture_console(message: ConsoleMessage) -> None:
             if message.type == "error":
@@ -53,6 +62,9 @@ def main() -> int:
             "() => window.__lwOcrTest && window.__lwOcrTest.snapshot().ready",
             timeout=180_000,
         )
+        export_buttons = page.locator("#copy-text, #export-txt, #export-json")
+        assert export_buttons.count() == 3
+        assert all(export_buttons.nth(index).is_disabled() for index in range(3))
 
         # Exercise the complete DET -> CLS -> REC path used by the product page.
         page.locator("#use-cls").check()
@@ -67,6 +79,7 @@ def main() -> int:
             timeout=180_000,
         )
         assert page.locator("#results .line").count() == 0
+        assert all(export_buttons.nth(index).is_disabled() for index in range(3))
         page.locator("#run").click()
         snapshot = wait_for_run(page, 0)
 
@@ -75,6 +88,49 @@ def main() -> int:
         assert EXPECTED_FIRST_LINE in lines.first.locator(".text").inner_text()
         assert snapshot["maxLineCapacity"] == 1000, snapshot
         assert 0 < snapshot["maxTextCapacity"] < 1024 * 1024, snapshot
+        assert snapshot["hasResults"], snapshot
+        assert snapshot["exportEnabled"], snapshot
+        assert all(export_buttons.nth(index).is_enabled() for index in range(3))
+
+        displayed_text = lines.locator("b").all_inner_texts()
+        assert len(displayed_text) == 16
+        page.locator("#copy-text").click()
+        page.wait_for_function("() => window.__lwCopiedText !== null")
+        assert page.evaluate("window.__lwCopiedText") == "\n".join(displayed_text)
+
+        with page.expect_download() as txt_download_info:
+            page.locator("#export-txt").click()
+        txt_download = txt_download_info.value
+        assert txt_download.suggested_filename == f"{sample.stem}-ocr.txt"
+        txt_path = txt_download.path()
+        assert txt_path is not None
+        txt_content = Path(txt_path).read_text(encoding="utf-8")
+        assert txt_content.endswith("\n")
+        assert txt_content.splitlines() == displayed_text
+        assert EXPECTED_FIRST_LINE in txt_content
+
+        with page.expect_download() as json_download_info:
+            page.locator("#export-json").click()
+        json_download = json_download_info.value
+        assert json_download.suggested_filename == f"{sample.stem}-ocr.json"
+        json_path = json_download.path()
+        assert json_path is not None
+        exported = json.loads(Path(json_path).read_text(encoding="utf-8"))
+        assert exported["schema_version"] == 1
+        assert exported["source"] == sample.name
+        assert exported["image"]["width"] > 0 and exported["image"]["height"] > 0
+        assert exported["options"] == {"use_cls": True}
+        assert exported["elapsed_ms"] > 0
+        assert len(exported["lines"]) == 16
+        assert [line["index"] for line in exported["lines"]] == list(range(16))
+        assert [line["text"] for line in exported["lines"]] == displayed_text
+        for line in exported["lines"]:
+            assert len(line["box"]) == 8
+            assert 0 <= line["det_score"] <= 1
+            assert 0 <= line["rec_score"] <= 1
+            assert 0 <= line["cls_score"] <= 1
+            assert line["cls_label"] in (0, 1)
+            assert line["rotation_degrees"] in (0, 180)
 
         # Adaptive-width REC can construct more than one concrete graph width.
         # Emscripten's linear memory never shrinks, so the first few identical
@@ -102,6 +158,20 @@ def main() -> int:
             "snapshot": snapshot,
             "heapHistory": heap_history,
         }
+
+        # Selecting a new image invalidates the previous result snapshot until
+        # the next successful OCR run, so stale data cannot be exported.
+        page.locator("#file").set_input_files([])
+        page.locator("#file").set_input_files(str(sample))
+        page.wait_for_function(
+            "() => !document.querySelector('#run').disabled && "
+            "document.querySelector('#status').textContent.includes('点击')",
+            timeout=180_000,
+        )
+        reset_snapshot = page.evaluate("window.__lwOcrTest.snapshot()")
+        assert not reset_snapshot["hasResults"], reset_snapshot
+        assert not reset_snapshot["exportEnabled"], reset_snapshot
+        assert all(export_buttons.nth(index).is_disabled() for index in range(3))
 
         browser.close()
 

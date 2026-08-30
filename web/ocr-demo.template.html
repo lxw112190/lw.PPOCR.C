@@ -27,6 +27,11 @@
     .grid { display: grid; grid-template-columns: minmax(0, 1.65fr) minmax(300px, 1fr); gap: 18px; }
     .card { overflow: hidden; border: 1px solid #e0e7ef; border-radius: 12px; background: #fff; box-shadow: 0 4px 14px #1c35570d; }
     .card h2 { margin: 0; padding: 14px 18px; border-bottom: 1px solid #edf1f5; font-size: 15px; }
+    .result-header { display: flex; min-height: 49px; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 10px 8px 18px; border-bottom: 1px solid #edf1f5; }
+    .result-header h2 { flex: 1; padding: 0; border: 0; }
+    .result-actions { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+    .result-actions button { padding: 7px 10px; border: 1px solid #cbd8e6; background: #fff; color: #2867ad; font-size: 12px; }
+    .result-actions button:hover:not(:disabled) { border-color: #2878d4; background: #edf5ff; }
     .preview { display: flex; min-height: 420px; align-items: center; justify-content: center; padding: 16px; background: #f9fbfd; }
     canvas { display: block; max-width: 100%; height: auto; border-radius: 6px; background: #eef2f6; }
     #results { max-height: 540px; overflow: auto; }
@@ -70,7 +75,14 @@
         <div class="preview"><canvas id="canvas"></canvas></div>
       </section>
       <section class="card">
-        <h2>识别结果</h2>
+        <div class="result-header">
+          <h2>识别结果</h2>
+          <div class="result-actions" aria-label="识别结果导出">
+            <button id="copy-text" type="button" disabled>复制文本</button>
+            <button id="export-txt" type="button" disabled>导出 TXT</button>
+            <button id="export-json" type="button" disabled>导出 JSON</button>
+          </div>
+        </div>
         <div id="results"><div class="empty">选择图片后，这里会显示识别文本。</div></div>
       </section>
     </div>
@@ -100,6 +112,10 @@
     const statsNode = document.getElementById("stats");
     const canvas = document.getElementById("canvas");
     const resultsNode = document.getElementById("results");
+    const copyTextButton = document.getElementById("copy-text");
+    const exportTxtButton = document.getElementById("export-txt");
+    const exportJsonButton = document.getElementById("export-json");
+    const exportButtons = [copyTextButton, exportTxtButton, exportJsonButton];
     const WEB_ABI_VERSION = 1;
     let moduleInstance;
     let loadMilliseconds = 0;
@@ -112,6 +128,7 @@
     let sourceCapacity = 0;
     let selectedFile = null;
     let previewSequence = 0;
+    let lastResults = null;
     const buffers = {source: 0, lines: 0, text: 0, result: 0};
 
     function decodeBase64(value) {
@@ -125,6 +142,74 @@
     function readUtf8(pointer, length) { return new TextDecoder().decode(moduleInstance.HEAPU8.subarray(pointer, pointer + length)); }
     function escapeHtml(value) { return value.replace(/[&<>]/g, c => ({"&":"&amp;", "<":"&lt;", ">":"&gt;"}[c])); }
     function makeFactory() { return eval("(function(){" + RUNTIME_JS + ";return LwPpocrModule;})()"); }
+
+    function setExportEnabled(enabled) {
+      for (const button of exportButtons) button.disabled = !enabled;
+    }
+
+    function clearLastResults() {
+      lastResults = null;
+      setExportEnabled(false);
+    }
+
+    function plainTextResult() {
+      return lastResults ? lastResults.lines.map(line => line.text).join("\n") : "";
+    }
+
+    function exportBaseName(source) {
+      const leaf = String(source || "").replace(/[\\/]/g, "_");
+      const dot = leaf.lastIndexOf(".");
+      const stem = (dot > 0 ? leaf.slice(0, dot) : leaf)
+        .replace(/[<>:"|?*\u0000-\u001f]/g, "_").trim().replace(/[. ]+$/g, "");
+      return (stem || "ocr-result") + "-ocr";
+    }
+
+    function downloadResult(content, mimeType, extension) {
+      if (!lastResults) return;
+      const url = URL.createObjectURL(new Blob([content], {type: mimeType}));
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = exportBaseName(lastResults.source) + extension;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 0);
+    }
+
+    async function copyPlainText() {
+      if (!lastResults) return;
+      const result = lastResults;
+      const text = result.lines.map(line => line.text).join("\n");
+      try {
+        if (!navigator.clipboard || !navigator.clipboard.writeText) throw new Error("Clipboard API unavailable");
+        await navigator.clipboard.writeText(text);
+      } catch (clipboardError) {
+        const textarea = document.createElement("textarea");
+        textarea.value = text;
+        textarea.setAttribute("readonly", "");
+        textarea.style.position = "fixed";
+        textarea.style.opacity = "0";
+        document.body.appendChild(textarea);
+        textarea.select();
+        const copied = document.execCommand("copy");
+        textarea.remove();
+        if (!copied) throw clipboardError;
+      }
+      if (lastResults === result) statusNode.textContent = `已复制 ${result.lines.length} 行文本。`;
+    }
+
+    function exportTxt() {
+      if (!lastResults) return;
+      const text = plainTextResult();
+      downloadResult(text ? text + "\n" : "", "text/plain;charset=utf-8", ".txt");
+      statusNode.textContent = `已导出 ${lastResults.lines.length} 行 TXT。`;
+    }
+
+    function exportJson() {
+      if (!lastResults) return;
+      downloadResult(JSON.stringify(lastResults, null, 2) + "\n", "application/json;charset=utf-8", ".json");
+      statusNode.textContent = `已导出 ${lastResults.lines.length} 行 JSON。`;
+    }
 
     function allocate(size, label) {
       const pointer = moduleInstance._lw_web_malloc(size);
@@ -193,10 +278,12 @@
         maxLineCapacity,
         maxTextCapacity,
         lineSize,
-        resultSize
+        resultSize,
+        hasResults: Boolean(lastResults),
+        exportEnabled: exportButtons.every(button => !button.disabled)
       };
     }
-    window.__lwOcrTest = {snapshot: runtimeSnapshot};
+    window.__lwOcrTest = {snapshot: runtimeSnapshot, plainTextResult, structuredResult: () => lastResults};
 
     async function boot() {
       const started = performance.now();
@@ -241,6 +328,7 @@
       const sequence = ++previewSequence;
       selectedFile = file || null;
       runButton.disabled = true;
+      clearLastResults();
       if (!file) {
         statusNode.textContent = "就绪，请选择图片。";
         resultsNode.innerHTML = '<div class="empty">选择图片后，点击“开始识别”显示结果。</div>';
@@ -274,10 +362,10 @@
       const file = selectedFile; if (!file || !moduleInstance || running) return;
       const totalStarted = performance.now();
       let image;
-      running = true; runButton.disabled = true; clsInput.disabled = true; statusNode.textContent = "识别中…";
+      running = true; runButton.disabled = true; clsInput.disabled = true; clearLastResults(); statusNode.textContent = "识别中…";
       try {
         const decodeStarted = performance.now();
-        image = await createImageBitmap(file); const scale = Math.min(1, 1600 / Math.max(image.width, image.height));
+        image = await createImageBitmap(file); const originalWidth = image.width, originalHeight = image.height; const scale = Math.min(1, 1600 / Math.max(originalWidth, originalHeight));
         const width = Math.max(1, Math.round(image.width * scale)); const height = Math.max(1, Math.round(image.height * scale));
         drawPreview(image, width, height); const context = canvas.getContext("2d");
         const rgba = context.getImageData(0, 0, width, height).data; const bgr = new Uint8Array(width * height * 3);
@@ -290,11 +378,42 @@
         if (status !== 0) throw new Error("推理失败：" + status);
         const lineCount = readU32(buffers.result), lines = [];
         if (lineCount > maxLineCapacity) throw new Error("引擎返回的文字行数量超出容量");
-        for (let i = 0; i < lineCount; ++i) { const p = buffers.lines + i * lineSize, box = []; for (let k = 0; k < 8; ++k) box.push(readF32(p + k * 4)); const offset = readU32(p + 52), length = readU32(p + 56); if (offset > maxTextCapacity || length > maxTextCapacity - offset) throw new Error("引擎返回的文本范围无效"); lines.push({box, text: readUtf8(buffers.text + offset, length), detection: readF32(p + 32), recognition: readF32(p + 36)}); }
+        for (let i = 0; i < lineCount; ++i) {
+          const p = buffers.lines + i * lineSize, box = [];
+          for (let k = 0; k < 8; ++k) box.push(readF32(p + k * 4));
+          const offset = readU32(p + 52), length = readU32(p + 56);
+          if (offset > maxTextCapacity || length > maxTextCapacity - offset) throw new Error("引擎返回的文本范围无效");
+          lines.push({box, text: readUtf8(buffers.text + offset, length), detection: readF32(p + 32), recognition: readF32(p + 36), classification: readF32(p + 40), classificationLabel: readU32(p + 44), rotationDegrees: readU32(p + 48)});
+        }
         drawResults(image, lines, width, height);
         resultsNode.innerHTML = lines.length ? lines.map((line, index) => `<div class="line"><div class="index">${String(index + 1).padStart(2, "0")}</div><div class="text"><b>${escapeHtml(line.text)}</b><div class="score">检测 ${(line.detection * 100).toFixed(1)}% · 识别 ${(line.recognition * 100).toFixed(1)}%</div></div></div>`).join("") : '<div class="empty">未检测到文本。</div>';
         const inferenceMilliseconds = performance.now() - inferenceStarted;
         const totalMilliseconds = performance.now() - totalStarted;
+        const xScale = originalWidth / width, yScale = originalHeight / height;
+        const useCls = clsInput.checked;
+        lastResults = {
+          schema_version: 1,
+          source: file.name,
+          image: {width: originalWidth, height: originalHeight},
+          options: {use_cls: useCls},
+          elapsed_ms: Number(totalMilliseconds.toFixed(3)),
+          lines: lines.map((line, index) => {
+            const exported = {
+              index,
+              text: line.text,
+              box: line.box.map((coordinate, coordinateIndex) => coordinate * (coordinateIndex % 2 ? yScale : xScale)),
+              det_score: line.detection,
+              rec_score: line.recognition
+            };
+            if (useCls) {
+              exported.cls_score = line.classification;
+              exported.cls_label = line.classificationLabel;
+              exported.rotation_degrees = line.rotationDegrees;
+            }
+            return exported;
+          })
+        };
+        setExportEnabled(true);
         runCount += 1;
         statsNode.textContent = `第 ${runCount} 次 · 引擎加载 ${(loadMilliseconds / 1000).toFixed(2)} s · 图像处理 ${decodeMilliseconds.toFixed(0)} ms · 推理 ${inferenceMilliseconds.toFixed(0)} ms · 总计 ${totalMilliseconds.toFixed(0)} ms · CLS ${clsInput.checked ? "开启" : "关闭"}`;
         statusNode.textContent = `完成：${lineCount} 行`;
@@ -306,6 +425,9 @@
     ["dragleave", "drop"].forEach(event => dropzone.addEventListener(event, e => { e.preventDefault(); dropzone.classList.remove("drag"); }));
     dropzone.addEventListener("drop", event => { if (event.dataTransfer.files.length) { fileInput.files = event.dataTransfer.files; fileInput.dispatchEvent(new Event("change")); } });
     runButton.addEventListener("click", runOcr);
+    copyTextButton.addEventListener("click", () => copyPlainText().catch(error => { statusNode.textContent = "复制失败：" + error; console.error(error); }));
+    exportTxtButton.addEventListener("click", exportTxt);
+    exportJsonButton.addEventListener("click", exportJson);
     window.addEventListener("beforeunload", shutdownEngine);
     boot();
   </script>
