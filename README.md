@@ -122,7 +122,9 @@ dictionary, and the page assets. It can be opened directly without the native
 HTTP Demo. The page queries the Web ABI for the actual output capacities and
 reuses its input/output buffers across repeated OCR runs. Completed results can
 be copied as plain text or downloaded as UTF-8 TXT and versioned JSON; see the
-[OCR result export schema](docs/ocr-export-schema.md).
+[OCR result export schema](docs/ocr-export-schema.md). For direct use,
+customization, and the public `window.lwPpocrDemo` API, see
+[standalone HTML usage and JavaScript integration](docs/standalone-html.md).
 
 ## Documentation
 
@@ -139,6 +141,7 @@ be copied as plain text or downloaded as UTF-8 TXT and versioned JSON; see the
   [full-OCR profile](docs/full-ocr-profile.md), and
   [kernel optimization](docs/kernel-optimization.md)
 - [Correctness-gated full-OCR comparison with OpenCV DNN](docs/opencv-dnn-comparison.md)
+- [Standalone HTML usage and JavaScript integration](docs/standalone-html.md)
 - [Development package and managed demos](docs/package.md) and
   [C#/HTTP/web integration](docs/managed-demos.md)
 
