@@ -174,12 +174,16 @@ jobs:
                 echo "cmake=$(cmake --version | sed -n "1p")"
               } > .ci/BUILD-ENVIRONMENT-loongarch64.txt
               cat .ci/BUILD-ENVIRONMENT-loongarch64.txt
+              # Keep all HTTP correctness checks; only widen their bounded
+              # budgets because QEMU scalar OCR is much slower than native.
               cmake -S . -B build-loongarch64 -G Ninja \
                 -DCMAKE_BUILD_TYPE=Release \
                 -DBUILD_TESTING=ON \
                 -DLW_PRECONVERTED_ASSETS_DIR=/workspace/.ci/preconverted \
                 -DLW_BUILD_ENVIRONMENT_FILE=/workspace/.ci/BUILD-ENVIRONMENT-loongarch64.txt \
                 -DLW_PACKAGE_PLATFORM_OVERRIDE=linux-loongarch64-debian13-qemu-experimental \
+                -DLW_HTTP_TEST_REQUEST_TIMEOUT=300 \
+                -DLW_HTTP_TEST_PROCESS_TIMEOUT=900 \
                 -DLW_STAGED_PACKAGE_TEST_TIMEOUT=1800
               cmake --build build-loongarch64 --parallel 2
               ctest --test-dir build-loongarch64 \

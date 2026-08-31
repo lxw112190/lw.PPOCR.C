@@ -8,6 +8,13 @@ import unittest
 from pathlib import Path
 
 
+def positive_seconds(value: str) -> float:
+    seconds = float(value)
+    if seconds <= 0:
+        raise argparse.ArgumentTypeError("timeout must be greater than zero")
+    return seconds
+
+
 class StagedPackageTest(unittest.TestCase):
     def test_required_files_and_live_demo(self) -> None:
         root = ARGUMENTS.root.resolve()
@@ -156,6 +163,7 @@ class StagedPackageTest(unittest.TestCase):
                     "--models", str(root / "models"),
                     "--www", str(root / "www"),
                     "--sample", str(root / "models" / "sample.ppm"),
+                    "--request-timeout", str(ARGUMENTS.http_request_timeout),
                 ],
                 cwd=root,
                 check=False,
@@ -163,7 +171,7 @@ class StagedPackageTest(unittest.TestCase):
                 text=True,
                 encoding="utf-8",
                 errors="replace",
-                timeout=120,
+                timeout=ARGUMENTS.http_process_timeout,
             )
             self.assertEqual(
                 http_test.returncode, 0, http_test.stdout + http_test.stderr
@@ -177,6 +185,12 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--root", type=Path, required=True)
     parser.add_argument("--http-script", type=Path, required=True)
+    parser.add_argument(
+        "--http-request-timeout", type=positive_seconds, default=30.0
+    )
+    parser.add_argument(
+        "--http-process-timeout", type=positive_seconds, default=120.0
+    )
     return parser.parse_args()
 
 

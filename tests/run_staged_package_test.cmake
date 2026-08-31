@@ -5,6 +5,13 @@ if(NOT DEFINED LW_BUILD_DIR OR NOT DEFINED LW_STAGE_DIR OR
     message(FATAL_ERROR "staged package test arguments are required")
 endif()
 
+if(NOT DEFINED LW_HTTP_TEST_REQUEST_TIMEOUT)
+    set(LW_HTTP_TEST_REQUEST_TIMEOUT 30)
+endif()
+if(NOT DEFINED LW_HTTP_TEST_PROCESS_TIMEOUT)
+    set(LW_HTTP_TEST_PROCESS_TIMEOUT 120)
+endif()
+
 file(REMOVE_RECURSE "${LW_STAGE_DIR}")
 execute_process(
     COMMAND "${CMAKE_COMMAND}" --install "${LW_BUILD_DIR}"
@@ -55,6 +62,8 @@ endif()
 execute_process(
     COMMAND "${LW_PYTHON}" "${LW_TEST_SCRIPT}" --root "${LW_STAGE_DIR}"
             --http-script "${LW_HTTP_TEST_SCRIPT}"
+            --http-request-timeout "${LW_HTTP_TEST_REQUEST_TIMEOUT}"
+            --http-process-timeout "${LW_HTTP_TEST_PROCESS_TIMEOUT}"
     RESULT_VARIABLE test_result
     OUTPUT_VARIABLE test_output
     ERROR_VARIABLE test_error)

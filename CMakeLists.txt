@@ -14,6 +14,10 @@ set(LW_BUILD_ENVIRONMENT_FILE "" CACHE FILEPATH
     "Optional build-environment report installed in the package root")
 set(LW_STAGED_PACKAGE_TEST_TIMEOUT 240 CACHE STRING
     "Timeout in seconds for the installed-package smoke test")
+set(LW_HTTP_TEST_REQUEST_TIMEOUT 30 CACHE STRING
+    "Timeout in seconds for one HTTP package-test request")
+set(LW_HTTP_TEST_PROCESS_TIMEOUT 120 CACHE STRING
+    "Timeout in seconds for the complete HTTP package-test process")
 set(LW_PACKAGE_PLATFORM_OVERRIDE "" CACHE STRING
     "Optional explicit platform suffix for the CPack archive name")
 
@@ -1274,6 +1278,8 @@ if(BUILD_TESTING AND NOT EMSCRIPTEN)
                 -DLW_PYTHON=${Python3_EXECUTABLE}
                 -DLW_TEST_SCRIPT=${CMAKE_CURRENT_SOURCE_DIR}/tests/test_staged_package.py
                 -DLW_HTTP_TEST_SCRIPT=${CMAKE_CURRENT_SOURCE_DIR}/tests/test_http_demo.py
+                -DLW_HTTP_TEST_REQUEST_TIMEOUT=${LW_HTTP_TEST_REQUEST_TIMEOUT}
+                -DLW_HTTP_TEST_PROCESS_TIMEOUT=${LW_HTTP_TEST_PROCESS_TIMEOUT}
                 -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/run_staged_package_test.cmake")
     set_tests_properties(staged_package PROPERTIES
         TIMEOUT "${LW_STAGED_PACKAGE_TEST_TIMEOUT}")

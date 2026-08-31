@@ -37,23 +37,33 @@ def ppm_to_bmp(ppm: bytes) -> bytes:
 
 
 def request_json(
-    url: str, data: Optional[bytes] = None, content_type: Optional[str] = None
+    url: str,
+    data: Optional[bytes] = None,
+    content_type: Optional[str] = None,
+    timeout: float = 30.0,
 ) -> Tuple[int, Dict[str, object]]:
     headers = {} if content_type is None else {"Content-Type": content_type}
     request = urllib.request.Request(url, data=data, headers=headers)
     try:
-        with urllib.request.urlopen(request, timeout=30) as response:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
             return response.status, json.loads(response.read().decode("utf-8"))
     except urllib.error.HTTPError as error:
         return error.code, json.loads(error.read().decode("utf-8"))
 
 
 def main() -> int:
+    def positive_seconds(value: str) -> float:
+        seconds = float(value)
+        if seconds <= 0:
+            raise argparse.ArgumentTypeError("timeout must be greater than zero")
+        return seconds
+
     parser = argparse.ArgumentParser()
     parser.add_argument("--server", type=Path, required=True)
     parser.add_argument("--models", type=Path, required=True)
     parser.add_argument("--www", type=Path, required=True)
     parser.add_argument("--sample", type=Path, required=True)
+    parser.add_argument("--request-timeout", type=positive_seconds, default=30.0)
     args = parser.parse_args()
     for required in (args.server, args.sample, args.www / "index.html"):
         if not required.is_file():
@@ -86,7 +96,9 @@ def main() -> int:
                 output = process.stdout.read() if process.stdout else ""
                 raise AssertionError(f"HTTP Demo exited early:\n{output}")
             try:
-                status, health = request_json(base_url + "/health")
+                status, health = request_json(
+                    base_url + "/health", timeout=min(args.request_timeout, 5.0)
+                )
                 if status == 200 and health.get("ok") is True:
                     break
             except OSError:
@@ -101,7 +113,8 @@ def main() -> int:
 
         image = args.sample.read_bytes()
         status, binary = request_json(
-            base_url + "/api/ocr", image, "image/x-portable-pixmap"
+            base_url + "/api/ocr", image, "image/x-portable-pixmap",
+            timeout=args.request_timeout,
         )
         assert status == 200 and binary.get("ok") is True
         result = binary.get("result")
@@ -110,7 +123,8 @@ def main() -> int:
         assert binary.get("request_id")
 
         status, bmp = request_json(
-            base_url + "/api/ocr", ppm_to_bmp(image), "image/bmp"
+            base_url + "/api/ocr", ppm_to_bmp(image), "image/bmp",
+            timeout=args.request_timeout,
         )
         assert status == 200 and bmp.get("ok") is True
         assert [line["text"] for line in bmp["result"]] == [
@@ -120,17 +134,26 @@ def main() -> int:
         body = json.dumps(
             {"imageBase64": base64.b64encode(image).decode("ascii")}
         ).encode("utf-8")
-        status, encoded = request_json(base_url + "/api/ocr", body, "application/json")
+        status, encoded = request_json(
+            base_url + "/api/ocr", body, "application/json",
+            timeout=args.request_timeout,
+        )
         assert status == 200 and encoded.get("ok") is True
         assert encoded["result"][0]["text"] == result[0]["text"]
 
-        status, rejected = request_json(base_url + "/api/ocr", b"bad", "image/jpeg")
+        status, rejected = request_json(
+            base_url + "/api/ocr", b"bad", "image/jpeg",
+            timeout=args.request_timeout,
+        )
         assert status == 415 and rejected.get("error_code") == "unsupported_media_type"
         status, rejected = request_json(
-            base_url + "/api/ocr", b"P6\n1 1\n255\n", "image/x-portable-pixmap"
+            base_url + "/api/ocr", b"P6\n1 1\n255\n",
+            "image/x-portable-pixmap", timeout=args.request_timeout,
         )
         assert status == 400 and rejected.get("error_code") == "bad_request"
-        status, rejected = request_json(base_url + "/missing")
+        status, rejected = request_json(
+            base_url + "/missing", timeout=args.request_timeout
+        )
         assert status == 404 and rejected.get("error_code") == "not_found"
         print("native HTTP smoke passed: PPM/BMP/JSON=16 lines, media=415, bad PPM=400, missing=404")
         return 0
