@@ -226,15 +226,24 @@ endif()
 
 string(TOLOWER "${CMAKE_SYSTEM_PROCESSOR}" LW_SYSTEM_PROCESSOR_LOWER)
 
+# Keep the portable Conv references and their SIMD implementations on the same
+# multiply-then-add contract. GCC enables FP contraction by default on AArch64
+# and LoongArch, while the intrinsic kernels below deliberately use separate
+# multiply and add instructions so their outputs remain byte-identical to the
+# established x86 kernels and golden checksums.
+set(LW_REPRODUCIBLE_CONV_SOURCES
+    src/kernels/packed_conv.c
+    src/kernels/scalar_conv.c
+    src/simd/lsx_packed_conv1x1.c
+    src/simd/neon_conv3x3.c
+    src/simd/neon_convtranspose2x2.c
+    src/simd/neon_packed_conv1x1.c)
+
 if(MSVC AND LW_SYSTEM_PROCESSOR_LOWER MATCHES "^(arm64|aarch64)$")
-    set_property(SOURCE src/simd/neon_conv3x3.c
-        src/simd/neon_convtranspose2x2.c
-        src/simd/neon_packed_conv1x1.c APPEND PROPERTY
+    set_property(SOURCE ${LW_REPRODUCIBLE_CONV_SOURCES} APPEND PROPERTY
         COMPILE_OPTIONS /fp:strict)
 elseif(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
-    set_property(SOURCE src/simd/neon_conv3x3.c
-        src/simd/neon_convtranspose2x2.c
-        src/simd/neon_packed_conv1x1.c APPEND PROPERTY
+    set_property(SOURCE ${LW_REPRODUCIBLE_CONV_SOURCES} APPEND PROPERTY
         COMPILE_OPTIONS -ffp-contract=off)
 endif()
 
@@ -244,7 +253,7 @@ if(LW_SYSTEM_PROCESSOR_LOWER MATCHES "^(loongarch64|loong64)$")
         message(FATAL_ERROR "The LoongArch compiler must support -mlsx")
     endif()
     set_property(SOURCE src/simd/lsx_packed_conv1x1.c APPEND PROPERTY
-        COMPILE_OPTIONS -mlsx -mno-lasx -ffp-contract=off)
+        COMPILE_OPTIONS -mlsx -mno-lasx)
 endif()
 
 function(lw_configure_runtime_target target)
