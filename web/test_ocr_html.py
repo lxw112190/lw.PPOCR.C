@@ -71,6 +71,15 @@ def main() -> int:
             timeout=180_000,
         )
         assert page.evaluate("typeof window.lwPpocrDemo.recognize") == "function"
+        assert page.evaluate(
+            "window.lwPpocrDemo.ready().then(() => window.lwPpocrDemo.getStatus().ready)"
+        )
+        missing_image_error = page.evaluate(
+            """() => window.lwPpocrDemo.recognize()
+              .then(() => "")
+              .catch(error => error.message)"""
+        )
+        assert "图片" in missing_image_error
         assert page.locator("#camera").get_attribute("capture") == "environment"
         export_buttons = page.locator("#copy-text, #export-txt, #export-json")
         assert export_buttons.count() == 3
@@ -90,8 +99,19 @@ def main() -> int:
         )
         assert page.locator("#results .line").count() == 0
         assert all(export_buttons.nth(index).is_disabled() for index in range(3))
-        page.locator("#run").click()
+        # Exercise the documented API against the currently selected image.
+        page.evaluate(
+            """() => {
+              window.__lwPublicApiResult = window.lwPpocrDemo.recognize(
+                undefined,
+                {useCls: true}
+              );
+            }"""
+        )
         snapshot = wait_for_run(page, 0)
+        api_result = page.evaluate("() => window.__lwPublicApiResult")
+        assert api_result["schema_version"] == 1
+        assert len(api_result["lines"]) == 16
 
         lines = page.locator("#results .line")
         assert lines.count() == 16, page.locator("#status").inner_text()

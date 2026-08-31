@@ -664,6 +664,9 @@
         engineReady = false;
         clsInput.disabled = false;
         statusNode.textContent = "WASM 初始化失败：" + error;
+        document.dispatchEvent(new CustomEvent("lwppocr:error", {
+          detail: {phase: "initialize", message: String(error)}
+        }));
         console.error(error);
       }
     }
@@ -876,7 +879,9 @@
         return lastResults;
       } catch (error) {
         statusNode.textContent = "识别失败：" + error;
-        document.dispatchEvent(new CustomEvent("lwppocr:error", {detail: {message: String(error)}}));
+        document.dispatchEvent(new CustomEvent("lwppocr:error", {
+          detail: {phase: "recognize", message: String(error)}
+        }));
         console.error(error);
         throw error;
       } finally {
@@ -960,16 +965,21 @@
      */
     window.lwPpocrDemo = Object.freeze({
       apiVersion: 1,
-      ready: () => bootPromise,
+      async ready() {
+        await bootPromise;
+        if (!runtimeSnapshot().ready) throw new Error("OCR 引擎初始化失败");
+      },
       selectImage: file => prepareSelectedFile(file),
       async recognize(file, options = {}) {
         await bootPromise;
         if (!runtimeSnapshot().ready) throw new Error("OCR 引擎初始化失败");
+        if (running) throw new Error("OCR 识别正在进行");
         if (typeof options.useCls === "boolean" && options.useCls !== clsInput.checked) {
           clsInput.checked = options.useCls;
           await reconfigureCls();
         }
         if (file) await prepareSelectedFile(file);
+        if (!preparedImage) throw new Error("没有可识别的图片");
         await runOcr();
         return lastResults ? JSON.parse(JSON.stringify(lastResults)) : null;
       },
