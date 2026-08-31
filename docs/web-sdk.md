@@ -245,7 +245,9 @@ python web/test_ocr_html.py \
   --sample models/ppocrv6-tiny/sample.jpg
 ~~~
 
-The SDK test covers the public namespace, File/Canvas/ImageData input,
-structured results, busy/destroyed behavior, CLS on/off, repeated inference,
-and the post-warm-up WebAssembly heap high-water mark. The HTML test separately
-covers the example UI, exports, compatibility adapter, and phone layout.
+The SDK test covers the public namespace, File/Blob/Canvas/ImageData input,
+structured results, busy/destroyed behavior, CLS on/off, Worker failure with
+real main-thread fallback OCR, repeated inference, and the post-warm-up
+WebAssembly heap high-water mark. The HTML test separately covers the example
+UI, CLS initialization lifecycle, v1 elapsed-time semantics, exports,
+compatibility adapter, and phone layout.

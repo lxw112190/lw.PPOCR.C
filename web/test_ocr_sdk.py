@@ -244,6 +244,53 @@ def main() -> int:
                 assert "cls_label" not in line
                 assert "rotation_degrees" not in line
 
+            # Product documentation promises a main-thread fallback when a
+            # browser or CSP rejects Blob Workers. Force the Worker constructor
+            # to fail and run the same real-model Golden OCR through that path.
+            fallback_page = browser.new_page()
+            fallback_page.add_init_script(
+                """
+                Object.defineProperty(window, "Worker", {
+                  configurable: true,
+                  value: function Worker() {
+                    throw new Error("Worker blocked by SDK fallback test");
+                  }
+                });
+                """
+            )
+            fallback_page.on("console", capture_console)
+            fallback_page.on(
+                "pageerror",
+                lambda error: browser_messages.append(f"pageerror: {error}"),
+            )
+            fallback_page.goto(page_path.as_uri(), wait_until="load", timeout=180_000)
+            fallback_page.wait_for_function("() => window.LwPpocr", timeout=180_000)
+            fallback_page.locator("#sample").set_input_files(str(sample))
+            fallback = fallback_page.evaluate(
+                """async () => {
+                  const engine = await LwPpocr.create({
+                    useCls: true,
+                    maxImageSide: 1600
+                  });
+                  const readyStatus = engine.getStatus();
+                  const result = await engine.recognize(
+                    document.querySelector("#sample").files[0]
+                  );
+                  engine.destroy();
+                  return {
+                    readyStatus,
+                    destroyedStatus: engine.getStatus(),
+                    result
+                  };
+                }"""
+            )
+            assert fallback["readyStatus"]["backend"] == "main-thread", fallback
+            assert fallback["readyStatus"]["state"] == "READY", fallback
+            assert len(fallback["result"]["lines"]) == 16
+            assert fallback["result"]["lines"][0]["text"] == EXPECTED_FIRST_LINE
+            assert fallback["destroyedStatus"]["state"] == "DESTROYED"
+            fallback_page.close()
+
             browser.close()
 
     if browser_messages:

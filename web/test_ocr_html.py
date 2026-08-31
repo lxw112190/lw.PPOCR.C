@@ -27,6 +27,9 @@ def main() -> int:
     sample = arguments.sample.resolve()
     if not html.is_file() or not sample.is_file():
         raise SystemExit("standalone HTML or sample image is missing")
+    assert '<input id="use-cls" type="checkbox" disabled>' in html.read_text(
+        encoding="utf-8"
+    )
 
     browser_messages: list[str] = []
     with sync_playwright() as playwright:
@@ -61,6 +64,7 @@ def main() -> int:
             "() => window.__lwOcrTest && window.__lwOcrTest.snapshot().ready",
             timeout=180_000,
         )
+        assert page.locator("#use-cls").is_enabled()
 
         assert page.evaluate("typeof window.LwPpocr.create") == "function"
         assert page.evaluate("window.LwPpocr.webAbiVersion") == 1
@@ -81,12 +85,30 @@ def main() -> int:
         assert export_buttons.count() == 3
         assert all(export_buttons.nth(index).is_disabled() for index in range(3))
 
+        # Delay the next create() deterministically so the test observes the
+        # complete reconfiguration lifecycle instead of relying on machine speed.
+        page.evaluate(
+            """() => {
+              const original = window.LwPpocr;
+              window.__lwOriginalNamespace = original;
+              window.LwPpocr = {
+                ...original,
+                create: async options => {
+                  await new Promise(resolve => setTimeout(resolve, 250));
+                  return original.create(options);
+                }
+              };
+            }"""
+        )
         page.locator("#use-cls").check()
+        assert page.locator("#use-cls").is_disabled()
+        assert not page.evaluate("window.__lwOcrTest.snapshot().ready")
         page.wait_for_function(
             "() => window.__lwOcrTest.snapshot().ready && "
             "!document.querySelector('#use-cls').disabled",
             timeout=180_000,
         )
+        page.evaluate("window.LwPpocr = window.__lwOriginalNamespace")
         page.locator("#file").set_input_files(str(sample))
         page.wait_for_function(
             "() => !document.querySelector('#run').disabled && "
@@ -114,6 +136,20 @@ def main() -> int:
         assert result["image"]["width"] > 0 and result["image"]["height"] > 0
         assert result["elapsed_ms"] > 0
         assert len(result["lines"]) == 16
+        timing = page.evaluate("window.__lwOcrTest.timingBreakdown()")
+        assert timing["prepareMilliseconds"] > 0
+        assert timing["sdkTotalMilliseconds"] > 0
+        assert timing["uiMilliseconds"] >= 0
+        expected_elapsed = round(
+            timing["prepareMilliseconds"]
+            + timing["sdkTotalMilliseconds"]
+            + timing["uiMilliseconds"],
+            3,
+        )
+        assert abs(result["elapsed_ms"] - expected_elapsed) <= 0.001, {
+            "result": result["elapsed_ms"],
+            "breakdown": timing,
+        }
 
         lines = page.locator("#results .line")
         assert lines.count() == 16

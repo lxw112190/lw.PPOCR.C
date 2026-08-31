@@ -40,12 +40,14 @@
   let previewSequence = 0;
   let running = false;
   let lastResults = null;
+  let lastTimingBreakdown = null;
 
   function setExportEnabled(enabled) {
     for (const button of resultActionButtons) button.disabled = !enabled;
   }
   function clearLastResults() {
     lastResults = null;
+    lastTimingBreakdown = null;
     setExportEnabled(false);
     overlay.replaceChildren();
   }
@@ -234,7 +236,8 @@
       source: selectedFile && selectedFile.name ? selectedFile.name : result.source,
       image: {width: originalWidth, height: originalHeight},
       options: result.options,
-      elapsed_ms: result.timing.total_ms,
+      // Filled after the Demo has materialized and rendered this result.
+      elapsed_ms: 0,
       lines: result.lines.map(line => ({
         ...line,
         box: line.box.map((coordinate, index) =>
@@ -259,16 +262,27 @@
     }
   }
   async function createEngine() {
+    clsInput.disabled = true;
     statusNode.textContent = "正在加载 WASM 和模型…";
-    const instance = await LwPpocr.create({useCls: clsInput.checked, maxImageSide: 1600});
-    engine = instance;
-    updateStats(instance.getStatus());
-    runButton.disabled = !preparedSource;
-    statusNode.textContent = preparedSource ? "图片已准备好，点击“开始识别”。" : "就绪，请选择图片。";
-    document.dispatchEvent(new CustomEvent("lwppocr:ready", {
-      detail: {backend: instance.getStatus().backend}
-    }));
-    return instance;
+    try {
+      const instance = await LwPpocr.create({
+        useCls: clsInput.checked,
+        maxImageSide: 1600
+      });
+      engine = instance;
+      updateStats(instance.getStatus());
+      runButton.disabled = !preparedSource;
+      statusNode.textContent = preparedSource ?
+        "图片已准备好，点击“开始识别”。" : "就绪，请选择图片。";
+      document.dispatchEvent(new CustomEvent("lwppocr:ready", {
+        detail: {backend: instance.getStatus().backend}
+      }));
+      return instance;
+    } finally {
+      // The checkbox must always describe the engine that was actually
+      // initialized. Re-enable it only after create() settles.
+      clsInput.disabled = false;
+    }
   }
   async function reconfigureCls() {
     if (!engine || running) return;
@@ -288,6 +302,7 @@
     statusNode.textContent = "正在识别，页面仍可正常操作…";
     try {
       const result = await engine.recognize(preparedSource);
+      const uiStarted = performance.now();
       // SDK coordinates are relative to the prepared canvas. Draw those
       // coordinates over the preview, then export coordinates restored to the
       // original image dimensions.
@@ -296,9 +311,20 @@
       renderResults(lastResults.lines);
       setExportEnabled(true);
       runCount += 1;
+      setMobilePanel("results");
+      const uiMilliseconds = performance.now() - uiStarted;
+      lastTimingBreakdown = {
+        prepareMilliseconds,
+        sdkTotalMilliseconds: result.timing.total_ms,
+        uiMilliseconds
+      };
+      lastResults.elapsed_ms = Number((
+        prepareMilliseconds +
+        result.timing.total_ms +
+        uiMilliseconds
+      ).toFixed(3));
       updateStats(engine.getStatus(), result);
       statusNode.textContent = "完成：" + lastResults.lines.length + " 行";
-      setMobilePanel("results");
       document.dispatchEvent(new CustomEvent("lwppocr:result", {detail: lastResults}));
       return lastResults;
     } catch (error) {
@@ -397,7 +423,13 @@
     getPlainText: plainTextResult,
     getStatus: snapshot
   });
-  window.__lwOcrTest = {snapshot, plainTextResult, structuredResult: () => lastResults};
+  window.__lwOcrTest = {
+    snapshot,
+    plainTextResult,
+    structuredResult: () => lastResults,
+    timingBreakdown: () => lastTimingBreakdown ?
+      {...lastTimingBreakdown} : null
+  };
   window.addEventListener("beforeunload", () => {
     if (engine) engine.destroy();
   });
