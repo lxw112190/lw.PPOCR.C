@@ -57,7 +57,7 @@
     .support-content { display: flex; gap: 24px; align-items: center; padding: 4px 20px 20px; }
     .support h2 { margin: 0 0 8px; font-size: 16px; }
     .support p { margin: 0 0 8px; color: #607086; font-size: 13px; line-height: 1.6; }
-    .support img { width: 150px; height: 150px; flex: 0 0 auto; border-radius: 8px; object-fit: cover; }
+    .support img { width: 150px; height: auto; flex: 0 0 auto; border-radius: 8px; }
     .mobile-tabs { display: none; }
     a { color: #2878d4; text-decoration: none; }
     a:hover { text-decoration: underline; }
@@ -82,14 +82,14 @@
       .result-header { align-items: flex-start; padding: 12px; }
       .result-actions button { min-height: 42px; padding: 9px 12px; font-size: 13px; }
       .support-content { align-items: flex-start; }
-      .support img { width: 112px; height: 112px; }
+      .support img { width: 112px; height: auto; }
       footer { text-align: center; }
     }
     @media (max-width: 430px) {
       .result-header { display: block; }
       .result-actions { margin-top: 10px; justify-content: flex-start; }
       .support-content { display: block; }
-      .support img { display: none; }
+      .support img { display: block; width: min(180px, 60vw); height: auto; margin: 4px auto 14px; }
     }
   </style>
 </head>
@@ -947,8 +947,6 @@
       if (line) selectResultLine(Number(line.dataset.lineIndex));
     });
     shareResultButton.hidden = !navigator.share;
-    if (matchMedia("(max-width: 760px)").matches) document.getElementById("support").open = false;
-
     /*
      * Public integration API
      * ----------------------

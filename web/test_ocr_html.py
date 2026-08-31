@@ -219,6 +219,12 @@ def main() -> int:
         # viewport exposes touch-sized camera/gallery controls and panel tabs.
         page.set_viewport_size({"width": 390, "height": 844})
         assert page.locator(".mobile-source-actions").is_visible()
+        assert page.locator("#support").get_attribute("open") is not None
+        sponsor_image = page.locator("#support img")
+        assert sponsor_image.is_visible()
+        sponsor_box = sponsor_image.bounding_box()
+        assert sponsor_box is not None and sponsor_box["width"] >= 112, sponsor_box
+        assert sponsor_image.get_attribute("src").startswith("data:image/jpeg;base64,")
         run_box = page.locator("#run").bounding_box()
         assert run_box is not None and run_box["height"] >= 44, run_box
         assert page.evaluate(

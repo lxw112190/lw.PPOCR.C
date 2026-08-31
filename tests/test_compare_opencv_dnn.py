@@ -5,6 +5,7 @@ import struct
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from tools import compare_opencv_dnn
 
@@ -33,7 +34,16 @@ class CompareOpenCvDnnTest(unittest.TestCase):
         self.assertEqual(bmp[54:60], bytes((30, 20, 10, 60, 50, 40)))
 
     def test_cpu_list_accepts_ranges_and_rejects_empty_values(self) -> None:
-        self.assertEqual(compare_opencv_dnn.parse_cpu_list("0-2,4,2"), [0, 1, 2, 4])
+        # Host affinity validation is intentional, so make the parser test
+        # independent of the logical CPU count assigned to a CI runner.
+        with patch.object(compare_opencv_dnn.os, "cpu_count", return_value=8):
+            self.assertEqual(
+                compare_opencv_dnn.parse_cpu_list("0-2,4,2"),
+                [0, 1, 2, 4],
+            )
+        with patch.object(compare_opencv_dnn.os, "cpu_count", return_value=4):
+            with self.assertRaises(ValueError):
+                compare_opencv_dnn.parse_cpu_list("4")
         with self.assertRaises(ValueError):
             compare_opencv_dnn.parse_cpu_list("")
         with self.assertRaises(ValueError):
