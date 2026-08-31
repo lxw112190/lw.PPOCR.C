@@ -537,6 +537,13 @@ if(BUILD_TESTING AND NOT EMSCRIPTEN)
         WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
 
     add_test(
+        NAME opencv_dnn_comparison_helpers
+        COMMAND "${Python3_EXECUTABLE}" -m unittest -v
+                tests.test_compare_opencv_dnn)
+    set_tests_properties(opencv_dnn_comparison_helpers PROPERTIES
+        WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
+
+    add_test(
         NAME conv_bn_fusion
         COMMAND "${Python3_EXECUTABLE}" -m unittest -v
                 tests.test_conv_bn_fusion)

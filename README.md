@@ -138,6 +138,7 @@ be copied as plain text or downloaded as UTF-8 TXT and versioned JSON; see the
 - [Performance baseline, profile, and optimization notes](docs/performance-baseline.md),
   [full-OCR profile](docs/full-ocr-profile.md), and
   [kernel optimization](docs/kernel-optimization.md)
+- [Correctness-gated full-OCR comparison with OpenCV DNN](docs/opencv-dnn-comparison.md)
 - [Development package and managed demos](docs/package.md) and
   [C#/HTTP/web integration](docs/managed-demos.md)
 

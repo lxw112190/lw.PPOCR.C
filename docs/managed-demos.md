@@ -84,7 +84,7 @@ Run on Windows:
 .\build\bin\lw.PPOCR.C.HttpServer.exe `
   --host 127.0.0.1 --port 8787 `
   --models .\build\models --www .\build\www `
-  --ocr-workers 4
+  --ocr-workers 4 --rec-max-width 960
 ```
 
 On Linux/macOS, use the same arguments with
@@ -113,6 +113,10 @@ Content-Type: image/x-portable-pixmap
 
 <P6 PPM bytes>
 ```
+
+Native clients may also send uncompressed 24-bit BMP with `Content-Type:
+image/bmp`. This lossless common format is used by the
+[OpenCV DNN comparison](opencv-dnn-comparison.md).
 
 JSON/Base64 OCR, compatible in shape with the referenced HTTP Demo:
 
@@ -158,6 +162,8 @@ MiB. OCR access is serialized because one native OCR handle is reused, while
 cpp-httplib can process unrelated HTTP work on its worker pool. Inside one OCR
 request, `--ocr-workers 1..16` controls independent CLS/REC line workers; x64
 uses the online logical-processor count capped at 8 and x86 uses 1.
+`--rec-max-width 192|320|480|640|960` caps adaptive REC width and defaults to
+320.
 
 The Demo defaults to loopback and provides no TLS, authentication, CORS, rate
 limit, or production access log. Do not bind it to an untrusted network.

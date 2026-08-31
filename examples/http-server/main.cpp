@@ -61,9 +61,10 @@ struct Config {
     std::string web_root;
     bool use_classifier;
     uint32_t ocr_workers;
+    uint32_t rec_max_width;
 
     Config() : host("127.0.0.1"), port(8787), use_classifier(true),
-               ocr_workers(DefaultOcrWorkers()) {}
+               ocr_workers(DefaultOcrWorkers()), rec_max_width(320u) {}
 };
 
 struct BgrImage {
@@ -317,6 +318,77 @@ BgrImage DecodeP6Ppm(const std::string& bytes) {
     return image;
 }
 
+uint16_t ReadLe16(const std::string& bytes, size_t offset, const char* field) {
+    if (offset > bytes.size() || bytes.size() - offset < 2u) {
+        throw ApiError(400, "bad_request", std::string("invalid BMP ") + field);
+    }
+    return static_cast<uint16_t>(
+        static_cast<uint8_t>(bytes[offset]) |
+        (static_cast<uint16_t>(static_cast<uint8_t>(bytes[offset + 1u])) << 8u));
+}
+
+uint32_t ReadLe32(const std::string& bytes, size_t offset, const char* field) {
+    if (offset > bytes.size() || bytes.size() - offset < 4u) {
+        throw ApiError(400, "bad_request", std::string("invalid BMP ") + field);
+    }
+    return static_cast<uint32_t>(static_cast<uint8_t>(bytes[offset])) |
+        (static_cast<uint32_t>(static_cast<uint8_t>(bytes[offset + 1u])) << 8u) |
+        (static_cast<uint32_t>(static_cast<uint8_t>(bytes[offset + 2u])) << 16u) |
+        (static_cast<uint32_t>(static_cast<uint8_t>(bytes[offset + 3u])) << 24u);
+}
+
+BgrImage DecodeBmp24(const std::string& bytes) {
+    if (bytes.size() < 54u || bytes[0] != 'B' || bytes[1] != 'M') {
+        throw ApiError(400, "bad_request", "invalid BMP header");
+    }
+    const uint32_t pixel_offset = ReadLe32(bytes, 10u, "pixel offset");
+    const uint32_t dib_size = ReadLe32(bytes, 14u, "DIB header");
+    const uint32_t raw_width = ReadLe32(bytes, 18u, "width");
+    const uint32_t raw_height = ReadLe32(bytes, 22u, "height");
+    const int64_t signed_width = raw_width <= INT32_MAX
+        ? static_cast<int64_t>(raw_width)
+        : static_cast<int64_t>(raw_width) - INT64_C(4294967296);
+    const int64_t signed_height = raw_height <= INT32_MAX
+        ? static_cast<int64_t>(raw_height)
+        : static_cast<int64_t>(raw_height) - INT64_C(4294967296);
+    const uint16_t planes = ReadLe16(bytes, 26u, "planes");
+    const uint16_t bits_per_pixel = ReadLe16(bytes, 28u, "bit depth");
+    const uint32_t compression = ReadLe32(bytes, 30u, "compression");
+    if (dib_size < 40u || dib_size > bytes.size() - 14u ||
+        pixel_offset < 14u + static_cast<uint64_t>(dib_size) ||
+        planes != 1u || bits_per_pixel != 24u ||
+        compression != 0u || signed_width <= 0 || signed_height == 0) {
+        throw ApiError(415, "unsupported_media_type",
+            "server accepts uncompressed 24-bit BMP images");
+    }
+    BgrImage image;
+    image.width = static_cast<uint32_t>(signed_width);
+    image.height = static_cast<uint32_t>(
+        signed_height < 0 ? -signed_height : signed_height);
+    const uint64_t pixels = static_cast<uint64_t>(image.width) * image.height;
+    if (pixels > kMaxImagePixels || !AllocationFits(pixels, 3u)) {
+        throw ApiError(413, "image_too_large", "decoded image exceeds 40,000,000 pixels");
+    }
+    const uint64_t row_bytes =
+        (static_cast<uint64_t>(image.width) * 3u + 3u) & ~UINT64_C(3);
+    const uint64_t payload_bytes = row_bytes * image.height;
+    if (pixel_offset > bytes.size() || payload_bytes > bytes.size() - pixel_offset) {
+        throw ApiError(400, "bad_request", "BMP pixel payload length is invalid");
+    }
+    image.pixels.resize(static_cast<size_t>(pixels * 3u));
+    for (uint32_t y = 0u; y < image.height; ++y) {
+        const uint32_t source_y =
+            signed_height < 0 ? y : image.height - 1u - y;
+        const size_t source_offset =
+            static_cast<size_t>(pixel_offset + row_bytes * source_y);
+        const size_t destination_offset =
+            static_cast<size_t>(image.width) * y * 3u;
+        std::memcpy(&image.pixels[destination_offset],
+            bytes.data() + source_offset, static_cast<size_t>(image.width) * 3u);
+    }
+    return image;
+}
+
 int Base64Value(unsigned char character) {
     if (character >= 'A' && character <= 'Z') return character - 'A';
     if (character >= 'a' && character <= 'z') return character - 'a' + 26;
@@ -421,8 +493,12 @@ BgrImage ReadRequestImage(const httplib::Request& request) {
         content_type == "application/octet-stream") {
         return DecodeP6Ppm(request.body);
     }
+    if (content_type == "image/bmp" || content_type == "image/x-ms-bmp") {
+        return DecodeBmp24(request.body);
+    }
     throw ApiError(415, "unsupported_media_type",
-        "use image/x-portable-pixmap, application/octet-stream, or JSON/Base64 P6 PPM");
+        "use image/x-portable-pixmap, image/bmp, application/octet-stream, "
+        "or JSON/Base64 P6 PPM");
 }
 
 class OcrEngine {
@@ -433,6 +509,7 @@ public:
         lw_ocr_options_init(&options);
         options.use_direction_classification = config.use_classifier ? 1u : 0u;
         options.worker_count = config.ocr_workers;
+        options.recognizer.target_width = config.rec_max_width;
         lw_error_init(&error);
         const std::string detector = JoinPath(config.models, "det.lwm");
         const std::string classifier = JoinPath(config.models, "cls.lwm");
@@ -573,7 +650,7 @@ Config ParseArguments(const std::vector<std::string>& arguments) {
             config.use_classifier = false;
         } else if (argument == "--host" || argument == "--port" ||
                    argument == "--models" || argument == "--www" ||
-                   argument == "--ocr-workers") {
+                   argument == "--ocr-workers" || argument == "--rec-max-width") {
             if (index + 1u >= arguments.size()) {
                 throw std::runtime_error("missing value after " + argument);
             }
@@ -582,15 +659,23 @@ Config ParseArguments(const std::vector<std::string>& arguments) {
             else if (argument == "--port") config.port = ParsePort(value);
             else if (argument == "--models") config.models = value;
             else if (argument == "--www") config.web_root = value;
-            else {
+            else if (argument == "--ocr-workers") {
                 config.ocr_workers = ParsePositiveU32(value, "ocr-workers");
                 if (config.ocr_workers > 16u)
                     throw std::runtime_error("ocr-workers must be between 1 and 16");
+            } else {
+                config.rec_max_width = ParsePositiveU32(value, "rec-max-width");
+                if (config.rec_max_width != 192u && config.rec_max_width != 320u &&
+                    config.rec_max_width != 480u && config.rec_max_width != 640u &&
+                    config.rec_max_width != 960u) {
+                    throw std::runtime_error(
+                        "rec-max-width must be one of 192, 320, 480, 640, or 960");
+                }
             }
         } else if (argument == "--help" || argument == "-h") {
             std::cout << "Usage: lw.PPOCR.C.HttpServer [--host ADDRESS] [--port PORT] "
                          "[--models DIRECTORY] [--www DIRECTORY] [--ocr-workers COUNT] "
-                         "[--no-cls]\n";
+                         "[--rec-max-width WIDTH] [--no-cls]\n";
             std::exit(0);
         } else {
             throw std::runtime_error("unknown argument: " + argument);
@@ -677,6 +762,7 @@ int Run(const std::vector<std::string>& arguments) {
             << "models: " << config.models << "\n"
             << "www: " << config.web_root << "\n"
             << "OCR line workers: " << config.ocr_workers << "\n"
+            << "REC maximum width: " << config.rec_max_width << "\n"
             << "HTTP workers: " << LW_HTTP_THREAD_POOL_COUNT;
     Log(startup.str());
     const bool listening = server.listen(config.host.c_str(), config.port);

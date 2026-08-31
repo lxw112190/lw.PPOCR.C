@@ -4,12 +4,36 @@ import argparse
 import base64
 import json
 import socket
+import struct
 import subprocess
 import time
 import urllib.error
 import urllib.request
 from pathlib import Path
 from typing import Dict, Optional, Tuple
+
+
+def ppm_to_bmp(ppm: bytes) -> bytes:
+    parts = ppm.split(b"\n", 3)
+    if len(parts) != 4 or parts[0] != b"P6" or parts[2] != b"255":
+        raise AssertionError("unexpected test PPM header")
+    width, height = (int(value) for value in parts[1].split())
+    rgb = parts[3]
+    row_bytes = (width * 3 + 3) & ~3
+    output = bytearray(54 + row_bytes * height)
+    struct.pack_into("<2sIHHI", output, 0, b"BM", len(output), 0, 0, 54)
+    struct.pack_into(
+        "<IiiHHIIiiII", output, 14, 40, width, height, 1, 24, 0,
+        row_bytes * height, 2835, 2835, 0, 0
+    )
+    for y in range(height):
+        destination = 54 + (height - 1 - y) * row_bytes
+        for x in range(width):
+            source = (y * width + x) * 3
+            output[destination + x * 3:destination + x * 3 + 3] = (
+                rgb[source + 2], rgb[source + 1], rgb[source]
+            )
+    return bytes(output)
 
 
 def request_json(
@@ -45,6 +69,7 @@ def main() -> int:
             "--port", str(port),
             "--models", str(args.models),
             "--www", str(args.www),
+            "--rec-max-width", "960",
         ],
         cwd=args.server.parent,
         stdout=subprocess.PIPE,
@@ -84,6 +109,14 @@ def main() -> int:
         assert result[0]["text"] == "纯臻营养护发素"
         assert binary.get("request_id")
 
+        status, bmp = request_json(
+            base_url + "/api/ocr", ppm_to_bmp(image), "image/bmp"
+        )
+        assert status == 200 and bmp.get("ok") is True
+        assert [line["text"] for line in bmp["result"]] == [
+            line["text"] for line in result
+        ]
+
         body = json.dumps(
             {"imageBase64": base64.b64encode(image).decode("ascii")}
         ).encode("utf-8")
@@ -99,7 +132,7 @@ def main() -> int:
         assert status == 400 and rejected.get("error_code") == "bad_request"
         status, rejected = request_json(base_url + "/missing")
         assert status == 404 and rejected.get("error_code") == "not_found"
-        print("native HTTP smoke passed: binary/json=16 lines, media=415, bad PPM=400, missing=404")
+        print("native HTTP smoke passed: PPM/BMP/JSON=16 lines, media=415, bad PPM=400, missing=404")
         return 0
     finally:
         process.terminate()
