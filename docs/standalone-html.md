@@ -1,238 +1,78 @@
-# Standalone HTML usage and JavaScript API
+# Standalone HTML usage
 
-The standalone OCR page packages the WebAssembly runtime, DET/CLS/REC models,
-dictionary, user interface, and support assets into one `ocr-demo.html` file.
-It runs OCR locally in the browser and does not upload the selected image.
+**ocr-demo.html** is the ready-made offline OCR application. It embeds the
+browser SDK, WebAssembly runtime, DET/CLS/REC models, dictionary, user
+interface, and support image in one file. Selected images remain local and are
+not uploaded.
 
-This document covers both direct end-user operation and integration code added
-to the standalone page.
+For a custom browser application, use the separate **lw-ppocr.js** artifact and
+the public **LwPpocr.create()** API described in the
+[Browser JavaScript SDK guide](web-sdk.md). Do not load an HTML file as a
+script.
 
-## Use the page directly
+## Use the page
 
-Download `ocr-demo.html` from a Release or build it with the
-`lw-ocr-html` CMake target. Open the file directly in a modern browser; a
-native server is not required.
+Download the release HTML or build the **lw-ocr-html** CMake target, then open
+**ocr-demo.html** directly in a modern browser.
 
 1. On desktop, select an image or drag it onto the page.
-2. On mobile, use **拍照识别** or **从相册选择**.
-3. Enable CLS when text orientation classification is needed.
+2. On a phone, choose **拍照识别** or **从相册选择**.
+3. Enable CLS when orientation classification is needed.
 4. Select **开始识别**.
-5. Copy or share the recognized text, or export UTF-8 TXT or JSON.
+5. Copy or share the text, or export UTF-8 TXT or structured JSON.
 
-The page keeps a single current image and result. Selecting another image or
-starting another recognition invalidates the previous export snapshot until
-the new run succeeds.
+The page keeps one current image and one result. Selecting another image
+invalidates the old export snapshot until recognition succeeds again.
 
-The generated page uses a Blob Web Worker so inference does not block normal UI
-interaction. If a browser or local security policy rejects Blob Workers, the
-page falls back to a compatible main-thread backend. The WebAssembly module
-itself does not use pthreads and retains one internal OCR line worker.
+Inference normally runs inside a Blob Worker so the controls remain
+responsive. If local browser policy rejects Blob Workers, the embedded SDK
+uses its compatible main-thread fallback. The default build enables
+WebAssembly SIMD128.
 
-The default build enables WebAssembly SIMD128. Use a browser with WebAssembly
-SIMD support, or build with `-DLW_WASM_SIMD128=OFF` when an older scalar-only
-browser must be supported.
+## Customize the Demo
 
-## Integration boundary
+The source is deliberately split into three layers:
 
-`ocr-demo.html` is a complete application, not a JavaScript library. Do not
-load it with:
+~~~text
+web/lw_ppocr_sdk.template.js  reusable OCR SDK
+             |
+web/ocr-demo-ui.js            DOM, preview, export, mobile interaction
+             |
+web/ocr-demo.template.html    markup and responsive styles
+~~~
 
-```html
-<!-- Not supported -->
-<script src="ocr-demo.html"></script>
-```
+The build first produces **lw-ppocr.js**, then injects that exact artifact and
+the UI script into **ocr-demo.html**. Integrations should keep image decoding,
+WASM pointers, buffer ownership, and native calls inside the SDK. Demo changes
+should operate on structured OCR results.
 
-The public `window.lwPpocrDemo` API is intended for code added after the
-existing application script in `web/ocr-demo.template.html`, or for other
-customizations made to the generated standalone page. It updates the built-in
-preview, status, result list, and export state.
+The page still exposes **window.lwPpocrDemo** version 1 as a compatibility
+adapter for existing customizations:
 
-Cross-page iframe access is not a supported integration contract. In
-particular, local `file://` iframe behavior varies by browser and origin
-policy. Applications that need an independent HTTP API should use the native
-HTTP Demo described in [managed demos](managed-demos.md).
-
-## Basic JavaScript integration
-
-Add custom markup where appropriate in the template:
-
-```html
-<input id="my-image" type="file" accept="image/*">
-<button id="my-ocr" type="button">Recognize</button>
-<pre id="my-result"></pre>
-```
-
-Add the following script after the existing OCR application script:
-
-```html
-<script>
-  const imageInput = document.getElementById("my-image");
-  const resultNode = document.getElementById("my-result");
-
-  document.getElementById("my-ocr").addEventListener("click", async () => {
-    const file = imageInput.files[0];
-    if (!file) {
-      resultNode.textContent = "Select an image first.";
-      return;
-    }
-
-    try {
-      await window.lwPpocrDemo.ready();
-      const result = await window.lwPpocrDemo.recognize(file, {
-        useCls: true
-      });
-      resultNode.textContent = JSON.stringify(result, null, 2);
-    } catch (error) {
-      resultNode.textContent = "OCR failed: " + error.message;
-    }
-  });
-</script>
-```
-
-The normal call sequence is:
-
-```text
-page load
-  -> await lwPpocrDemo.ready()
-  -> obtain a browser File or decodable Blob
-  -> await lwPpocrDemo.recognize(file, options)
-  -> consume the schema_version: 1 result
-```
-
-Calls to `recognize` must be serialized. Await one call before starting the
-next one.
-
-## API reference
-
-### `apiVersion`
-
-The JavaScript integration API version. Its current value is `1`. This is
-separate from the OCR JSON `schema_version`.
-
-### `ready()`
-
-```javascript
+~~~javascript
 await window.lwPpocrDemo.ready();
-```
-
-Waits for the current WASM/model initialization attempt. It rejects when the
-engine did not initialize successfully. It can also be used after changing CLS
-while the page reinitializes the engine.
-
-### `selectImage(file)`
-
-```javascript
-await window.lwPpocrDemo.selectImage(file);
-```
-
-Decodes and prepares a browser `File` or decodable `Blob`, updates the
-built-in preview, and invalidates the previous result. It does not run OCR.
-Ignore its return value.
-
-### `recognize(file?, options?)`
-
-```javascript
-const result = await window.lwPpocrDemo.recognize(file, {
-  useCls: false
-});
-```
-
-Runs the complete DET -> optional CLS -> REC pipeline and returns the same
-structured object used by JSON export.
-
-- `file` is optional. When omitted, the current prepared image is used.
-- `options.useCls` is optional. Pass an explicit Boolean when an integration
-  must not depend on the current checkbox state.
-- Passing a file prepares it before recognition.
-- Omitting `file` when no current image is prepared rejects the Promise.
-- Starting another call while recognition is running rejects the Promise.
-- The Promise rejects if initialization, image decoding, or recognition fails.
-- A successful image with no detected text returns an empty `lines` array.
-
-### `getResult()`
-
-```javascript
-const result = window.lwPpocrDemo.getResult();
-```
-
-Returns a deep copy of the last successful structured result, or `null` when
-no current result is available. Mutating this copy does not alter page state.
-
-### `getPlainText()`
-
-```javascript
+const result = await window.lwPpocrDemo.recognize(file, {useCls: true});
 const text = window.lwPpocrDemo.getPlainText();
-```
+~~~
 
-Returns recognized lines joined with LF characters in display/reading order.
-It returns an empty string when there is no current result.
+It updates the built-in preview, result list, and export state. New
+applications should use **LwPpocr.create()** directly because it is independent
+of Demo markup and is tested as a standalone SDK.
 
-### `getStatus()`
+The Demo also dispatches:
 
-```javascript
-const status = window.lwPpocrDemo.getStatus();
-console.log(status.ready, status.backend, status.heapBytes);
-```
+- **lwppocr:ready** with **{backend}**;
+- **lwppocr:result** with the successful export object;
+- **lwppocr:error** with **{phase, message}**.
 
-Returns a diagnostic snapshot used for troubleshooting and automated tests.
-Useful fields include:
+The test hook, Worker messages, embedded model variables, Emscripten members,
+and DOM state are implementation details, not public API.
 
-| Field | Meaning |
-|---|---|
-| `ready` | The engine is ready to recognize an image |
-| `backend` | `worker`, `main-thread`, `loading`, or `failed` |
-| `runCount` | Number of successful OCR runs |
-| `heapBytes` | Current WebAssembly linear-memory high-water mark |
-| `sourceCapacity` | Reusable BGR input capacity in bytes |
-| `prepareCount` | Number of images decoded and prepared |
-| `prepared` | A current image is ready |
-| `hasResults` | A successful current result exists |
-| `exportEnabled` | Copy/TXT/JSON actions are enabled |
+## Export format
 
-Diagnostic objects may gain optional fields without changing `apiVersion`.
+The Demo export contains original image dimensions, OCR options, elapsed time,
+reading-order lines, original-image quadrilaterals, and confidence scores. See
+[OCR result export schema](ocr-export-schema.md).
 
-## Document events
-
-Integrations may observe page activity without replacing the built-in
-controls:
-
-```javascript
-document.addEventListener("lwppocr:ready", event => {
-  console.log("OCR backend:", event.detail.backend);
-});
-
-document.addEventListener("lwppocr:result", event => {
-  console.log("OCR result:", event.detail);
-});
-
-document.addEventListener("lwppocr:error", event => {
-  console.error(event.detail.phase, event.detail.message);
-});
-```
-
-| Event | `detail` |
-|---|---|
-| `lwppocr:ready` | `{backend}`; emitted after initial setup and CLS reinitialization |
-| `lwppocr:result` | The successful `schema_version: 1` result |
-| `lwppocr:error` | `{phase, message}`, where phase is `initialize` or `recognize` |
-
-Register listeners before calling `recognize`. Code that must observe the
-initial ready event should be placed before the page calls `boot()`; otherwise
-call `ready()` to query the current state reliably.
-
-## Result format
-
-The structured result contains the original image dimensions, options, elapsed
-time, reading-order text lines, original-image quadrilaterals, and confidence
-scores. See [OCR result export schema](ocr-export-schema.md) for the versioned
-field contract.
-
-The JavaScript API and JSON export are application-level contracts. They do not
-change or extend the public C ABI.
-
-## Internal names are not public API
-
-Do not depend on the Worker message protocol, `MODEL_B64`, `RUNTIME_JS`,
-WASM pointers, buffer-management helpers, DOM state variables, or
-`window.__lwOcrTest`. The last name exists only for browser automation and
-may change with the tests.
+The browser SDK and the Demo export are application-layer contracts. Neither
+changes the public C ABI.

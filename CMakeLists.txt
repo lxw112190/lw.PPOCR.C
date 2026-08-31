@@ -233,22 +233,54 @@ if(EMSCRIPTEN)
         "-sEXPORTED_FUNCTIONS=['_lw_web_init','_lw_web_shutdown','_lw_web_info_size','_lw_web_get_info','_lw_web_run','_lw_web_last_error','_lw_web_malloc','_lw_web_free']"
         "--no-entry")
     set_target_properties(lw_ppocr_web PROPERTIES OUTPUT_NAME "lw_ppocr_web")
-    set_property(TARGET lw_ppocr_web APPEND PROPERTY LINK_DEPENDS
-        "${CMAKE_CURRENT_SOURCE_DIR}/web/ocr-demo.template.html"
-        "${CMAKE_CURRENT_SOURCE_DIR}/web/package_ocr_html.py"
-        "${CMAKE_CURRENT_SOURCE_DIR}/docs/assets/sponsor.jpg")
     add_dependencies(lw_ppocr_web convert_det_model convert_cls_model convert_rec_model)
-    add_custom_command(TARGET lw_ppocr_web POST_BUILD
-        COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/web/package_ocr_html.py"
-            --template "${CMAKE_CURRENT_SOURCE_DIR}/web/ocr-demo.template.html"
+
+    # The generated runtime remains a normal Emscripten module. The browser
+    # SDK is a separate deterministic artifact layered on top of that module,
+    # so other applications can consume it without the demo HTML.
+    set(LW_PPOCR_C_WEB_SDK
+        "${CMAKE_CURRENT_BINARY_DIR}/lw-ppocr.js")
+    add_custom_command(
+        OUTPUT "${LW_PPOCR_C_WEB_SDK}"
+        COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/web/package_ocr_sdk.py"
+            --template "${CMAKE_CURRENT_SOURCE_DIR}/web/lw_ppocr_sdk.template.js"
             --runtime "$<TARGET_FILE_DIR:lw_ppocr_web>/lw_ppocr_web.js"
             --det "${LW_PPOCR_C_DET_LWM}" --cls "${LW_PPOCR_C_CLS_LWM}"
             --rec "${LW_PPOCR_C_REC_LWM}"
             --dictionary "${CMAKE_CURRENT_SOURCE_DIR}/models/ppocrv6-tiny/ppocr_keys.txt"
-            --sponsor "${CMAKE_CURRENT_SOURCE_DIR}/docs/assets/sponsor.jpg"
-            --output "$<TARGET_FILE_DIR:lw_ppocr_web>/ocr-demo.html"
+            --version "${PROJECT_VERSION}"
+            --output "${LW_PPOCR_C_WEB_SDK}"
+        DEPENDS
+            lw_ppocr_web
+            "${CMAKE_CURRENT_SOURCE_DIR}/web/lw_ppocr_sdk.template.js"
+            "${CMAKE_CURRENT_SOURCE_DIR}/web/package_ocr_sdk.py"
+            "${LW_PPOCR_C_DET_LWM}" "${LW_PPOCR_C_CLS_LWM}" "${LW_PPOCR_C_REC_LWM}"
+            "${CMAKE_CURRENT_SOURCE_DIR}/models/ppocrv6-tiny/ppocr_keys.txt"
+        COMMENT "Packaging the browser OCR SDK"
         VERBATIM)
-    add_custom_target(lw-ocr-html DEPENDS lw_ppocr_web)
+    add_custom_target(lw-ocr-js DEPENDS "${LW_PPOCR_C_WEB_SDK}")
+
+    # The standalone HTML is now only a thin UI shell plus the SDK. Keep it as
+    # a separate target so CI and downstream users can download either file.
+    set(LW_PPOCR_C_WEB_HTML
+        "${CMAKE_CURRENT_BINARY_DIR}/ocr-demo.html")
+    add_custom_command(
+        OUTPUT "${LW_PPOCR_C_WEB_HTML}"
+        COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/web/package_ocr_html.py"
+            --template "${CMAKE_CURRENT_SOURCE_DIR}/web/ocr-demo.template.html"
+            --sdk "${LW_PPOCR_C_WEB_SDK}"
+            --ui "${CMAKE_CURRENT_SOURCE_DIR}/web/ocr-demo-ui.js"
+            --sponsor "${CMAKE_CURRENT_SOURCE_DIR}/docs/assets/sponsor.jpg"
+            --output "${LW_PPOCR_C_WEB_HTML}"
+        DEPENDS
+            lw-ocr-js
+            "${CMAKE_CURRENT_SOURCE_DIR}/web/ocr-demo.template.html"
+            "${CMAKE_CURRENT_SOURCE_DIR}/web/ocr-demo-ui.js"
+            "${CMAKE_CURRENT_SOURCE_DIR}/web/package_ocr_html.py"
+            "${CMAKE_CURRENT_SOURCE_DIR}/docs/assets/sponsor.jpg"
+        COMMENT "Packaging the standalone offline OCR HTML demo"
+        VERBATIM)
+    add_custom_target(lw-ocr-html DEPENDS "${LW_PPOCR_C_WEB_HTML}")
 endif()
 
 set(LW_PPOCR_C_REC_DEMO_PPM

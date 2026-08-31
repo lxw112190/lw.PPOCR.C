@@ -1,4 +1,4 @@
-name: offline-wasm-html
+name: browser-wasm-sdk-and-html
 
 on:
   push:
@@ -12,7 +12,7 @@ permissions:
 
 jobs:
   build:
-    name: Build standalone OCR HTML
+    name: Build browser OCR SDK and standalone HTML
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
@@ -54,25 +54,35 @@ jobs:
           -DLW_BUILD_CSHARP_DEMOS=OFF
           -DBUILD_TESTING=OFF
 
-      - name: Build standalone HTML
-        run: cmake --build build-wasm --target lw-ocr-html --parallel
+      - name: Build browser SDK and standalone HTML
+        run: cmake --build build-wasm --target lw-ocr-js lw-ocr-html --parallel
 
-      - name: Verify standalone HTML
+      - name: Verify browser artifacts
         shell: bash
         run: |
+          test -s build-wasm/lw-ppocr.js
           test -s build-wasm/ocr-demo.html
+          ! grep -a -q '__LW_' build-wasm/lw-ppocr.js
           ! grep -a -q '__LW_' build-wasm/ocr-demo.html
 
-      - name: Run browser OCR and memory smoke test
+      - name: Run browser SDK contract and memory test
+        run: >-
+          python web/test_ocr_sdk.py
+          --sdk build-wasm/lw-ppocr.js
+          --sample models/ppocrv6-tiny/sample.jpg
+
+      - name: Run standalone HTML UI test
         run: >-
           python web/test_ocr_html.py
           --html build-wasm/ocr-demo.html
           --sample models/ppocrv6-tiny/sample.jpg
 
-      - name: Upload standalone HTML
+      - name: Upload browser artifacts
         uses: actions/upload-artifact@v7
         with:
-          name: lw.PPOCR.C-ocr-demo-html-${{ github.sha }}
-          path: build-wasm/ocr-demo.html
+          name: lw.PPOCR.C-browser-${{ github.sha }}
+          path: |
+            build-wasm/lw-ppocr.js
+            build-wasm/ocr-demo.html
           if-no-files-found: error
           retention-days: 14

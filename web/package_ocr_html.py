@@ -1,13 +1,48 @@
-"""Pack the Emscripten runtime and LWM models into one offline HTML file."""
+"""Inline the browser SDK and UI glue into the standalone offline HTML demo."""
 from __future__ import annotations
-import argparse, base64, json
+
+import argparse
+import base64
 from pathlib import Path
-def enc(path: Path) -> str: return base64.b64encode(path.read_bytes()).decode("ascii")
+
+
+def read_text(path: Path) -> str:
+    return path.read_text(encoding="utf-8")
+
+
 def main() -> int:
-    p=argparse.ArgumentParser(); p.add_argument("--template",type=Path,required=True); p.add_argument("--runtime",type=Path,required=True); p.add_argument("--det",type=Path,required=True); p.add_argument("--cls",type=Path,required=True); p.add_argument("--rec",type=Path,required=True); p.add_argument("--dictionary",type=Path,required=True); p.add_argument("--sponsor",type=Path,required=True); p.add_argument("--output",type=Path,required=True); a=p.parse_args()
-    values={"__LW_DET_MODEL_BASE64__":enc(a.det),"__LW_CLS_MODEL_BASE64__":enc(a.cls),"__LW_REC_MODEL_BASE64__":enc(a.rec),"__LW_DICTIONARY_BASE64__":enc(a.dictionary),"__LW_SPONSOR_IMAGE_BASE64__":enc(a.sponsor),"__LW_RUNTIME_JS_JSON__":json.dumps(a.runtime.read_text(encoding="utf-8"))}
-    out=a.template.read_text(encoding="utf-8")
-    for k,v in values.items(): out=out.replace(k,v)
-    if "__LW_" in out: raise SystemExit("unresolved HTML placeholder")
-    a.output.parent.mkdir(parents=True,exist_ok=True); a.output.write_text(out,encoding="utf-8",newline="\n"); print(f"wrote {a.output} ({a.output.stat().st_size} bytes)"); return 0
-if __name__=="__main__": raise SystemExit(main())
+    parser = argparse.ArgumentParser(
+        description="Package lw-ppocr.js and the demo UI into one offline HTML file."
+    )
+    parser.add_argument("--template", type=Path, required=True)
+    parser.add_argument("--sdk", type=Path, required=True)
+    parser.add_argument("--ui", type=Path, required=True)
+    parser.add_argument("--sponsor", type=Path, required=True)
+    parser.add_argument("--output", type=Path, required=True)
+    args = parser.parse_args()
+
+    html = read_text(args.template)
+    replacements = {
+        "__LW_SDK_JS__": read_text(args.sdk),
+        "__LW_DEMO_UI_JS__": read_text(args.ui),
+        "__LW_SPONSOR_IMAGE_BASE64__": base64.b64encode(
+            args.sponsor.read_bytes()
+        ).decode("ascii"),
+    }
+    for placeholder, value in replacements.items():
+        html = html.replace(placeholder, value)
+    if "__LW_" in html:
+        raise SystemExit("unresolved HTML placeholder")
+    if "</script>" in replacements["__LW_SDK_JS__"].lower() or "</script>" in replacements[
+        "__LW_DEMO_UI_JS__"
+    ].lower():
+        raise SystemExit("script payload contains a closing script tag")
+
+    args.output.parent.mkdir(parents=True, exist_ok=True)
+    args.output.write_text(html, encoding="utf-8", newline="\n")
+    print(f"wrote {args.output} ({args.output.stat().st_size} bytes)")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

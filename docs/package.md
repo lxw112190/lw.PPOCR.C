@@ -171,8 +171,9 @@ git tag -a v0.1.0-preview.1 -m "lw.PPOCR.C v0.1.0 preview 1"
 git push origin v0.1.0-preview.1
 ```
 
-The workflow rebuilds and tests the Windows x64, Linux x64, and standalone WASM
+The workflow rebuilds and tests the Windows x64, Linux x64, and browser WASM
 packages from the tagged commit. A GitHub Release is created only after all
-three jobs succeed. The Release contains the native archives, the offline HTML,
-and a SHA-256 file for every downloadable asset. Tags with a `0.x` version or a
-prerelease suffix are automatically marked as GitHub prereleases.
+three jobs succeed. The Release contains the native archives, reusable
+JavaScript SDK, offline HTML, and a SHA-256 file for every downloadable asset.
+Tags with a `0.x` version or a prerelease suffix are automatically marked as
+GitHub prereleases.

@@ -169,15 +169,22 @@ HTTP Demo 使用原生 C++ 和 vendored `cpp-httplib`，没有 .NET 运行时依
 
 ```powershell
 emcmake cmake -S . -B build-wasm -G Ninja -DCMAKE_BUILD_TYPE=Release -DLW_BUILD_HTTP_DEMO=OFF -DBUILD_TESTING=OFF
-cmake --build build-wasm --target lw-ocr-html
+cmake --build build-wasm --target lw-ocr-js lw-ocr-html
 ```
 
 Windows 下可在 emsdk 目录运行 `emsdk_env.bat`，或按 emsdk 文档使用对应的环境初始化脚本；不同安装位置无需修改上述构建命令。
 
-生成的 `build-wasm/ocr-demo.html` 已内嵌 WASM、三个 LWM 模型和字典，可以直接双击打开
-并选择图片进行完整 OCR，不需要启动 HTTP 服务。页面在初始化时按照 Runtime 返回的真实
-容量分配输出缓冲区，后续识别会复用这些缓冲区；输入缓冲区只在图片变大时扩容。识别完成后
-可以复制全文，或导出 UTF-8 TXT 和带版本号的结构化 JSON；字段定义见
+构建会生成两个自包含的浏览器产物：
+
+- `build-wasm/lw-ppocr.js` 是可复用的 JavaScript SDK，通过
+  `LwPpocr.create()` 创建实例，支持 File、Blob、ImageData 和 Canvas 输入，浏览器允许时
+  在 Worker 中执行，并返回带版本号的结构化结果；
+- `build-wasm/ocr-demo.html` 内嵌同一份 SDK 和响应式示例界面，可以直接双击打开，不需要
+  启动 HTTP 服务。
+
+SDK 会按照 Runtime 返回的真实容量分配并复用输入/输出缓冲区。接入方法见
+[`docs/web-sdk.md`](docs/web-sdk.md)，单 HTML 的直接使用与定制见
+[`docs/standalone-html.md`](docs/standalone-html.md)，导出字段见
 [`docs/ocr-export-schema.md`](docs/ocr-export-schema.md)。
 
 ### C# WinForms Demo
@@ -245,6 +252,8 @@ HTTP Demo 和正式发布包均不链接、加载或携带 OpenCV。
 - [标量算子](docs/scalar-kernels.md)
 - [性能基线与优化](docs/performance-baseline.md)
 - [完整 OCR 分阶段与算子性能分析](docs/full-ocr-profile.md)
+- [浏览器 JavaScript SDK](docs/web-sdk.md)
+- [单文件离线 HTML 使用与定制](docs/standalone-html.md)
 - [开发包说明](docs/package.md)
 - [C# 与 HTTP/Web Demo](docs/managed-demos.md)
 

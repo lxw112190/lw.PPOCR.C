@@ -13,13 +13,15 @@ verification.
 | Windows 7 SP1 x86 | Yes | No | No | Compatibility profile; not a v0.1 blocker |
 | Windows 10 x86 build | Design check | No | Windows 10 development host | Full REC path, DLL/static package, and installed Demo pass |
 
-The offline HTML can be opened directly from `file://`. It normally runs the
-single-threaded Emscripten module inside a Blob Web Worker so inference does not
+The reusable `lw-ppocr.js` SDK and offline HTML can be loaded directly from
+`file://`. They normally run the single-threaded Emscripten module inside a
+Blob Web Worker so inference does not
 block the page UI; browsers that reject Blob Workers use a main-thread fallback.
 The module does not use pthreads and retains one internal OCR line worker. Its
 default `LW_WASM_SIMD128=ON` build requires a browser with WebAssembly SIMD
 support. Configure with `-DLW_WASM_SIMD128=OFF` only when a scalar fallback
-is needed for an older browser. See [standalone HTML usage](standalone-html.md).
+is needed for an older browser. See the [Browser JavaScript SDK](web-sdk.md)
+and [standalone HTML usage](standalone-html.md).
 
 The current repository contains a development-time converter, a deployable
 pure-C loader/session planner, complete REC scalar kernels, and a public

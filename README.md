@@ -114,17 +114,21 @@ emcmake cmake -S . -B build-wasm -G Ninja \
   -DLW_BUILD_HTTP_DEMO=OFF \
   -DLW_BUILD_CSHARP_DEMOS=OFF \
   -DBUILD_TESTING=OFF
-cmake --build build-wasm --target lw-ocr-html
+cmake --build build-wasm --target lw-ocr-js lw-ocr-html
 ```
 
-`build-wasm/ocr-demo.html` embeds the WASM runtime, all three LWM models, the
-dictionary, and the page assets. It can be opened directly without the native
-HTTP Demo. The page queries the Web ABI for the actual output capacities and
-reuses its input/output buffers across repeated OCR runs. Completed results can
-be copied as plain text or downloaded as UTF-8 TXT and versioned JSON; see the
-[OCR result export schema](docs/ocr-export-schema.md). For direct use,
-customization, and the public `window.lwPpocrDemo` API, see
-[standalone HTML usage and JavaScript integration](docs/standalone-html.md).
+The build produces two self-contained browser artifacts:
+
+- `build-wasm/lw-ppocr.js` is the reusable JavaScript SDK. It exposes
+  `LwPpocr.create()`, accepts File, Blob, ImageData, or Canvas input, runs in a
+  Worker when available, and returns versioned structured results.
+- `build-wasm/ocr-demo.html` embeds that exact SDK plus the responsive example
+  UI. It can be opened directly without the native HTTP Demo.
+
+The SDK queries the Web ABI for actual output capacities and reuses buffers
+across repeated OCR runs. See the [Browser JavaScript SDK](docs/web-sdk.md),
+[standalone HTML usage](docs/standalone-html.md), and
+[OCR result export schema](docs/ocr-export-schema.md).
 
 ## Documentation
 
@@ -141,7 +145,8 @@ customization, and the public `window.lwPpocrDemo` API, see
   [full-OCR profile](docs/full-ocr-profile.md), and
   [kernel optimization](docs/kernel-optimization.md)
 - [Correctness-gated full-OCR comparison with OpenCV DNN](docs/opencv-dnn-comparison.md)
-- [Standalone HTML usage and JavaScript integration](docs/standalone-html.md)
+- [Browser JavaScript SDK](docs/web-sdk.md) and
+  [standalone HTML usage](docs/standalone-html.md)
 - [Development package and managed demos](docs/package.md) and
   [C#/HTTP/web integration](docs/managed-demos.md)
 
