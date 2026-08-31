@@ -165,28 +165,36 @@ def main() -> int:
             timeout=180_000,
         )
 
-        # Adaptive-width REC can construct more than one concrete graph width.
-        # Emscripten's linear memory never shrinks, so the first few identical
-        # runs may raise the heap high-water mark even though retired sessions
-        # have already been released. Require the heap to converge instead of
-        # assuming that the first inference is a complete allocator warm-up.
+        # Adaptive-width REC lazily constructs concrete graph widths. A CLS
+        # reinitialization can restart that bounded warm-up, and Emscripten's
+        # linear memory never shrinks afterward. Keep warm-up and verification
+        # as separate phases so a legitimate expansion on the final warm-up
+        # run is not mistaken for a leak.
+        snapshot = page.evaluate("window.__lwOcrTest.snapshot()")
         initial_heap = int(snapshot["heapBytes"])
         heap_history = [initial_heap]
         stable_source = snapshot["sourceCapacity"]
-        for _ in range(12):
+        warmup_runs = 16
+        verification_runs = 6
+        verification_heaps: list[int] = []
+        for run_index in range(warmup_runs + verification_runs):
             previous_count = int(snapshot["runCount"])
             page.locator("#run").click()
             snapshot = wait_for_run(page, previous_count)
             assert snapshot["sourceCapacity"] == stable_source, snapshot
             assert snapshot["prepareCount"] == 1, snapshot
             assert lines.count() == 16
-            heap_history.append(int(snapshot["heapBytes"]))
+            heap_bytes = int(snapshot["heapBytes"])
+            heap_history.append(heap_bytes)
+            if run_index >= warmup_runs:
+                verification_heaps.append(heap_bytes)
 
-        # Four unchanged final runs catch persistent heap growth while allowing the
-        # bounded high-water-mark expansion caused by allocator warm-up.
-        assert len(set(heap_history[-4:])) == 1, {
+        # Every post-warm-up run must observe the same high-water mark.
+        assert len(verification_heaps) == verification_runs
+        assert len(set(verification_heaps)) == 1, {
             "snapshot": snapshot,
             "heapHistory": heap_history,
+            "verificationHeaps": verification_heaps,
         }
         assert heap_history[-1] <= initial_heap * 2, {
             "snapshot": snapshot,
