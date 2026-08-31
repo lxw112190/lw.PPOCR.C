@@ -99,10 +99,10 @@ lw_status lw_matmul_shared_f32(const float* input, const float* weights, float* 
     }
     /* Detection happens at runtime so one binary remains safe on older CPUs. */
     simd_level = lw_detect_simd_level();
-    if (simd_level >= LW_SIMD_LEVEL_AVX2) {
+    if (lw_simd_level_is_avx2(simd_level)) {
         lw_avx2_matmul_shared_f32(input, weights, output, batch_count, rows, inner_dimension,
                                   columns);
-    } else if (simd_level >= LW_SIMD_LEVEL_SSE2) {
+    } else if (lw_simd_level_is_sse2(simd_level)) {
         lw_sse2_matmul_shared_f32(input, weights, output, batch_count, rows, inner_dimension,
                                   columns);
     } else {

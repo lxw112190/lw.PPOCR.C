@@ -69,9 +69,9 @@ static void dispatch_binary_contiguous_for_level_f32(lw_scalar_binary_op operati
                                                      const float* left, const float* right,
                                                      float* output, uint64_t element_count,
                                                      lw_simd_level simd_level) {
-    if (simd_level >= LW_SIMD_LEVEL_AVX2) {
+    if (lw_simd_level_is_avx2(simd_level)) {
         lw_avx2_binary_contiguous_f32(operation, left, right, output, element_count);
-    } else if (simd_level >= LW_SIMD_LEVEL_SSE2) {
+    } else if (lw_simd_level_is_sse2(simd_level)) {
         lw_sse2_binary_contiguous_f32(operation, left, right, output, element_count);
     } else {
         lw_scalar_binary_contiguous_f32(operation, left, right, output, element_count);
@@ -89,9 +89,9 @@ static void dispatch_binary_right_scalar_for_level_f32(lw_scalar_binary_op opera
                                                        const float* left, float right,
                                                        float* output, uint64_t element_count,
                                                        lw_simd_level simd_level) {
-    if (simd_level >= LW_SIMD_LEVEL_AVX2) {
+    if (lw_simd_level_is_avx2(simd_level)) {
         lw_avx2_binary_right_scalar_f32(operation, left, right, output, element_count);
-    } else if (simd_level >= LW_SIMD_LEVEL_SSE2) {
+    } else if (lw_simd_level_is_sse2(simd_level)) {
         lw_sse2_binary_right_scalar_f32(operation, left, right, output, element_count);
     } else {
         lw_scalar_binary_right_scalar_f32(operation, left, right, output, element_count);

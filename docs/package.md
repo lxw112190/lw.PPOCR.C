@@ -198,11 +198,16 @@ ldd ./bin/lw-ocr-ppm
   ./models/rec.lwm ./models/ppocr_keys.txt ./models/sample.ppm
 ```
 
-ARM64 and LoongArch64 currently use the portable scalar kernels. They are
-functional-validation packages, not performance-equivalent replacements for
-the runtime-dispatched SSE2/AVX2 amd64 build. Do not attach these manual
-artifacts to a tagged release until their jobs are green and the intended
-support policy has been reviewed.
+The ARM64 package selects NEON and currently accelerates packed pointwise Conv,
+regular 3x3 Conv, and 2x2 ConvTranspose. The LoongArch64 package detects LSX and
+LASX through Linux HWCAP; LSX-capable CPUs use the LSX packed pointwise kernel,
+LASX CPUs currently reuse that LSX implementation, and older CPUs remain on
+the scalar fallback. The workflow verifies backend selection and direct Conv
+correctness, but these packages are not performance-equivalent claims for the
+amd64 build. Do not attach the manual artifacts to a tagged release until the
+jobs are green and the intended support policy has been reviewed. LoongArch
+performance claims additionally require the exact archive on physical customer
+hardware.
 
 ## Publish a tagged release
 

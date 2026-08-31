@@ -327,12 +327,12 @@ static lw_status dispatch_node(lw_session* session, const uint8_t* node, uint32_
             return LW_STATUS_INVALID_SHAPE;
         }
         element_count = tensor_element_count(input_tensors[0]);
-        if (simd_level >= LW_SIMD_LEVEL_AVX2) {
+        if (lw_simd_level_is_avx2(simd_level)) {
             lw_avx2_erf_f32(inputs[0], output, element_count);
             return LW_STATUS_OK;
         }
 #if defined(__EMSCRIPTEN__)
-        if (simd_level >= LW_SIMD_LEVEL_SSE2) {
+        if (lw_simd_level_is_sse2(simd_level)) {
             lw_wasm128_erf_f32(inputs[0], output, element_count);
             return LW_STATUS_OK;
         }
@@ -419,7 +419,7 @@ static lw_status dispatch_node(lw_session* session, const uint8_t* node, uint32_
         if (batch_count > UINT32_MAX) {
             return LW_STATUS_OUT_OF_BOUNDS;
         }
-        if (simd_level >= LW_SIMD_LEVEL_AVX2 && session->prepared_nodes != NULL &&
+        if (lw_simd_level_is_avx2(simd_level) && session->prepared_nodes != NULL &&
             session->prepared_nodes[node_index].kind == LW_PREPARED_NODE_MATMUL_PACKED16) {
             const lw_prepared_node* prepared = &session->prepared_nodes[node_index];
             const float* packed_weights =
@@ -685,7 +685,7 @@ static lw_status execute_session_f32(lw_session* session, const float* input,
             model->bytes + (size_t)model->node_offset + (size_t)node_index * LWM_V0_NODE_SIZE;
         uint32_t operation = (uint32_t)lwm_read_u16(node);
         uint64_t started = 0u;
-        if (simd_level >= LW_SIMD_LEVEL_AVX2 && operation == LW_OP_DIV) {
+        if (lw_simd_level_is_avx2(simd_level) && operation == LW_OP_DIV) {
             const float* gelu_input;
             float* gelu_output;
             uint64_t gelu_element_count;

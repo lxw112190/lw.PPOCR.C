@@ -28,6 +28,7 @@ endif()
 include(CTest)
 include(GNUInstallDirs)
 include(CMakePackageConfigHelpers)
+include(CheckCCompilerFlag)
 find_package(Python3 3.9 COMPONENTS Interpreter REQUIRED)
 if(NOT EMSCRIPTEN)
     find_package(Threads REQUIRED)
@@ -195,6 +196,10 @@ set(LW_PPOCR_C_SOURCES
     src/simd/avx2_matmul.c
     src/simd/avx2_packed_conv1x1.c
     src/simd/cpu_features.c
+    src/simd/lsx_packed_conv1x1.c
+    src/simd/neon_conv3x3.c
+    src/simd/neon_convtranspose2x2.c
+    src/simd/neon_packed_conv1x1.c
     src/simd/sse2_binary.c
     src/simd/sse2_conv1x1.c
     src/simd/sse2_conv2x2.c
@@ -217,6 +222,29 @@ if(MSVC AND MSVC_C_ARCHITECTURE_ID MATCHES "^(x64|X86)$")
         COMPILE_OPTIONS /arch:AVX2 /fp:strict)
     set_property(SOURCE src/simd/cpu_features.c APPEND PROPERTY
         COMPILE_OPTIONS /arch:AVX)
+endif()
+
+string(TOLOWER "${CMAKE_SYSTEM_PROCESSOR}" LW_SYSTEM_PROCESSOR_LOWER)
+
+if(MSVC AND LW_SYSTEM_PROCESSOR_LOWER MATCHES "^(arm64|aarch64)$")
+    set_property(SOURCE src/simd/neon_conv3x3.c
+        src/simd/neon_convtranspose2x2.c
+        src/simd/neon_packed_conv1x1.c APPEND PROPERTY
+        COMPILE_OPTIONS /fp:strict)
+elseif(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
+    set_property(SOURCE src/simd/neon_conv3x3.c
+        src/simd/neon_convtranspose2x2.c
+        src/simd/neon_packed_conv1x1.c APPEND PROPERTY
+        COMPILE_OPTIONS -ffp-contract=off)
+endif()
+
+if(LW_SYSTEM_PROCESSOR_LOWER MATCHES "^(loongarch64|loong64)$")
+    check_c_compiler_flag("-mlsx" LW_COMPILER_SUPPORTS_LSX)
+    if(NOT LW_COMPILER_SUPPORTS_LSX)
+        message(FATAL_ERROR "The LoongArch compiler must support -mlsx")
+    endif()
+    set_property(SOURCE src/simd/lsx_packed_conv1x1.c APPEND PROPERTY
+        COMPILE_OPTIONS -mlsx -mno-lasx -ffp-contract=off)
 endif()
 
 function(lw_configure_runtime_target target)
@@ -882,6 +910,19 @@ if(BUILD_TESTING AND NOT EMSCRIPTEN)
                 --driver "$<TARGET_FILE:conv-reference-driver>")
     set_tests_properties(conv_kernel_reference PROPERTIES
         WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
+
+    add_executable(simd-backend-driver tests/simd_backend_driver.c)
+    target_link_libraries(simd-backend-driver PRIVATE lw_ppocr_c)
+    target_include_directories(simd-backend-driver PRIVATE
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/simd")
+    target_compile_features(simd-backend-driver PRIVATE c_std_11)
+    if(MSVC)
+        target_compile_options(simd-backend-driver PRIVATE /W4 /WX /utf-8)
+    else()
+        target_compile_options(simd-backend-driver PRIVATE
+            -Wall -Wextra -Wpedantic -Werror)
+    endif()
+    add_test(NAME simd_backend_detection COMMAND simd-backend-driver)
 
     add_executable(rec-graph-driver tests/rec_graph_driver.c)
     target_link_libraries(rec-graph-driver PRIVATE lw_ppocr_c)

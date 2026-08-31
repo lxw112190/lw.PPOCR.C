@@ -14,7 +14,8 @@ Python、OpenCV、ONNX Runtime、OpenVINO、TensorRT 或 protobuf，适合将文
 - 完整 OCR：文字检测（DET）→ 可选方向分类（CLS）→ 文字识别（REC）；
 - 独立的 DET、CLS、REC 公共 C API；
 - 纯 C11 核心，公共 ABI 不暴露 C++、STL 或第三方库类型；
-- 支持标量、SSE2 和 AVX2 运行时自动分派，不支持 SIMD 时自动回退；
+- 支持标量、x86 SSE2/AVX2、AArch64 NEON 和 LoongArch LSX 运行时自动分派，
+  不支持对应 SIMD 时自动回退；
 - 完整 OCR 在 DET 后使用独立 CLS/REC worker 并行处理文字行；原生 64 位默认 4 个，
   x86 与 WebAssembly 默认 1 个，可通过 `lw_ocr_options.worker_count` 调整；
 - 输入为调用方已经解码的 BGR8 图像，核心库不绑定具体图片解码库；
@@ -49,7 +50,7 @@ PP-OCR ONNX 模型
 
 - 模型：PP-OCRv6 tiny；
 - 精度与设备：FP32、CPU；
-- 指令集：标量、SSE2、AVX2；
+- 指令集：标量、x86 SSE2/AVX2、AArch64 NEON、LoongArch LSX；
 - 线程模型：单个 OCR 句柄仍由调用方串行使用，但句柄内部可并行处理不同文字行；
   多个句柄也可以由应用自行并行调度；
 - 首要平台：Windows x64、Linux x64；
@@ -61,7 +62,10 @@ PP-OCR ONNX 模型
 平台支持分为源码兼容、CI 验证和实体机验证三个层次。不要仅凭某个平台能够编译，便认为
 所有发行版和硬件都已经得到验证。具体说明请查看
 [`docs/package.md`](docs/package.md) 和 [`docs/architecture.md`](docs/architecture.md)。
-ARM64 和 LoongArch64 当前使用可移植标量算子，不能直接套用 amd64 的 SSE2/AVX2 性能数据。
+ARM64 已为 packed pointwise Conv、regular 3x3 Conv 和 2x2 ConvTranspose
+接入 NEON。LoongArch64 通过 Linux HWCAP 检测 LSX/LASX，有 LSX 时使用 LSX packed
+pointwise Conv（LASX CPU 本轮也复用 LSX 内核），否则回退标量。两者都不能直接套用
+amd64 的 SSE2/AVX2 性能数据，LoongArch 性能仍需客户实体机验证。
 
 ## 性能口径说明
 
@@ -78,7 +82,7 @@ fixed-960 与 adaptive-960 对比中，16 行样本单工作器降低 31.09%，�
 include/                     公共 C API
 src/runtime/                 模型加载、校验、Shape/内存规划和图执行器
 src/kernels/                 可移植的标量算子
-src/simd/                    SSE2/AVX2 优化及 CPU 特性检测
+src/simd/                    SSE2/AVX2、NEON、LSX 优化及 CPU 特性检测
 src/ppocr/                   DET、CLS、REC 和完整 OCR 流程
 converter/                   ONNX 到 LWM 的开发期转换工具
 examples/                    C、C# WinForms、HTTP/Web 示例

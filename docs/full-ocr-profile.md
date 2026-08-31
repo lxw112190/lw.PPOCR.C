@@ -133,14 +133,16 @@ weights unchanged. During session creation, eligible group-1 weights are
 copied once into `[Cout/4][Cin][4]` blocks. The execution microkernel loads one
 input vector and updates four output-channel accumulators, reducing repeated
 input traffic without changing each output element's input-channel addition
-order. Separate scalar, SSE2, and AVX2 implementations share the packed format;
-FMA remains disabled.
+order. Scalar, SSE2, AVX2, NEON, and LSX implementations share the packed
+format; FMA remains disabled.
 
-The selector is deliberately conservative. It requires SSE2 or AVX2, an output
-channel count divisible by four, and the long feature-map geometry used by the
-CLS/REC stages. Large square DET maps measured slower with four distant output
-streams and remain on the existing kernel. Non-x86 and scalar-only targets do
-not allocate packed weights.
+The selector requires an optimized packed backend, an output channel count
+divisible by four, and either the long feature-map geometry used by CLS/REC or
+a square map with at least 256 spatial values. The latter remains AVX2-only on
+x86, while NEON and LSX also use it on ARM64 and LoongArch64. Scalar-only
+targets do not allocate packed weights. The cross-architecture extension keeps
+the private packed format and arithmetic order, but its latency and memory
+tradeoff must be measured separately on native ARM64 and Loongson hardware.
 
 The checked analysis behind this decision can be reproduced with:
 
@@ -168,9 +170,10 @@ and twelve measured calls:
 
 The extra memory is per-session packed weight storage, so it scales with the
 number of CLS/REC workers. This tradeoff should be remeasured on each target
-CPU and worker count. Direct tail-block tests require scalar, SSE2, AVX2, and
-automatic dispatch to be byte-identical before ONNX reference comparison; the
-complete x64 suite and x86 ABI, graph, package, and full-OCR gates also pass.
+CPU and worker count. Direct tail-block tests require the available scalar and
+architecture-specific implementation plus automatic dispatch to be
+byte-identical before ONNX reference comparison. The x64 figures above remain
+x64-only and are not ARM64 or LoongArch performance claims.
 
 ## Integer nearest-neighbor Resize
 

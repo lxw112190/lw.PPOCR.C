@@ -104,10 +104,16 @@ void lw_packed_conv1x1_f32(const float* input, const float* packed_weights, cons
                            float* output, const int32_t input_dimensions[4],
                            const int32_t output_dimensions[4]) {
     lw_simd_level simd_level = lw_detect_simd_level();
-    if (simd_level >= LW_SIMD_LEVEL_AVX2) {
+    if (lw_simd_level_is_avx2(simd_level)) {
         lw_avx2_packed_conv1x1_f32(input, packed_weights, bias, output, input_dimensions,
                                    output_dimensions);
-    } else if (simd_level >= LW_SIMD_LEVEL_SSE2) {
+    } else if (lw_simd_level_is_neon(simd_level)) {
+        lw_neon_packed_conv1x1_f32(input, packed_weights, bias, output, input_dimensions,
+                                   output_dimensions);
+    } else if (lw_simd_level_is_lsx(simd_level)) {
+        lw_lsx_packed_conv1x1_f32(input, packed_weights, bias, output, input_dimensions,
+                                  output_dimensions);
+    } else if (lw_simd_level_is_sse2(simd_level)) {
         lw_sse2_packed_conv1x1_f32(input, packed_weights, bias, output, input_dimensions,
                                    output_dimensions);
     } else {

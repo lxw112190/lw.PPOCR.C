@@ -55,7 +55,8 @@ lw_status lw_scalar_softmax_f32(const float* input, float* output, uint32_t rank
      * pointers remove the general strided offset arithmetic while preserving
      * the maximum, expf, accumulation and division order exactly. */
     if (inner_count == 1u) {
-        if (axis_count >= 256u && lw_detect_simd_level() >= LW_SIMD_LEVEL_AVX2) {
+        if (axis_count >= 256u &&
+            lw_simd_level_is_avx2(lw_detect_simd_level())) {
             lw_avx2_softmax_contiguous_f32(input, output, outer_count, axis_count);
             return LW_STATUS_OK;
         }

@@ -46,6 +46,12 @@ void lw_sse2_packed_conv1x1_f32(const float* input, const float* packed_weights,
 void lw_avx2_packed_conv1x1_f32(const float* input, const float* packed_weights, const float* bias,
                                 float* output, const int32_t input_dimensions[4],
                                 const int32_t output_dimensions[4]);
+void lw_neon_packed_conv1x1_f32(const float* input, const float* packed_weights, const float* bias,
+                                float* output, const int32_t input_dimensions[4],
+                                const int32_t output_dimensions[4]);
+void lw_lsx_packed_conv1x1_f32(const float* input, const float* packed_weights, const float* bias,
+                               float* output, const int32_t input_dimensions[4],
+                               const int32_t output_dimensions[4]);
 void lw_sse2_depthwise_conv3x3_unit_pad1_f32(const float* input, const float* weights,
                                              const float* bias, float* output,
                                              const int32_t dimensions[4]);
@@ -62,6 +68,9 @@ void lw_sse2_conv3x3_unit_pad1_f32(const float* input, const float* weights, con
                                    float* output, const int32_t input_dimensions[4],
                                    const int32_t output_dimensions[4]);
 void lw_avx2_conv3x3_unit_pad1_f32(const float* input, const float* weights, const float* bias,
+                                   float* output, const int32_t input_dimensions[4],
+                                   const int32_t output_dimensions[4]);
+void lw_neon_conv3x3_unit_pad1_f32(const float* input, const float* weights, const float* bias,
                                    float* output, const int32_t input_dimensions[4],
                                    const int32_t output_dimensions[4]);
 void lw_sse2_conv2x2_unit_pad_end1_f32(const float* input, const float* weights, const float* bias,
@@ -81,6 +90,10 @@ void lw_avx2_conv_transpose2x2_stride2_f32(const float* input, const float* weig
                                            const int32_t input_dimensions[4],
                                            const int32_t output_dimensions[4]);
 void lw_sse2_conv_transpose2x2_stride2_f32(const float* input, const float* weights,
+                                           const float* bias, float* output,
+                                           const int32_t input_dimensions[4],
+                                           const int32_t output_dimensions[4]);
+void lw_neon_conv_transpose2x2_stride2_f32(const float* input, const float* weights,
                                            const float* bias, float* output,
                                            const int32_t input_dimensions[4],
                                            const int32_t output_dimensions[4]);

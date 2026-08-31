@@ -120,14 +120,14 @@ int main(void) {
     for (index = 0u; index < 3u; ++index) {
         lw_scalar_binary_op operation = (lw_scalar_binary_op)(index + 1u);
         lw_scalar_binary_contiguous_f32(operation, flat_left, flat_right, flat_output, 10u);
-        if (simd_level >= LW_SIMD_LEVEL_SSE2) {
+        if (lw_simd_level_is_sse2(simd_level)) {
             lw_sse2_binary_contiguous_f32(operation, flat_left, flat_right, flat_simd_output, 10u);
             if (memcmp(flat_output, flat_simd_output, sizeof(flat_output)) != 0) {
                 fprintf(stderr, "SSE2 flat binary differs from scalar output\n");
                 return 1;
             }
         }
-        if (simd_level >= LW_SIMD_LEVEL_AVX2) {
+        if (lw_simd_level_is_avx2(simd_level)) {
             lw_avx2_binary_contiguous_f32(operation, flat_left, flat_right, flat_simd_output, 10u);
             if (memcmp(flat_output, flat_simd_output, sizeof(flat_output)) != 0) {
                 fprintf(stderr, "AVX2 flat binary differs from scalar output\n");
@@ -144,7 +144,7 @@ int main(void) {
         print_values(flat_names[index], flat_output, 10u);
 
         lw_scalar_binary_right_scalar_f32(operation, flat_left, flat_scalar[0], flat_output, 10u);
-        if (simd_level >= LW_SIMD_LEVEL_SSE2) {
+        if (lw_simd_level_is_sse2(simd_level)) {
             lw_sse2_binary_right_scalar_f32(operation, flat_left, flat_scalar[0], flat_simd_output,
                                             10u);
             if (memcmp(flat_output, flat_simd_output, sizeof(flat_output)) != 0) {
@@ -152,7 +152,7 @@ int main(void) {
                 return 1;
             }
         }
-        if (simd_level >= LW_SIMD_LEVEL_AVX2) {
+        if (lw_simd_level_is_avx2(simd_level)) {
             lw_avx2_binary_right_scalar_f32(operation, flat_left, flat_scalar[0], flat_simd_output,
                                             10u);
             if (memcmp(flat_output, flat_simd_output, sizeof(flat_output)) != 0) {
@@ -182,7 +182,7 @@ int main(void) {
     }
     print_values("erf", activation_output, 9u);
 
-    if (simd_level >= LW_SIMD_LEVEL_AVX2) {
+    if (lw_simd_level_is_avx2(simd_level)) {
         const float special_input[8] = {0.0f, -0.0f, INFINITY, -INFINITY, NAN, 0.5f, -0.5f, 4.0f};
         float special_output[8];
         float maximum_error = 0.0f;

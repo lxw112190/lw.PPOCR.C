@@ -57,15 +57,17 @@ static int prepared_pointwise_geometry(lw_simd_level simd_level,
     const uint64_t height = (uint32_t)input->dimensions[2];
     const uint64_t width = (uint32_t)input->dimensions[3];
     if (width >= UINT64_C(2) * height) {
-        return 1;
+        return lw_simd_level_has_packed_conv1x1(simd_level);
     }
 #if defined(_M_X64) || defined(__x86_64__)
     /* The 4x16 microkernel needs the x64 register file. Keep square feature
      * maps on the canonical kernel for x86, SSE2-only hosts and tiny tensors. */
-    return simd_level >= LW_SIMD_LEVEL_AVX2 && height * width >= 256u;
+    return lw_simd_level_is_avx2(simd_level) && height * width >= 256u;
 #else
-    (void)simd_level;
-    return 0;
+    /* NEON and LSX both have enough vector registers for the portable packed
+     * four-output microkernel on large square detector feature maps. */
+    return (lw_simd_level_is_neon(simd_level) || lw_simd_level_is_lsx(simd_level)) &&
+           height * width >= 256u;
 #endif
 }
 
@@ -137,7 +139,7 @@ static int prepared_matmul_node(const lw_session* session, lw_simd_level simd_le
     uint32_t rows;
     uint32_t inner_dimension;
     uint32_t columns;
-    if (simd_level < LW_SIMD_LEVEL_AVX2 || lwm_read_u16(node) != LW_OP_MATMUL ||
+    if (!lw_simd_level_is_avx2(simd_level) || lwm_read_u16(node) != LW_OP_MATMUL ||
         lwm_read_u16(node + 2u) != 2u) {
         return 0;
     }
@@ -188,7 +190,8 @@ static lw_status prepare_constant_weights(lw_session* session, lw_error* error) 
     const lw_simd_level simd_level = lw_detect_simd_level();
     uint64_t total_bytes = 0u;
     uint32_t node_index;
-    if (model->info.node_count == 0u || simd_level < LW_SIMD_LEVEL_SSE2) {
+    if (model->info.node_count == 0u ||
+        !lw_simd_level_has_packed_conv1x1(simd_level)) {
         return LW_STATUS_OK;
     }
     session->prepared_nodes =

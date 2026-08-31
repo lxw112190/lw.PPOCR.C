@@ -489,11 +489,11 @@ lw_status lw_scalar_conv2d_f32(const float* input, const float* weights, const f
         dilations[0] == 1 && dilations[1] == 1 && pads[0] == 0 && pads[1] == 0 && pads[2] == 0 &&
         pads[3] == 0) {
         lw_simd_level simd_level = lw_detect_simd_level();
-        if (simd_level >= LW_SIMD_LEVEL_AVX2) {
+        if (lw_simd_level_is_avx2(simd_level)) {
             lw_avx2_conv1x1_unit_f32(input, weights, bias, output, input_dimensions,
                                      output_dimensions, groups, input_channels_per_group,
                                      output_channels_per_group);
-        } else if (simd_level >= LW_SIMD_LEVEL_SSE2) {
+        } else if (lw_simd_level_is_sse2(simd_level)) {
             lw_sse2_conv1x1_unit_f32(input, weights, bias, output, input_dimensions,
                                      output_dimensions, groups, input_channels_per_group,
                                      output_channels_per_group);
@@ -510,9 +510,9 @@ lw_status lw_scalar_conv2d_f32(const float* input, const float* weights, const f
         pads[2] == 1 && pads[3] == 1 && output_dimensions[2] == input_dimensions[2] &&
         output_dimensions[3] == input_dimensions[3]) {
         lw_simd_level simd_level = lw_detect_simd_level();
-        if (simd_level >= LW_SIMD_LEVEL_AVX2) {
+        if (lw_simd_level_is_avx2(simd_level)) {
             lw_avx2_depthwise_conv3x3_unit_pad1_f32(input, weights, bias, output, input_dimensions);
-        } else if (simd_level >= LW_SIMD_LEVEL_SSE2) {
+        } else if (lw_simd_level_is_sse2(simd_level)) {
             lw_sse2_depthwise_conv3x3_unit_pad1_f32(input, weights, bias, output, input_dimensions);
         } else {
             lw_scalar_depthwise_conv3x3_unit_pad1_f32(input, weights, bias, output,
@@ -526,9 +526,9 @@ lw_status lw_scalar_conv2d_f32(const float* input, const float* weights, const f
         pads[2] == 2 && pads[3] == 2 && output_dimensions[2] == input_dimensions[2] &&
         output_dimensions[3] == input_dimensions[3]) {
         lw_simd_level simd_level = lw_detect_simd_level();
-        if (simd_level >= LW_SIMD_LEVEL_AVX2) {
+        if (lw_simd_level_is_avx2(simd_level)) {
             lw_avx2_depthwise_conv5x5_unit_pad2_f32(input, weights, bias, output, input_dimensions);
-        } else if (simd_level >= LW_SIMD_LEVEL_SSE2) {
+        } else if (lw_simd_level_is_sse2(simd_level)) {
             lw_sse2_depthwise_conv5x5_unit_pad2_f32(input, weights, bias, output, input_dimensions);
         } else {
             lw_scalar_depthwise_conv5x5_unit_pad2_f32(input, weights, bias, output,
@@ -541,10 +541,13 @@ lw_status lw_scalar_conv2d_f32(const float* input, const float* weights, const f
         pads[3] == 1 && output_dimensions[2] == input_dimensions[2] &&
         output_dimensions[3] == input_dimensions[3]) {
         lw_simd_level simd_level = lw_detect_simd_level();
-        if (simd_level >= LW_SIMD_LEVEL_AVX2) {
+        if (lw_simd_level_is_avx2(simd_level)) {
             lw_avx2_conv3x3_unit_pad1_f32(input, weights, bias, output, input_dimensions,
                                           output_dimensions);
-        } else if (simd_level >= LW_SIMD_LEVEL_SSE2) {
+        } else if (lw_simd_level_is_neon(simd_level)) {
+            lw_neon_conv3x3_unit_pad1_f32(input, weights, bias, output, input_dimensions,
+                                          output_dimensions);
+        } else if (lw_simd_level_is_sse2(simd_level)) {
             lw_sse2_conv3x3_unit_pad1_f32(input, weights, bias, output, input_dimensions,
                                           output_dimensions);
         } else {
@@ -558,10 +561,10 @@ lw_status lw_scalar_conv2d_f32(const float* input, const float* weights, const f
         pads[3] == 1 && output_dimensions[2] == input_dimensions[2] &&
         output_dimensions[3] == input_dimensions[3]) {
         lw_simd_level simd_level = lw_detect_simd_level();
-        if (simd_level >= LW_SIMD_LEVEL_AVX2) {
+        if (lw_simd_level_is_avx2(simd_level)) {
             lw_avx2_conv2x2_unit_pad_end1_f32(input, weights, bias, output, input_dimensions,
                                               output_dimensions);
-        } else if (simd_level >= LW_SIMD_LEVEL_SSE2) {
+        } else if (lw_simd_level_is_sse2(simd_level)) {
             lw_sse2_conv2x2_unit_pad_end1_f32(input, weights, bias, output, input_dimensions,
                                               output_dimensions);
         } else {
@@ -574,10 +577,10 @@ lw_status lw_scalar_conv2d_f32(const float* input, const float* weights, const f
         dilations[0] == 1 && dilations[1] == 1 && pads[0] == 1 && pads[1] == 1 && pads[2] == 1 &&
         pads[3] == 1) {
         lw_simd_level simd_level = lw_detect_simd_level();
-        if (simd_level >= LW_SIMD_LEVEL_AVX2) {
+        if (lw_simd_level_is_avx2(simd_level)) {
             lw_avx2_conv3x3_stride2_pad1_f32(input, weights, bias, output, input_dimensions,
                                              output_dimensions);
-        } else if (simd_level >= LW_SIMD_LEVEL_SSE2) {
+        } else if (lw_simd_level_is_sse2(simd_level)) {
             lw_sse2_conv3x3_stride2_pad1_f32(input, weights, bias, output, input_dimensions,
                                              output_dimensions);
         } else {
@@ -683,10 +686,10 @@ lw_status lw_scalar_conv2d_f32(const float* input, const float* weights, const f
     return LW_STATUS_OK;
 }
 
-static void conv_transpose2x2_stride2_f32(const float* input, const float* weights,
-                                          const float* bias, float* output,
-                                          const int32_t input_dimensions[4],
-                                          const int32_t output_dimensions[4]) {
+void lw_scalar_conv_transpose2x2_stride2_f32(const float* input, const float* weights,
+                                             const float* bias, float* output,
+                                             const int32_t input_dimensions[4],
+                                             const int32_t output_dimensions[4]) {
     uint32_t input_channels = (uint32_t)input_dimensions[1];
     uint32_t output_channels = (uint32_t)output_dimensions[1];
     uint32_t input_height = (uint32_t)input_dimensions[2];
@@ -788,15 +791,18 @@ lw_status lw_scalar_conv_transpose2d_f32(
         dilations[0] == 1 && dilations[1] == 1 && pads[0] == 0 && pads[1] == 0 && pads[2] == 0 &&
         pads[3] == 0) {
         lw_simd_level simd_level = lw_detect_simd_level();
-        if (simd_level >= LW_SIMD_LEVEL_AVX2) {
+        if (lw_simd_level_is_avx2(simd_level)) {
             lw_avx2_conv_transpose2x2_stride2_f32(input, weights, bias, output, input_dimensions,
                                                    output_dimensions);
-        } else if (simd_level >= LW_SIMD_LEVEL_SSE2) {
+        } else if (lw_simd_level_is_neon(simd_level)) {
+            lw_neon_conv_transpose2x2_stride2_f32(input, weights, bias, output, input_dimensions,
+                                                   output_dimensions);
+        } else if (lw_simd_level_is_sse2(simd_level)) {
             lw_sse2_conv_transpose2x2_stride2_f32(input, weights, bias, output, input_dimensions,
                                                    output_dimensions);
         } else {
-            conv_transpose2x2_stride2_f32(input, weights, bias, output, input_dimensions,
-                                          output_dimensions);
+            lw_scalar_conv_transpose2x2_stride2_f32(input, weights, bias, output,
+                                                     input_dimensions, output_dimensions);
         }
         return LW_STATUS_OK;
     }

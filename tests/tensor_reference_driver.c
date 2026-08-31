@@ -244,14 +244,14 @@ int main(void) {
     }
     print_values("matmul", matmul_output, 30u);
     simd_level = lw_detect_simd_level();
-    if (simd_level >= LW_SIMD_LEVEL_SSE2) {
+    if (lw_simd_level_is_sse2(simd_level)) {
         lw_sse2_matmul_shared_f32(matmul_input, matmul_weights, matmul_simd_output, 2u, 3u, 4u, 5u);
         if (memcmp(matmul_output, matmul_simd_output, sizeof(matmul_output)) != 0) {
             fprintf(stderr, "SSE2 matmul differs from scalar output\n");
             return 1;
         }
     }
-    if (simd_level >= LW_SIMD_LEVEL_AVX2) {
+    if (lw_simd_level_is_avx2(simd_level)) {
         lw_avx2_matmul_shared_f32(matmul_input, matmul_weights, matmul_simd_output, 2u, 3u, 4u, 5u);
         if (memcmp(matmul_output, matmul_simd_output, sizeof(matmul_output)) != 0) {
             fprintf(stderr, "AVX2 matmul differs from scalar output\n");
@@ -290,7 +290,7 @@ int main(void) {
         fprintf(stderr, "scalar packed MatMul differs from canonical output\n");
         return 1;
     }
-    if (simd_level >= LW_SIMD_LEVEL_AVX2) {
+    if (lw_simd_level_is_avx2(simd_level)) {
         lw_avx2_packed_matmul_shared_f32(packed_matmul_input, packed_matmul_weights_buffer,
                                          packed_matmul_output, 1u, 4u, 64u, 17u);
         if (memcmp(packed_matmul_reference, packed_matmul_output,

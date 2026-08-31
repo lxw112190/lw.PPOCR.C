@@ -177,6 +177,7 @@ int main(void) {
     float transpose_conv_simd_output[288];
     float transpose_conv_sse2_output[288];
     float transpose_conv_avx2_output[288];
+    float transpose_conv_arch_output[288];
     lw_simd_level simd_level;
     lw_status status;
 
@@ -196,7 +197,7 @@ int main(void) {
     lw_scalar_conv3x3_stride2_pad1_f32(stride2_input, stride2_weights, stride2_bias, stride2_output,
                                        stride2_input_dimensions, stride2_output_dimensions);
     simd_level = lw_detect_simd_level();
-    if (simd_level >= LW_SIMD_LEVEL_SSE2) {
+    if (lw_simd_level_is_sse2(simd_level)) {
         lw_sse2_conv3x3_stride2_pad1_f32(stride2_input, stride2_weights, stride2_bias,
                                          stride2_simd_output, stride2_input_dimensions,
                                          stride2_output_dimensions);
@@ -205,7 +206,7 @@ int main(void) {
             return 1;
         }
     }
-    if (simd_level >= LW_SIMD_LEVEL_AVX2) {
+    if (lw_simd_level_is_avx2(simd_level)) {
         lw_avx2_conv3x3_stride2_pad1_f32(stride2_input, stride2_weights, stride2_bias,
                                          stride2_simd_output, stride2_input_dimensions,
                                          stride2_output_dimensions);
@@ -231,7 +232,7 @@ int main(void) {
     lw_scalar_conv3x3_stride2_pad1_f32(stride2_input, stride2_four_weights, stride2_four_bias,
                                        stride2_four_output, stride2_input_dimensions,
                                        stride2_four_output_dimensions);
-    if (simd_level >= LW_SIMD_LEVEL_AVX2) {
+    if (lw_simd_level_is_avx2(simd_level)) {
         lw_avx2_conv3x3_stride2_pad1_f32(stride2_input, stride2_four_weights, stride2_four_bias,
                                          stride2_four_simd_output, stride2_input_dimensions,
                                          stride2_four_output_dimensions);
@@ -247,7 +248,7 @@ int main(void) {
     lw_scalar_conv3x3_unit_pad1_f32(unit_conv_input, unit_conv_weights, unit_conv_bias,
                                     unit_conv_output, unit_conv_input_dimensions,
                                     unit_conv_output_dimensions);
-    if (simd_level >= LW_SIMD_LEVEL_SSE2) {
+    if (lw_simd_level_is_sse2(simd_level)) {
         lw_sse2_conv3x3_unit_pad1_f32(unit_conv_input, unit_conv_weights, unit_conv_bias,
                                       unit_conv_simd_output, unit_conv_input_dimensions,
                                       unit_conv_output_dimensions);
@@ -256,7 +257,16 @@ int main(void) {
             return 1;
         }
     }
-    if (simd_level >= LW_SIMD_LEVEL_AVX2) {
+    if (lw_simd_level_is_neon(simd_level)) {
+        lw_neon_conv3x3_unit_pad1_f32(unit_conv_input, unit_conv_weights, unit_conv_bias,
+                                      unit_conv_simd_output, unit_conv_input_dimensions,
+                                      unit_conv_output_dimensions);
+        if (memcmp(unit_conv_output, unit_conv_simd_output, sizeof(unit_conv_output)) != 0) {
+            fprintf(stderr, "NEON unit-stride Conv differs from scalar output\n");
+            return 1;
+        }
+    }
+    if (lw_simd_level_is_avx2(simd_level)) {
         lw_avx2_conv3x3_unit_pad1_f32(unit_conv_input, unit_conv_weights, unit_conv_bias,
                                       unit_conv_simd_output, unit_conv_input_dimensions,
                                       unit_conv_output_dimensions);
@@ -282,7 +292,7 @@ int main(void) {
     lw_scalar_conv3x3_unit_pad1_f32(unit_conv_input, unit_conv_four_weights, unit_conv_four_bias,
                                     unit_conv_four_output, unit_conv_input_dimensions,
                                     unit_conv_four_output_dimensions);
-    if (simd_level >= LW_SIMD_LEVEL_AVX2) {
+    if (lw_simd_level_is_avx2(simd_level)) {
         lw_avx2_conv3x3_unit_pad1_f32(unit_conv_input, unit_conv_four_weights, unit_conv_four_bias,
                                       unit_conv_four_simd_output, unit_conv_input_dimensions,
                                       unit_conv_four_output_dimensions);
@@ -297,7 +307,7 @@ int main(void) {
     lw_scalar_conv2x2_unit_pad_end1_f32(unit_conv_input, unit_conv2x2_weights, unit_conv_bias,
                                         unit_conv2x2_output, unit_conv_input_dimensions,
                                         unit_conv_output_dimensions);
-    if (simd_level >= LW_SIMD_LEVEL_SSE2) {
+    if (lw_simd_level_is_sse2(simd_level)) {
         lw_sse2_conv2x2_unit_pad_end1_f32(unit_conv_input, unit_conv2x2_weights, unit_conv_bias,
                                           unit_conv2x2_simd_output, unit_conv_input_dimensions,
                                           unit_conv_output_dimensions);
@@ -307,7 +317,7 @@ int main(void) {
             return 1;
         }
     }
-    if (simd_level >= LW_SIMD_LEVEL_AVX2) {
+    if (lw_simd_level_is_avx2(simd_level)) {
         lw_avx2_conv2x2_unit_pad_end1_f32(unit_conv_input, unit_conv2x2_weights, unit_conv_bias,
                                           unit_conv2x2_simd_output, unit_conv_input_dimensions,
                                           unit_conv_output_dimensions);
@@ -356,7 +366,7 @@ int main(void) {
     lw_scalar_depthwise_conv3x3_unit_pad1_f32(unit_depthwise_input, unit_depthwise_weights,
                                               unit_depthwise_bias, unit_depthwise_output,
                                               unit_depthwise_dimensions);
-    if (simd_level >= LW_SIMD_LEVEL_SSE2) {
+    if (lw_simd_level_is_sse2(simd_level)) {
         lw_sse2_depthwise_conv3x3_unit_pad1_f32(unit_depthwise_input, unit_depthwise_weights,
                                                 unit_depthwise_bias, unit_depthwise_simd_output,
                                                 unit_depthwise_dimensions);
@@ -366,7 +376,7 @@ int main(void) {
             return 1;
         }
     }
-    if (simd_level >= LW_SIMD_LEVEL_AVX2) {
+    if (lw_simd_level_is_avx2(simd_level)) {
         lw_avx2_depthwise_conv3x3_unit_pad1_f32(unit_depthwise_input, unit_depthwise_weights,
                                                 unit_depthwise_bias, unit_depthwise_simd_output,
                                                 unit_depthwise_dimensions);
@@ -393,7 +403,7 @@ int main(void) {
     lw_scalar_depthwise_conv5x5_unit_pad2_f32(unit_depthwise5x5_input, unit_depthwise5x5_weights,
                                               unit_depthwise_bias, unit_depthwise5x5_output,
                                               unit_depthwise5x5_dimensions);
-    if (simd_level >= LW_SIMD_LEVEL_SSE2) {
+    if (lw_simd_level_is_sse2(simd_level)) {
         lw_sse2_depthwise_conv5x5_unit_pad2_f32(unit_depthwise5x5_input, unit_depthwise5x5_weights,
                                                 unit_depthwise_bias, unit_depthwise5x5_simd_output,
                                                 unit_depthwise5x5_dimensions);
@@ -403,7 +413,7 @@ int main(void) {
             return 1;
         }
     }
-    if (simd_level >= LW_SIMD_LEVEL_AVX2) {
+    if (lw_simd_level_is_avx2(simd_level)) {
         lw_avx2_depthwise_conv5x5_unit_pad2_f32(unit_depthwise5x5_input, unit_depthwise5x5_weights,
                                                 unit_depthwise_bias, unit_depthwise5x5_simd_output,
                                                 unit_depthwise5x5_dimensions);
@@ -441,7 +451,7 @@ int main(void) {
     fill_values(pointwise_weights, 12u, 11u, 23u, 11, 6.0f);
     lw_scalar_conv1x1_unit_f32(pointwise_input, pointwise_weights, pointwise_bias, pointwise_output,
                                pointwise_input_dimensions, pointwise_output_dimensions, 2u, 2u, 3u);
-    if (simd_level >= LW_SIMD_LEVEL_SSE2) {
+    if (lw_simd_level_is_sse2(simd_level)) {
         lw_sse2_conv1x1_unit_f32(pointwise_input, pointwise_weights, pointwise_bias,
                                  pointwise_simd_output, pointwise_input_dimensions,
                                  pointwise_output_dimensions, 2u, 2u, 3u);
@@ -450,7 +460,7 @@ int main(void) {
             return 1;
         }
     }
-    if (simd_level >= LW_SIMD_LEVEL_AVX2) {
+    if (lw_simd_level_is_avx2(simd_level)) {
         lw_avx2_conv1x1_unit_f32(pointwise_input, pointwise_weights, pointwise_bias,
                                  pointwise_simd_output, pointwise_input_dimensions,
                                  pointwise_output_dimensions, 2u, 2u, 3u);
@@ -490,7 +500,7 @@ int main(void) {
         fprintf(stderr, "scalar packed pointwise Conv differs from canonical output\n");
         return 1;
     }
-    if (simd_level >= LW_SIMD_LEVEL_SSE2) {
+    if (lw_simd_level_is_sse2(simd_level)) {
         lw_sse2_packed_conv1x1_f32(packed_pointwise_input, packed_pointwise_packed_weights,
                                    packed_pointwise_bias, packed_pointwise_simd_output,
                                    packed_pointwise_input_dimensions,
@@ -501,7 +511,29 @@ int main(void) {
             return 1;
         }
     }
-    if (simd_level >= LW_SIMD_LEVEL_AVX2) {
+    if (lw_simd_level_is_neon(simd_level)) {
+        lw_neon_packed_conv1x1_f32(packed_pointwise_input, packed_pointwise_packed_weights,
+                                    packed_pointwise_bias, packed_pointwise_simd_output,
+                                    packed_pointwise_input_dimensions,
+                                    packed_pointwise_output_dimensions);
+        if (memcmp(packed_pointwise_output, packed_pointwise_simd_output,
+                   sizeof(packed_pointwise_output)) != 0) {
+            fprintf(stderr, "NEON packed pointwise Conv differs from canonical output\n");
+            return 1;
+        }
+    }
+    if (lw_simd_level_is_lsx(simd_level)) {
+        lw_lsx_packed_conv1x1_f32(packed_pointwise_input, packed_pointwise_packed_weights,
+                                   packed_pointwise_bias, packed_pointwise_simd_output,
+                                   packed_pointwise_input_dimensions,
+                                   packed_pointwise_output_dimensions);
+        if (memcmp(packed_pointwise_output, packed_pointwise_simd_output,
+                   sizeof(packed_pointwise_output)) != 0) {
+            fprintf(stderr, "LSX packed pointwise Conv differs from canonical output\n");
+            return 1;
+        }
+    }
+    if (lw_simd_level_is_avx2(simd_level)) {
         lw_avx2_packed_conv1x1_f32(packed_pointwise_input, packed_pointwise_packed_weights,
                                    packed_pointwise_bias, packed_pointwise_simd_output,
                                    packed_pointwise_input_dimensions,
@@ -537,6 +569,10 @@ int main(void) {
      * kernels; compare each implementation with the dispatched result. */
     fill_values(transpose_conv_simd_input, 48u, 17u, 37u, 18, 9.0f);
     fill_values(transpose_conv_simd_weights, 24u, 11u, 29u, 14, 7.0f);
+    lw_scalar_conv_transpose2x2_stride2_f32(
+        transpose_conv_simd_input, transpose_conv_simd_weights, transpose_conv_simd_bias,
+        transpose_conv_arch_output, transpose_conv_simd_input_dimensions,
+        transpose_conv_simd_output_dimensions);
     status = lw_scalar_conv_transpose2d_f32(
         transpose_conv_simd_input, transpose_conv_simd_weights, transpose_conv_simd_bias, 3u,
         transpose_conv_simd_output, transpose_conv_simd_input_dimensions,
@@ -545,23 +581,39 @@ int main(void) {
     if (!expect_status("transpose conv SIMD shape", status, LW_STATUS_OK)) {
         return 1;
     }
-    if (simd_level >= LW_SIMD_LEVEL_SSE2) {
+    if (memcmp(transpose_conv_arch_output, transpose_conv_simd_output,
+               sizeof(transpose_conv_simd_output)) != 0) {
+        fprintf(stderr, "dispatched transpose Conv differs from scalar output\n");
+        return 1;
+    }
+    if (lw_simd_level_is_sse2(simd_level)) {
         lw_sse2_conv_transpose2x2_stride2_f32(
             transpose_conv_simd_input, transpose_conv_simd_weights, transpose_conv_simd_bias,
             transpose_conv_sse2_output, transpose_conv_simd_input_dimensions,
             transpose_conv_simd_output_dimensions);
-        if (memcmp(transpose_conv_simd_output, transpose_conv_sse2_output,
+        if (memcmp(transpose_conv_arch_output, transpose_conv_sse2_output,
                    sizeof(transpose_conv_simd_output)) != 0) {
             fprintf(stderr, "SSE2 transpose Conv differs from dispatched output\n");
             return 1;
         }
     }
-    if (simd_level >= LW_SIMD_LEVEL_AVX2) {
+    if (lw_simd_level_is_neon(simd_level)) {
+        lw_neon_conv_transpose2x2_stride2_f32(
+            transpose_conv_simd_input, transpose_conv_simd_weights, transpose_conv_simd_bias,
+            transpose_conv_arch_output, transpose_conv_simd_input_dimensions,
+            transpose_conv_simd_output_dimensions);
+        if (memcmp(transpose_conv_simd_output, transpose_conv_arch_output,
+                   sizeof(transpose_conv_simd_output)) != 0) {
+            fprintf(stderr, "NEON transpose Conv differs from dispatched output\n");
+            return 1;
+        }
+    }
+    if (lw_simd_level_is_avx2(simd_level)) {
         lw_avx2_conv_transpose2x2_stride2_f32(
             transpose_conv_simd_input, transpose_conv_simd_weights, transpose_conv_simd_bias,
             transpose_conv_avx2_output, transpose_conv_simd_input_dimensions,
             transpose_conv_simd_output_dimensions);
-        if (memcmp(transpose_conv_simd_output, transpose_conv_avx2_output,
+        if (memcmp(transpose_conv_arch_output, transpose_conv_avx2_output,
                    sizeof(transpose_conv_simd_output)) != 0) {
             fprintf(stderr, "AVX2 transpose Conv differs from dispatched output\n");
             return 1;

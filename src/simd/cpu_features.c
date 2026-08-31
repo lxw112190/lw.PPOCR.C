@@ -19,10 +19,35 @@
 #  include <cpuid.h>
 #endif
 
+#if defined(__linux__) && defined(__loongarch__)
+#  include <sys/auxv.h>
+#  include <asm/hwcap.h>
+#  ifndef HWCAP_LOONGARCH_LSX
+#    define HWCAP_LOONGARCH_LSX (1UL << 4)
+#  endif
+#  ifndef HWCAP_LOONGARCH_LASX
+#    define HWCAP_LOONGARCH_LASX (1UL << 5)
+#  endif
+#endif
+
 lw_simd_level lw_detect_simd_level(void) {
 #if LW_EMSCRIPTEN_SIMD128
     /* The module itself requires SIMD128, so no runtime CPUID probe exists. */
     return LW_SIMD_LEVEL_SSE2;
+#elif defined(_M_ARM64) || defined(__aarch64__)
+    /* Advanced SIMD is part of the AArch64 execution environment. */
+    return LW_SIMD_LEVEL_NEON;
+#elif defined(__linux__) && defined(__loongarch__)
+    {
+        const unsigned long capabilities = getauxval(AT_HWCAP);
+        if ((capabilities & HWCAP_LOONGARCH_LASX) != 0u) {
+            return LW_SIMD_LEVEL_LASX;
+        }
+        if ((capabilities & HWCAP_LOONGARCH_LSX) != 0u) {
+            return LW_SIMD_LEVEL_LSX;
+        }
+        return LW_SIMD_LEVEL_SCALAR;
+    }
 #elif defined(_MSC_VER) && (defined(_M_IX86) || defined(_M_X64))
     int registers[4];
     int maximum_leaf;
@@ -75,8 +100,20 @@ lw_simd_level lw_detect_simd_level(void) {
 }
 
 const char* lw_simd_level_name(lw_simd_level level) {
-    if (level >= LW_SIMD_LEVEL_AVX2) {
+    if (level == LW_SIMD_LEVEL_AVX2) {
         return "avx2";
     }
-    return level >= LW_SIMD_LEVEL_SSE2 ? "sse2" : "scalar";
+    if (level == LW_SIMD_LEVEL_SSE2) {
+        return "sse2";
+    }
+    if (level == LW_SIMD_LEVEL_NEON) {
+        return "neon";
+    }
+    if (level == LW_SIMD_LEVEL_LSX) {
+        return "lsx";
+    }
+    if (level == LW_SIMD_LEVEL_LASX) {
+        return "lasx";
+    }
+    return "scalar";
 }

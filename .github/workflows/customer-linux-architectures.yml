@@ -105,6 +105,12 @@ jobs:
             -DLW_PACKAGE_PLATFORM_OVERRIDE=linux-${{ matrix.arch }}-ubuntu22.04 \
             -DLW_STAGED_PACKAGE_TEST_TIMEOUT=900
           cmake --build build-${{ matrix.arch }} --parallel 2
+      - name: Verify native SIMD dispatch and optimized Conv kernels
+        run: |
+          set -euo pipefail
+          ctest --test-dir build-${{ matrix.arch }} \
+            --output-on-failure -V -R '^simd_backend_detection$'
+          "build-${{ matrix.arch }}/conv-reference-driver" >/dev/null
       - name: Test installed native package with real OCR
         run: >-
           ctest --test-dir build-${{ matrix.arch }}
@@ -186,6 +192,9 @@ jobs:
                 -DLW_HTTP_TEST_PROCESS_TIMEOUT=900 \
                 -DLW_STAGED_PACKAGE_TEST_TIMEOUT=1800
               cmake --build build-loongarch64 --parallel 2
+              ctest --test-dir build-loongarch64 \
+                --output-on-failure -V -R "^simd_backend_detection$"
+              build-loongarch64/conv-reference-driver >/dev/null
               ctest --test-dir build-loongarch64 \
                 --output-on-failure -R "^staged_package$"
               package_root=build-loongarch64/stage-test

@@ -21,9 +21,9 @@ The project currently provides:
   detection, and composed full OCR.
 - Pure-C BGR preprocessing, perspective crop, UTF-8 CTC decoding, DB-style
   detection postprocessing, and reading-order quadrilateral output.
-- FP32 CPU inference with scalar fallback and runtime-dispatched SSE2/AVX2
-  kernels. Full OCR can use a fixed DET operator pool and then recognize
-  independent detected lines in parallel.
+- FP32 CPU inference with scalar fallback and runtime-dispatched x86
+  SSE2/AVX2, AArch64 NEON, and LoongArch LSX kernels. Full OCR can use a fixed
+  DET operator pool and then recognize independent detected lines in parallel.
 - Optional .NET Framework 3.5 WinForms, native `cpp-httplib` HTTP/web, and
   offline single-file WebAssembly demos.
 
@@ -43,10 +43,12 @@ application concern, so the core itself stays dependency-free.
 - Windows 7 x86 compatibility is preserved by design.
 - The LWM v0.1 format is custom and not yet frozen.
 
-ARM64 and LoongArch64 currently use the portable scalar kernels. See the
-[platform matrix](docs/platform-matrix.md) and
+ARM64 uses NEON for packed pointwise Conv, regular 3x3 Conv, and 2x2
+ConvTranspose. LoongArch64 detects LSX/LASX through Linux HWCAP, uses the LSX
+packed pointwise kernel when available (including on LASX CPUs), and otherwise
+falls back to scalar. See the [platform matrix](docs/platform-matrix.md) and
 [development package guide](docs/package.md) before making compatibility or
-performance claims.
+performance claims; LoongArch performance still requires physical hardware.
 
 ### Performance snapshot
 
