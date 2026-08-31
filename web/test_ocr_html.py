@@ -1,4 +1,4 @@
-"""Run the standalone OCR page and verify inference, exports, and memory reuse."""
+"""Verify desktop/mobile UI, Worker inference, exports, and memory reuse."""
 
 from __future__ import annotations
 
@@ -27,6 +27,11 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--html", type=Path, required=True)
     parser.add_argument("--sample", type=Path, required=True)
+    parser.add_argument(
+        "--browser-executable",
+        type=Path,
+        help="optional local Chrome/Edge executable; CI uses Playwright Chromium",
+    )
     arguments = parser.parse_args()
 
     html = arguments.html.resolve()
@@ -36,10 +41,13 @@ def main() -> int:
 
     browser_messages: list[str] = []
     with sync_playwright() as playwright:
-        browser = playwright.chromium.launch(
-            headless=True,
-            args=["--allow-file-access-from-files"],
-        )
+        launch_options: dict[str, object] = {
+            "headless": True,
+            "args": ["--allow-file-access-from-files"],
+        }
+        if arguments.browser_executable:
+            launch_options["executable_path"] = str(arguments.browser_executable.resolve())
+        browser = playwright.chromium.launch(**launch_options)
         page = browser.new_page()
         page.add_init_script(
             """
@@ -62,6 +70,8 @@ def main() -> int:
             "() => window.__lwOcrTest && window.__lwOcrTest.snapshot().ready",
             timeout=180_000,
         )
+        assert page.evaluate("typeof window.lwPpocrDemo.recognize") == "function"
+        assert page.locator("#camera").get_attribute("capture") == "environment"
         export_buttons = page.locator("#copy-text, #export-txt, #export-json")
         assert export_buttons.count() == 3
         assert all(export_buttons.nth(index).is_disabled() for index in range(3))
@@ -88,12 +98,17 @@ def main() -> int:
         assert EXPECTED_FIRST_LINE in lines.first.locator(".text").inner_text()
         assert snapshot["maxLineCapacity"] == 1000, snapshot
         assert 0 < snapshot["maxTextCapacity"] < 1024 * 1024, snapshot
+        assert snapshot["backend"] == "worker", snapshot
+        assert snapshot["prepareCount"] == 1, snapshot
+        assert snapshot["prepared"], snapshot
         assert snapshot["hasResults"], snapshot
         assert snapshot["exportEnabled"], snapshot
         assert all(export_buttons.nth(index).is_enabled() for index in range(3))
 
         displayed_text = lines.locator("b").all_inner_texts()
         assert len(displayed_text) == 16
+        assert page.evaluate("window.lwPpocrDemo.getPlainText()") == "\n".join(displayed_text)
+        assert page.evaluate("window.lwPpocrDemo.getResult().lines.length") == 16
         page.locator("#copy-text").click()
         page.wait_for_function("() => window.__lwCopiedText !== null")
         assert page.evaluate("window.__lwCopiedText") == "\n".join(displayed_text)
@@ -132,6 +147,24 @@ def main() -> int:
             assert line["cls_label"] in (0, 1)
             assert line["rotation_degrees"] in (0, 180)
 
+        # Reconfiguring CLS must preserve the Worker-owned input. The browser
+        # should not decode or upload the same image again.
+        page.locator("#use-cls").uncheck()
+        page.wait_for_function(
+            "() => window.__lwOcrTest.snapshot().ready && !document.querySelector('#use-cls').disabled",
+            timeout=180_000,
+        )
+        previous_count = int(snapshot["runCount"])
+        page.locator("#run").click()
+        snapshot = wait_for_run(page, previous_count)
+        assert snapshot["prepareCount"] == 1, snapshot
+        assert lines.count() == 16
+        page.locator("#use-cls").check()
+        page.wait_for_function(
+            "() => window.__lwOcrTest.snapshot().ready && !document.querySelector('#use-cls').disabled",
+            timeout=180_000,
+        )
+
         # Adaptive-width REC can construct more than one concrete graph width.
         # Emscripten's linear memory never shrinks, so the first few identical
         # runs may raise the heap high-water mark even though retired sessions
@@ -145,6 +178,7 @@ def main() -> int:
             page.locator("#run").click()
             snapshot = wait_for_run(page, previous_count)
             assert snapshot["sourceCapacity"] == stable_source, snapshot
+            assert snapshot["prepareCount"] == 1, snapshot
             assert lines.count() == 16
             heap_history.append(int(snapshot["heapBytes"]))
 
@@ -172,6 +206,22 @@ def main() -> int:
         assert not reset_snapshot["hasResults"], reset_snapshot
         assert not reset_snapshot["exportEnabled"], reset_snapshot
         assert all(export_buttons.nth(index).is_disabled() for index in range(3))
+
+        # The same HTML remains a two-column desktop tool, while a phone-sized
+        # viewport exposes touch-sized camera/gallery controls and panel tabs.
+        page.set_viewport_size({"width": 390, "height": 844})
+        assert page.locator(".mobile-source-actions").is_visible()
+        run_box = page.locator("#run").bounding_box()
+        assert run_box is not None and run_box["height"] >= 44, run_box
+        assert page.evaluate(
+            "document.documentElement.scrollWidth <= document.documentElement.clientWidth"
+        )
+        page.locator("#show-results").click()
+        assert page.locator(".result-card").is_visible()
+        assert not page.locator(".image-card").is_visible()
+        page.locator("#show-image").click()
+        assert page.locator(".image-card").is_visible()
+        assert not page.locator(".result-card").is_visible()
 
         browser.close()
 

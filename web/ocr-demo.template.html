@@ -2,26 +2,30 @@
 <html lang="zh-CN">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>lw.PPOCR.C · 离线 OCR 工作台</title>
   <style>
     :root { color-scheme: light; font-family: Inter, "Segoe UI", "Microsoft YaHei", sans-serif; }
     * { box-sizing: border-box; }
-    body { margin: 0; min-height: 100vh; color: #182230; background: #f3f6fa; }
+    body { margin: 0; min-height: 100vh; min-height: 100dvh; color: #182230; background: #f3f6fa; }
     header { padding: 28px max(20px, calc((100% - 1180px) / 2)); background: #13243a; color: #fff; }
     header h1 { margin: 0 0 6px; font-size: 24px; letter-spacing: .2px; }
     header p { margin: 0; color: #b8c7d9; font-size: 14px; }
     main { max-width: 1180px; margin: 24px auto; padding: 0 20px 40px; }
     .toolbar { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-bottom: 18px; }
+    .source-picker { flex: 1; min-width: 260px; }
     .options { display: flex; align-items: center; gap: 7px; padding: 11px 13px; border: 1px solid #e0e7ef; border-radius: 8px; background: #fff; color: #526277; font-size: 13px; }
     .options input { accent-color: #2878d4; }
-    .dropzone { flex: 1; min-width: 260px; padding: 14px 18px; border: 1px dashed #9aabc0; border-radius: 10px; background: #fff; cursor: pointer; }
+    .dropzone { display: block; padding: 14px 18px; border: 1px dashed #9aabc0; border-radius: 10px; background: #fff; cursor: pointer; }
     .dropzone.drag { border-color: #2878d4; background: #edf5ff; }
     .dropzone strong { display: block; font-size: 14px; }
     .dropzone span { display: block; margin-top: 3px; color: #718096; font-size: 12px; }
     input[type=file] { display: none; }
     button { border: 0; border-radius: 8px; padding: 12px 20px; color: #fff; background: #2878d4; font-weight: 600; cursor: pointer; }
     button:disabled { cursor: not-allowed; opacity: .5; }
+    button:focus-visible, a:focus-visible, summary:focus-visible, label:focus-visible { outline: 3px solid #85bfff; outline-offset: 2px; }
+    .mobile-source-actions { display: none; gap: 10px; }
+    .source-button { display: flex; min-height: 46px; flex: 1; align-items: center; justify-content: center; border: 1px solid #9aabc0; border-radius: 9px; background: #fff; color: #2867ad; font-size: 14px; font-weight: 600; cursor: pointer; }
     #status { min-height: 20px; color: #526277; font-size: 13px; }
     #stats { margin: 0 0 18px; color: #607086; font-size: 12px; }
     .grid { display: grid; grid-template-columns: minmax(0, 1.65fr) minmax(300px, 1fr); gap: 18px; }
@@ -33,23 +37,60 @@
     .result-actions button { padding: 7px 10px; border: 1px solid #cbd8e6; background: #fff; color: #2867ad; font-size: 12px; }
     .result-actions button:hover:not(:disabled) { border-color: #2878d4; background: #edf5ff; }
     .preview { display: flex; min-height: 420px; align-items: center; justify-content: center; padding: 16px; background: #f9fbfd; }
+    .preview-stage { position: relative; max-width: 100%; line-height: 0; }
     canvas { display: block; max-width: 100%; height: auto; border-radius: 6px; background: #eef2f6; }
+    #overlay { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+    #overlay polygon { fill: transparent; stroke: #e53935; vector-effect: non-scaling-stroke; }
+    #overlay text { fill: #e53935; stroke: #fff; stroke-width: 3px; paint-order: stroke; font: 14px sans-serif; }
+    #overlay .active { fill: #2878d426; stroke: #2878d4; stroke-width: 3px; }
     #results { max-height: 540px; overflow: auto; }
     .empty { padding: 44px 20px; color: #8794a6; text-align: center; font-size: 13px; }
     .line { display: grid; grid-template-columns: 34px 1fr; gap: 8px; padding: 12px 16px; border-bottom: 1px solid #edf1f5; }
+    .line[data-line-index] { cursor: pointer; }
+    .line.active { background: #edf5ff; }
     .line:last-child { border-bottom: 0; }
     .index { color: #8b99aa; font-variant-numeric: tabular-nums; }
     .text { overflow-wrap: anywhere; font-size: 14px; line-height: 1.5; }
     .score { margin-top: 3px; color: #8290a0; font-size: 11px; }
-    .support { display: flex; gap: 24px; align-items: center; margin-top: 18px; padding: 20px; }
+    .support { margin-top: 18px; padding: 0; }
+    .support summary { padding: 14px 18px; color: #24354a; font-size: 15px; font-weight: 600; cursor: pointer; }
+    .support-content { display: flex; gap: 24px; align-items: center; padding: 4px 20px 20px; }
     .support h2 { margin: 0 0 8px; font-size: 16px; }
     .support p { margin: 0 0 8px; color: #607086; font-size: 13px; line-height: 1.6; }
     .support img { width: 150px; height: 150px; flex: 0 0 auto; border-radius: 8px; object-fit: cover; }
+    .mobile-tabs { display: none; }
     a { color: #2878d4; text-decoration: none; }
     a:hover { text-decoration: underline; }
     footer { margin-top: 18px; color: #8491a2; font-size: 12px; text-align: right; }
-    @media (max-width: 480px) { .support { align-items: flex-start; } .support img { width: 112px; height: 112px; } }
-    @media (max-width: 760px) { main { margin-top: 16px; } .grid { grid-template-columns: 1fr; } .preview { min-height: 280px; } }
+    @media (max-width: 760px) {
+      header { padding: 20px max(16px, env(safe-area-inset-left)) 18px max(16px, env(safe-area-inset-right)); }
+      header h1 { font-size: 20px; }
+      main { margin-top: 14px; padding: 0 max(14px, env(safe-area-inset-right)) calc(92px + env(safe-area-inset-bottom)) max(14px, env(safe-area-inset-left)); }
+      .toolbar { align-items: stretch; }
+      .source-picker { width: 100%; min-width: 0; }
+      .dropzone { display: none; }
+      .mobile-source-actions { display: flex; }
+      .options { width: 100%; min-height: 46px; }
+      #run { position: fixed; z-index: 20; right: max(14px, env(safe-area-inset-right)); bottom: max(12px, env(safe-area-inset-bottom)); left: max(14px, env(safe-area-inset-left)); min-height: 52px; box-shadow: 0 8px 28px #17324f59; }
+      .mobile-tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; margin-bottom: 10px; padding: 4px; border: 1px solid #dce5ef; border-radius: 10px; background: #eaf0f6; }
+      .mobile-tabs button { min-height: 42px; padding: 8px; background: transparent; color: #526277; }
+      .mobile-tabs button.active { background: #fff; color: #2867ad; box-shadow: 0 2px 6px #1c35571a; }
+      .grid { grid-template-columns: 1fr; }
+      .grid[data-mobile-panel="image"] .result-card, .grid[data-mobile-panel="results"] .image-card { display: none; }
+      .preview { min-height: 260px; padding: 10px; }
+      #results { max-height: none; overflow: visible; }
+      .result-header { align-items: flex-start; padding: 12px; }
+      .result-actions button { min-height: 42px; padding: 9px 12px; font-size: 13px; }
+      .support-content { align-items: flex-start; }
+      .support img { width: 112px; height: 112px; }
+      footer { text-align: center; }
+    }
+    @media (max-width: 430px) {
+      .result-header { display: block; }
+      .result-actions { margin-top: 10px; justify-content: flex-start; }
+      .support-content { display: block; }
+      .support img { display: none; }
+    }
   </style>
 </head>
 <body>
@@ -59,26 +100,43 @@
   </header>
   <main>
     <div class="toolbar">
-      <label id="dropzone" class="dropzone" for="file">
-        <strong>选择或拖入图片</strong>
-        <span>支持 JPG、PNG、BMP 等浏览器可解码格式</span>
-      </label>
+      <div class="source-picker">
+        <label id="dropzone" class="dropzone" for="file" tabindex="0">
+          <strong>选择或拖入图片</strong>
+          <span>支持 JPG、PNG、BMP 等浏览器可解码格式</span>
+        </label>
+        <div class="mobile-source-actions" aria-label="选择图片">
+          <label class="source-button" for="camera" tabindex="0">拍照识别</label>
+          <label class="source-button" for="file" tabindex="0">从相册选择</label>
+        </div>
+      </div>
       <input id="file" type="file" accept="image/*">
+      <input id="camera" type="file" accept="image/*" capture="environment">
       <label class="options"><input id="use-cls" type="checkbox"> 启用方向分类（CLS）</label>
       <button id="run" type="button" disabled>开始识别</button>
-      <span id="status" aria-live="polite">正在加载 WASM 和模型…</span>
-  </div>
+      <span id="status" role="status" aria-live="polite">正在加载 WASM 和模型…</span>
+    </div>
     <div id="stats">引擎状态：加载中</div>
-    <div class="grid">
-      <section class="card">
+    <nav class="mobile-tabs" aria-label="工作区视图">
+      <button id="show-image" class="active" type="button" aria-pressed="true">图片</button>
+      <button id="show-results" type="button" aria-pressed="false">结果</button>
+    </nav>
+    <div id="workspace" class="grid" data-mobile-panel="image">
+      <section class="card image-card">
         <h2>图像预览与检测框</h2>
-        <div class="preview"><canvas id="canvas"></canvas></div>
+        <div class="preview">
+          <div class="preview-stage">
+            <canvas id="canvas"></canvas>
+            <svg id="overlay" aria-hidden="true"></svg>
+          </div>
+        </div>
       </section>
-      <section class="card">
+      <section class="card result-card">
         <div class="result-header">
           <h2>识别结果</h2>
           <div class="result-actions" aria-label="识别结果导出">
             <button id="copy-text" type="button" disabled>复制文本</button>
+            <button id="share-result" type="button" hidden disabled>分享</button>
             <button id="export-txt" type="button" disabled>导出 TXT</button>
             <button id="export-json" type="button" disabled>导出 JSON</button>
           </div>
@@ -86,36 +144,47 @@
         <div id="results"><div class="empty">选择图片后，这里会显示识别文本。</div></div>
       </section>
     </div>
-    <section class="support card">
-      <img src="data:image/jpeg;base64,__LW_SPONSOR_IMAGE_BASE64__" alt="赞赏二维码">
-      <div>
-        <h2>联系与支持</h2>
-        <p>如果这个离线 OCR 工具对你有帮助，欢迎扫码支持项目维护。</p>
-        <p>项目地址：<a href="https://github.com/lxw112190/lw.PPOCR.C" target="_blank" rel="noopener noreferrer">github.com/lxw112190/lw.PPOCR.C</a></p>
+    <details id="support" class="support card" open>
+      <summary>联系与支持</summary>
+      <div class="support-content">
+        <img src="data:image/jpeg;base64,__LW_SPONSOR_IMAGE_BASE64__" alt="赞赏二维码">
+        <div>
+          <h2>感谢使用 lw.PPOCR.C</h2>
+          <p>如果这个离线 OCR 工具对你有帮助，欢迎扫码支持项目维护。</p>
+          <p>项目地址：<a href="https://github.com/lxw112190/lw.PPOCR.C" target="_blank" rel="noopener noreferrer">github.com/lxw112190/lw.PPOCR.C</a></p>
+        </div>
       </div>
-    </section>
+    </details>
     <footer><a href="https://github.com/lxw112190/lw.PPOCR.C" target="_blank" rel="noopener noreferrer">lw.PPOCR.C</a> · WebAssembly · 完整 DET → CLS → REC 流程</footer>
   </main>
   <script>
-    const MODEL_B64 = {
+    // ---------- Embedded assets, DOM references, and page state ----------
+    let MODEL_B64 = {
       det: "__LW_DET_MODEL_BASE64__",
       cls: "__LW_CLS_MODEL_BASE64__",
       rec: "__LW_REC_MODEL_BASE64__",
       dict: "__LW_DICTIONARY_BASE64__"
     };
-    const RUNTIME_JS = __LW_RUNTIME_JS_JSON__;
+    let RUNTIME_JS = __LW_RUNTIME_JS_JSON__;
     const fileInput = document.getElementById("file");
+    const cameraInput = document.getElementById("camera");
     const dropzone = document.getElementById("dropzone");
     const runButton = document.getElementById("run");
     const clsInput = document.getElementById("use-cls");
     const statusNode = document.getElementById("status");
     const statsNode = document.getElementById("stats");
     const canvas = document.getElementById("canvas");
+    const overlay = document.getElementById("overlay");
+    const workspace = document.getElementById("workspace");
+    const showImageButton = document.getElementById("show-image");
+    const showResultsButton = document.getElementById("show-results");
     const resultsNode = document.getElementById("results");
     const copyTextButton = document.getElementById("copy-text");
+    const shareResultButton = document.getElementById("share-result");
     const exportTxtButton = document.getElementById("export-txt");
     const exportJsonButton = document.getElementById("export-json");
     const exportButtons = [copyTextButton, exportTxtButton, exportJsonButton];
+    const resultActionButtons = [...exportButtons, shareResultButton];
     const WEB_ABI_VERSION = 1;
     let moduleInstance;
     let loadMilliseconds = 0;
@@ -129,6 +198,14 @@
     let selectedFile = null;
     let previewSequence = 0;
     let lastResults = null;
+    let preparedImage = null;
+    let prepareCount = 0;
+    let currentInputId = 0;
+    let workerBridge = null;
+    let workerHeapBytes = 0;
+    let backend = "loading";
+    let engineReady = false;
+    let bootPromise = null;
     const buffers = {source: 0, lines: 0, text: 0, result: 0};
 
     function decodeBase64(value) {
@@ -143,8 +220,230 @@
     function escapeHtml(value) { return value.replace(/[&<>]/g, c => ({"&":"&amp;", "<":"&lt;", ">":"&gt;"}[c])); }
     function makeFactory() { return eval("(function(){" + RUNTIME_JS + ";return LwPpocrModule;})()"); }
 
+    /*
+     * Worker-side adapter for the C Web ABI.
+     *
+     * It deliberately owns the Emscripten module, model files and reusable
+     * buffers.  The page sends an image only once; repeated OCR runs send the
+     * input id and reuse the copy already held by WASM.
+     */
+    function ocrWorkerMain(runtimeSource, models) {
+      const ABI_VERSION = 1;
+      let module = null, sourceCapacity = 0, inputId = 0;
+      let maxLines = 0, maxText = 0, lineSize = 0, resultSize = 0;
+      const pointers = {source: 0, lines: 0, text: 0, result: 0};
+
+      function decode(value) {
+        const raw = atob(value), bytes = new Uint8Array(raw.length);
+        for (let i = 0; i < raw.length; ++i) bytes[i] = raw.charCodeAt(i);
+        return bytes;
+      }
+      function u32(pointer) { return module.HEAPU32[pointer >> 2] >>> 0; }
+      function f32(pointer) { return module.HEAPF32[pointer >> 2]; }
+      function utf8(pointer, length) {
+        return new TextDecoder().decode(module.HEAPU8.subarray(pointer, pointer + length));
+      }
+      function allocate(size, label) {
+        const pointer = module._lw_web_malloc(size);
+        if (!pointer) throw new Error(`无法分配${label}（${size} 字节）`);
+        return pointer;
+      }
+      function releaseOutputs() {
+        for (const name of ["lines", "text", "result"]) {
+          if (pointers[name]) module._lw_web_free(pointers[name]);
+          pointers[name] = 0;
+        }
+      }
+      function ensureSource(required) {
+        if (required <= sourceCapacity) return pointers.source;
+        const replacement = allocate(required, "输入图像缓冲区");
+        if (pointers.source) module._lw_web_free(pointers.source);
+        pointers.source = replacement;
+        sourceCapacity = required;
+        return replacement;
+      }
+      function snapshot() {
+        return {
+          heapBytes: module ? module.HEAPU8.buffer.byteLength : 0,
+          sourceCapacity, maxLineCapacity: maxLines,
+          maxTextCapacity: maxText, lineSize, resultSize
+        };
+      }
+      async function loadModule() {
+        if (module) return;
+        const factory = eval("(function(){" + runtimeSource + ";return LwPpocrModule;})()");
+        module = await factory({});
+        module.FS.mkdir("/models");
+        for (const [name, key] of [
+          ["det.lwm", "det"], ["cls.lwm", "cls"],
+          ["rec.lwm", "rec"], ["ppocr_keys.txt", "dict"]
+        ]) {
+          module.FS.writeFile("/models/" + name, decode(models[key]));
+          models[key] = "";
+        }
+        runtimeSource = "";
+        models = null;
+      }
+      function allocateOutputs() {
+        const infoSize = module._lw_web_info_size();
+        if (infoSize !== 20) throw new Error(`不支持的 Web ABI 信息大小：${infoSize}`);
+        const info = allocate(infoSize, "Web ABI 信息");
+        try {
+          const status = module._lw_web_get_info(info);
+          if (status !== 0) throw new Error("读取引擎容量失败：" + status);
+          if (u32(info) !== ABI_VERSION) throw new Error("不支持的 Web ABI：" + u32(info));
+          maxLines = u32(info + 4); maxText = u32(info + 8);
+          lineSize = u32(info + 12); resultSize = u32(info + 16);
+          if (!maxLines || !maxText || lineSize !== 60 || resultSize !== 16) {
+            throw new Error("引擎返回了无效的输出容量");
+          }
+        } finally {
+          module._lw_web_free(info);
+        }
+        pointers.lines = allocate(maxLines * lineSize, "识别行缓冲区");
+        pointers.text = allocate(maxText, "文本缓冲区");
+        pointers.result = allocate(resultSize, "结果缓冲区");
+      }
+      async function initialize(useCls) {
+        const started = performance.now();
+        await loadModule();
+        if (pointers.lines) {
+          releaseOutputs();
+          module._lw_web_shutdown();
+        }
+        const status = module._lw_web_init(useCls ? 1 : 0);
+        if (status !== 0) throw new Error("初始化失败：" + status);
+        allocateOutputs();
+        return {type: "ready", loadMilliseconds: performance.now() - started, snapshot: snapshot()};
+      }
+      function run(message) {
+        if (!pointers.lines) throw new Error("OCR 引擎尚未初始化");
+        if (message.pixels) {
+          const pixels = new Uint8Array(message.pixels);
+          const source = ensureSource(pixels.byteLength);
+          module.HEAPU8.set(pixels, source);
+          inputId = message.inputId;
+        }
+        if (!inputId || inputId !== message.inputId) throw new Error("OCR 输入图像已经失效");
+        const started = performance.now();
+        const status = module._lw_web_run(
+          pointers.source, message.byteLength, message.width, message.height,
+          message.width * 3, pointers.lines, maxLines, pointers.text, maxText,
+          pointers.result
+        );
+        if (status !== 0) throw new Error("推理失败：" + status);
+        const count = u32(pointers.result), lines = [];
+        if (count > maxLines) throw new Error("引擎返回的文字行数量超出容量");
+        for (let i = 0; i < count; ++i) {
+          const pointer = pointers.lines + i * lineSize, box = [];
+          for (let k = 0; k < 8; ++k) box.push(f32(pointer + k * 4));
+          const offset = u32(pointer + 52), length = u32(pointer + 56);
+          if (offset > maxText || length > maxText - offset) throw new Error("引擎返回的文本范围无效");
+          lines.push({
+            box, text: utf8(pointers.text + offset, length),
+            detection: f32(pointer + 32), recognition: f32(pointer + 36),
+            classification: f32(pointer + 40),
+            classificationLabel: u32(pointer + 44),
+            rotationDegrees: u32(pointer + 48)
+          });
+        }
+        return {
+          type: "result", lines,
+          inferenceMilliseconds: performance.now() - started,
+          snapshot: snapshot()
+        };
+      }
+      self.onmessage = async event => {
+        const message = event.data;
+        try {
+          let response;
+          if (message.type === "initialize") response = await initialize(message.useCls);
+          else if (message.type === "run") response = run(message);
+          else throw new Error("未知的 Worker 请求：" + message.type);
+          self.postMessage({requestId: message.requestId, ok: true, ...response});
+        } catch (error) {
+          self.postMessage({
+            requestId: message.requestId, ok: false,
+            error: error && error.message ? error.message : String(error)
+          });
+        }
+      };
+    }
+
+    /*
+     * Creates a Worker from an in-memory Blob, preserving the downloadable
+     * one-file HTML format.  Consumers normally do not need this internal
+     * protocol; use window.lwPpocrDemo below.
+     */
+    function createWorkerBridge() {
+      if (!window.Worker || !window.Blob || !URL.createObjectURL) {
+        throw new Error("当前浏览器不支持 Web Worker");
+      }
+      const source = [
+        '"use strict";(', ocrWorkerMain.toString(), ")(",
+        JSON.stringify(RUNTIME_JS), ",", JSON.stringify(MODEL_B64), ");"
+      ].join("");
+      const url = URL.createObjectURL(new Blob([source], {type: "text/javascript"}));
+      const worker = new Worker(url);
+      const pending = new Map();
+      let nextRequestId = 1;
+      let failed = false;
+
+      function rejectAll(error) {
+        if (failed) return;
+        failed = true;
+        for (const request of pending.values()) request.reject(error);
+        pending.clear();
+      }
+      worker.onmessage = event => {
+        const message = event.data, request = pending.get(message.requestId);
+        if (!request) return;
+        pending.delete(message.requestId);
+        if (message.ok) request.resolve(message);
+        else request.reject(new Error(message.error || "Worker 请求失败"));
+      };
+      worker.onerror = event => rejectAll(new Error(event.message || "OCR Worker 启动失败"));
+
+      return {
+        kind: "worker",
+        request(message, transfer = []) {
+          if (failed) return Promise.reject(new Error("OCR Worker 已停止"));
+          const requestId = nextRequestId++;
+          return new Promise((resolve, reject) => {
+            pending.set(requestId, {resolve, reject});
+            worker.postMessage({...message, requestId}, transfer);
+          });
+        },
+        ready() { URL.revokeObjectURL(url); },
+        close() {
+          rejectAll(new Error("OCR Worker 已关闭"));
+          worker.terminate();
+          URL.revokeObjectURL(url);
+        }
+      };
+    }
+
+    function setMobilePanel(panel) {
+      workspace.dataset.mobilePanel = panel;
+      const showingImage = panel === "image";
+      showImageButton.classList.toggle("active", showingImage);
+      showResultsButton.classList.toggle("active", !showingImage);
+      showImageButton.setAttribute("aria-pressed", String(showingImage));
+      showResultsButton.setAttribute("aria-pressed", String(!showingImage));
+    }
+
+    function updateEngineSnapshot(snapshot) {
+      if (!snapshot) return;
+      maxLineCapacity = snapshot.maxLineCapacity;
+      maxTextCapacity = snapshot.maxTextCapacity;
+      lineSize = snapshot.lineSize;
+      resultSize = snapshot.resultSize;
+      sourceCapacity = snapshot.sourceCapacity;
+    }
+
+    // ---------- Result snapshot, clipboard, sharing, and downloads ----------
     function setExportEnabled(enabled) {
-      for (const button of exportButtons) button.disabled = !enabled;
+      for (const button of resultActionButtons) button.disabled = !enabled;
     }
 
     function clearLastResults() {
@@ -198,6 +497,16 @@
       if (lastResults === result) statusNode.textContent = `已复制 ${result.lines.length} 行文本。`;
     }
 
+    async function shareResult() {
+      if (!lastResults || !navigator.share) return;
+      const result = lastResults;
+      await navigator.share({
+        title: `${exportBaseName(result.source)} 识别结果`,
+        text: plainTextResult()
+      });
+      if (lastResults === result) statusNode.textContent = `已分享 ${result.lines.length} 行文本。`;
+    }
+
     function exportTxt() {
       if (!lastResults) return;
       const text = plainTextResult();
@@ -211,6 +520,9 @@
       statusNode.textContent = `已导出 ${lastResults.lines.length} 行 JSON。`;
     }
 
+    // ---------- Main-thread compatibility backend ----------
+    // Modern browsers use the Worker above. These helpers preserve the same
+    // behavior for browsers that reject Blob Workers when opened from file://.
     function allocate(size, label) {
       const pointer = moduleInstance._lw_web_malloc(size);
       if (!pointer) throw new Error(`无法分配 ${label}（${size} 字节）`);
@@ -271,14 +583,17 @@
 
     function runtimeSnapshot() {
       return {
-        ready: Boolean(moduleInstance && buffers.lines && buffers.text && buffers.result),
+        ready: engineReady,
+        backend,
         runCount,
-        heapBytes: moduleInstance ? moduleInstance.HEAPU8.buffer.byteLength : 0,
+        heapBytes: workerBridge ? workerHeapBytes : (moduleInstance ? moduleInstance.HEAPU8.buffer.byteLength : 0),
         sourceCapacity,
         maxLineCapacity,
         maxTextCapacity,
         lineSize,
         resultSize,
+        prepareCount,
+        prepared: Boolean(preparedImage),
         hasResults: Boolean(lastResults),
         exportEnabled: exportButtons.every(button => !button.disabled)
       };
@@ -288,115 +603,254 @@
     async function boot() {
       const started = performance.now();
       try {
+        engineReady = false;
         runButton.disabled = true;
         clsInput.disabled = true;
-        if (!moduleInstance) {
-          moduleInstance = await makeFactory()({});
-          moduleInstance.FS.mkdir("/models");
-          for (const [name, key] of [["det.lwm", "det"], ["cls.lwm", "cls"], ["rec.lwm", "rec"], ["ppocr_keys.txt", "dict"]]) moduleInstance.FS.writeFile("/models/" + name, decodeBase64(MODEL_B64[key]));
+        if (workerBridge) {
+          const ready = await workerBridge.request({type: "initialize", useCls: clsInput.checked});
+          updateEngineSnapshot(ready.snapshot);
+          workerHeapBytes = ready.snapshot.heapBytes;
+          loadMilliseconds = performance.now() - started;
+        } else if (!moduleInstance) {
+          try {
+            statusNode.textContent = "正在后台加载 WASM 和模型…";
+            workerBridge = createWorkerBridge();
+            const ready = await workerBridge.request({type: "initialize", useCls: clsInput.checked});
+            workerBridge.ready();
+            updateEngineSnapshot(ready.snapshot);
+            workerHeapBytes = ready.snapshot.heapBytes;
+            loadMilliseconds = performance.now() - started;
+            backend = "worker";
+            // The Worker now owns the runtime and models. Drop the page copies
+            // so large Base64 strings can be reclaimed on memory-limited phones.
+            for (const key of Object.keys(MODEL_B64)) MODEL_B64[key] = "";
+            MODEL_B64 = null;
+            RUNTIME_JS = "";
+          } catch (workerError) {
+            if (workerBridge) workerBridge.close();
+            workerBridge = null;
+            console.warn("Worker 不可用，回退到页面主线程：", workerError);
+            statusNode.textContent = "后台线程不可用，正在兼容模式加载…";
+          }
         }
-        const status = moduleInstance._lw_web_init(clsInput.checked ? 1 : 0);
-        if (status !== 0) throw new Error("初始化失败：" + status);
-        allocateOutputBuffers();
-        loadMilliseconds = performance.now() - started;
+        if (!workerBridge) {
+          if (!moduleInstance) {
+            moduleInstance = await makeFactory()({});
+            moduleInstance.FS.mkdir("/models");
+            for (const [name, key] of [
+              ["det.lwm", "det"], ["cls.lwm", "cls"],
+              ["rec.lwm", "rec"], ["ppocr_keys.txt", "dict"]
+            ]) {
+              moduleInstance.FS.writeFile("/models/" + name, decodeBase64(MODEL_B64[key]));
+            }
+          }
+          const status = moduleInstance._lw_web_init(clsInput.checked ? 1 : 0);
+          if (status !== 0) throw new Error("初始化失败：" + status);
+          allocateOutputBuffers();
+          loadMilliseconds = performance.now() - started;
+          backend = "main-thread";
+        }
+        engineReady = true;
         runButton.disabled = !selectedFile;
         clsInput.disabled = false;
-        statsNode.textContent = `引擎已就绪 · 加载 ${(loadMilliseconds / 1000).toFixed(2)} s · 输出 ${maxLineCapacity} 行/${maxTextCapacity} 字节 · CLS ${clsInput.checked ? "开启" : "关闭"}`;
+        statsNode.textContent = `引擎已就绪 · ${backend === "worker" ? "后台线程" : "兼容模式"} · 加载 ${(loadMilliseconds / 1000).toFixed(2)} s · 输出 ${maxLineCapacity} 行/${maxTextCapacity} 字节 · CLS ${clsInput.checked ? "开启" : "关闭"}`;
         statusNode.textContent = selectedFile ? "图片已准备好，点击“开始识别”。" : "就绪，请选择图片。";
+        document.dispatchEvent(new CustomEvent("lwppocr:ready", {detail: {backend}}));
       } catch (error) {
         shutdownEngine();
+        if (workerBridge) workerBridge.close();
+        workerBridge = null;
+        backend = "failed";
+        engineReady = false;
         clsInput.disabled = false;
         statusNode.textContent = "WASM 初始化失败：" + error;
         console.error(error);
       }
     }
 
+    // ---------- Image preparation and non-destructive SVG overlay ----------
     function drawPreview(image, width, height) {
-      canvas.width = width; canvas.height = height;
-      const context = canvas.getContext("2d"); context.drawImage(image, 0, 0, width, height);
+      canvas.width = width;
+      canvas.height = height;
+      canvas.getContext("2d").drawImage(image, 0, 0, width, height);
+      overlay.setAttribute("viewBox", `0 0 ${width} ${height}`);
+      overlay.replaceChildren();
     }
 
-    function drawResults(image, lines, width, height) {
-      drawPreview(image, width, height);
-      const context = canvas.getContext("2d");
-      context.lineWidth = Math.max(2, canvas.width / 500); context.font = "16px sans-serif"; context.strokeStyle = "#e53935"; context.fillStyle = "#e53935";
-      for (const line of lines) { const b = line.box; context.beginPath(); context.moveTo(b[0], b[1]); context.lineTo(b[2], b[3]); context.lineTo(b[4], b[5]); context.lineTo(b[6], b[7]); context.closePath(); context.stroke(); context.fillText(line.text, b[0], Math.max(16, b[1] - 3)); }
+    function drawResults(lines, width, height) {
+      const svgNamespace = "http://www.w3.org/2000/svg";
+      overlay.setAttribute("viewBox", `0 0 ${width} ${height}`);
+      overlay.replaceChildren();
+      lines.forEach((line, index) => {
+        const polygon = document.createElementNS(svgNamespace, "polygon");
+        polygon.dataset.lineIndex = String(index);
+        polygon.setAttribute("points", [
+          `${line.box[0]},${line.box[1]}`, `${line.box[2]},${line.box[3]}`,
+          `${line.box[4]},${line.box[5]}`, `${line.box[6]},${line.box[7]}`
+        ].join(" "));
+        polygon.setAttribute("stroke-width", String(Math.max(2, width / 500)));
+        overlay.appendChild(polygon);
+        const label = document.createElementNS(svgNamespace, "text");
+        label.setAttribute("x", String(line.box[0]));
+        label.setAttribute("y", String(Math.max(16, line.box[1] - 3)));
+        label.textContent = line.text;
+        overlay.appendChild(label);
+      });
     }
 
-    async function previewSelectedFile() {
-      const file = fileInput.files[0];
+    async function decodeImage(file) {
+      if (window.createImageBitmap) return createImageBitmap(file);
+      const url = URL.createObjectURL(file);
+      try {
+        const image = new Image();
+        image.decoding = "async";
+        image.src = url;
+        await image.decode();
+        return image;
+      } finally {
+        URL.revokeObjectURL(url);
+      }
+    }
+
+    function canvasBgrBuffer() {
+      const rgba = canvas.getContext("2d").getImageData(0, 0, canvas.width, canvas.height).data;
+      const bgr = new Uint8Array(canvas.width * canvas.height * 3);
+      for (let i = 0, j = 0; i < rgba.length; i += 4) {
+        bgr[j++] = rgba[i + 2]; bgr[j++] = rgba[i + 1]; bgr[j++] = rgba[i];
+      }
+      return bgr.buffer;
+    }
+
+    async function prepareSelectedFile(file) {
       const sequence = ++previewSequence;
       selectedFile = file || null;
+      preparedImage = null;
       runButton.disabled = true;
       clearLastResults();
+      setMobilePanel("image");
       if (!file) {
         statusNode.textContent = "就绪，请选择图片。";
         resultsNode.innerHTML = '<div class="empty">选择图片后，点击“开始识别”显示结果。</div>';
-        return;
+        overlay.replaceChildren();
+        return null;
       }
+      let image;
       try {
-        statusNode.textContent = "正在更新图片预览…";
-        const image = await createImageBitmap(file);
-        try {
-          if (sequence !== previewSequence) return;
-          const scale = Math.min(1, 1600 / Math.max(image.width, image.height));
-          const width = Math.max(1, Math.round(image.width * scale));
-          const height = Math.max(1, Math.round(image.height * scale));
-          drawPreview(image, width, height);
-          resultsNode.innerHTML = '<div class="empty">图片已准备好，点击“开始识别”执行 OCR。</div>';
-          statusNode.textContent = `已选择：${file.name}，点击“开始识别”。`;
-        } finally {
-          if (image.close) image.close();
-        }
+        const started = performance.now();
+        statusNode.textContent = "正在准备图片…";
+        image = await decodeImage(file);
+        if (sequence !== previewSequence) return null;
+        const originalWidth = image.width || image.naturalWidth;
+        const originalHeight = image.height || image.naturalHeight;
+        const scale = Math.min(1, 1600 / Math.max(originalWidth, originalHeight));
+        const width = Math.max(1, Math.round(originalWidth * scale));
+        const height = Math.max(1, Math.round(originalHeight * scale));
+        drawPreview(image, width, height);
+        preparedImage = {
+          id: ++currentInputId, file, originalWidth, originalHeight, width, height,
+          byteLength: width * height * 3, pixels: canvasBgrBuffer(),
+          prepareMilliseconds: performance.now() - started,
+          sentToEngine: false
+        };
+        prepareCount += 1;
+        resultsNode.innerHTML = '<div class="empty">图片已准备好，点击“开始识别”执行 OCR。</div>';
+        statusNode.textContent = `已选择：${file.name} · 处理尺寸 ${width}×${height}，点击“开始识别”。`;
+        return preparedImage;
       } catch (error) {
         if (sequence === previewSequence) {
           selectedFile = null;
+          preparedImage = null;
           statusNode.textContent = "图片预览失败：" + error;
         }
+        throw error;
       } finally {
-        if (sequence === previewSequence) runButton.disabled = !selectedFile || !moduleInstance;
+        if (image && image.close) image.close();
+        if (sequence === previewSequence) runButton.disabled = !preparedImage || !runtimeSnapshot().ready;
       }
     }
 
     async function runOcr() {
-      const file = selectedFile; if (!file || !moduleInstance || running) return;
+      const file = selectedFile, prepared = preparedImage;
+      if (!file || !prepared || !runtimeSnapshot().ready || running) return null;
       const totalStarted = performance.now();
-      let image;
-      running = true; runButton.disabled = true; clsInput.disabled = true; clearLastResults(); statusNode.textContent = "识别中…";
+      running = true;
+      runButton.disabled = true;
+      clsInput.disabled = true;
+      clearLastResults();
+      document.body.setAttribute("aria-busy", "true");
+      statusNode.textContent = "正在识别，页面仍可正常操作…";
       try {
-        const decodeStarted = performance.now();
-        image = await createImageBitmap(file); const originalWidth = image.width, originalHeight = image.height; const scale = Math.min(1, 1600 / Math.max(originalWidth, originalHeight));
-        const width = Math.max(1, Math.round(image.width * scale)); const height = Math.max(1, Math.round(image.height * scale));
-        drawPreview(image, width, height); const context = canvas.getContext("2d");
-        const rgba = context.getImageData(0, 0, width, height).data; const bgr = new Uint8Array(width * height * 3);
-        for (let i = 0, j = 0; i < rgba.length; i += 4) { bgr[j++] = rgba[i + 2]; bgr[j++] = rgba[i + 1]; bgr[j++] = rgba[i]; }
-        const sourcePointer = ensureSourceCapacity(bgr.length);
-        moduleInstance.HEAPU8.set(bgr, sourcePointer);
-        const decodeMilliseconds = performance.now() - decodeStarted;
-        const inferenceStarted = performance.now();
-        const status = moduleInstance._lw_web_run(sourcePointer, bgr.length, width, height, width * 3, buffers.lines, maxLineCapacity, buffers.text, maxTextCapacity, buffers.result);
-        if (status !== 0) throw new Error("推理失败：" + status);
-        const lineCount = readU32(buffers.result), lines = [];
-        if (lineCount > maxLineCapacity) throw new Error("引擎返回的文字行数量超出容量");
-        for (let i = 0; i < lineCount; ++i) {
-          const p = buffers.lines + i * lineSize, box = [];
-          for (let k = 0; k < 8; ++k) box.push(readF32(p + k * 4));
-          const offset = readU32(p + 52), length = readU32(p + 56);
-          if (offset > maxTextCapacity || length > maxTextCapacity - offset) throw new Error("引擎返回的文本范围无效");
-          lines.push({box, text: readUtf8(buffers.text + offset, length), detection: readF32(p + 32), recognition: readF32(p + 36), classification: readF32(p + 40), classificationLabel: readU32(p + 44), rotationDegrees: readU32(p + 48)});
+        let lines, inferenceMilliseconds;
+        if (workerBridge) {
+          const request = {
+            type: "run", inputId: prepared.id, width: prepared.width,
+            height: prepared.height, byteLength: prepared.byteLength
+          };
+          let transfer = [];
+          if (!prepared.sentToEngine) {
+            if (!prepared.pixels) prepared.pixels = canvasBgrBuffer();
+            const pixels = prepared.pixels;
+            prepared.pixels = null;
+            request.pixels = pixels;
+            transfer = [pixels];
+          }
+          const response = await workerBridge.request(request, transfer);
+          prepared.sentToEngine = true;
+          lines = response.lines;
+          inferenceMilliseconds = response.inferenceMilliseconds;
+          workerHeapBytes = response.snapshot.heapBytes;
+          updateEngineSnapshot(response.snapshot);
+        } else {
+          if (!prepared.sentToEngine) {
+            if (!prepared.pixels) prepared.pixels = canvasBgrBuffer();
+            const pixels = new Uint8Array(prepared.pixels);
+            const sourcePointer = ensureSourceCapacity(pixels.byteLength);
+            moduleInstance.HEAPU8.set(pixels, sourcePointer);
+            prepared.sentToEngine = true;
+            prepared.pixels = null;
+          }
+          const inferenceStarted = performance.now();
+          const status = moduleInstance._lw_web_run(
+            buffers.source, prepared.byteLength, prepared.width, prepared.height,
+            prepared.width * 3, buffers.lines, maxLineCapacity, buffers.text,
+            maxTextCapacity, buffers.result
+          );
+          if (status !== 0) throw new Error("推理失败：" + status);
+          const lineCount = readU32(buffers.result);
+          lines = [];
+          if (lineCount > maxLineCapacity) throw new Error("引擎返回的文字行数量超出容量");
+          for (let i = 0; i < lineCount; ++i) {
+            const pointer = buffers.lines + i * lineSize, box = [];
+            for (let k = 0; k < 8; ++k) box.push(readF32(pointer + k * 4));
+            const offset = readU32(pointer + 52), length = readU32(pointer + 56);
+            if (offset > maxTextCapacity || length > maxTextCapacity - offset) {
+              throw new Error("引擎返回的文本范围无效");
+            }
+            lines.push({
+              box, text: readUtf8(buffers.text + offset, length),
+              detection: readF32(pointer + 32), recognition: readF32(pointer + 36),
+              classification: readF32(pointer + 40),
+              classificationLabel: readU32(pointer + 44),
+              rotationDegrees: readU32(pointer + 48)
+            });
+          }
+          inferenceMilliseconds = performance.now() - inferenceStarted;
         }
-        drawResults(image, lines, width, height);
-        resultsNode.innerHTML = lines.length ? lines.map((line, index) => `<div class="line"><div class="index">${String(index + 1).padStart(2, "0")}</div><div class="text"><b>${escapeHtml(line.text)}</b><div class="score">检测 ${(line.detection * 100).toFixed(1)}% · 识别 ${(line.recognition * 100).toFixed(1)}%</div></div></div>`).join("") : '<div class="empty">未检测到文本。</div>';
-        const inferenceMilliseconds = performance.now() - inferenceStarted;
+
+        drawResults(lines, prepared.width, prepared.height);
+        resultsNode.innerHTML = lines.length ? lines.map((line, index) =>
+          `<div class="line" data-line-index="${index}"><div class="index">${String(index + 1).padStart(2, "0")}</div><div class="text"><b>${escapeHtml(line.text)}</b><div class="score">检测 ${(line.detection * 100).toFixed(1)}% · 识别 ${(line.recognition * 100).toFixed(1)}%</div></div></div>`
+        ).join("") : '<div class="empty">未检测到文本。</div>';
         const totalMilliseconds = performance.now() - totalStarted;
-        const xScale = originalWidth / width, yScale = originalHeight / height;
+        const xScale = prepared.originalWidth / prepared.width;
+        const yScale = prepared.originalHeight / prepared.height;
         const useCls = clsInput.checked;
         lastResults = {
           schema_version: 1,
-          source: file.name,
-          image: {width: originalWidth, height: originalHeight},
+          source: file.name || "image",
+          image: {width: prepared.originalWidth, height: prepared.originalHeight},
           options: {use_cls: useCls},
-          elapsed_ms: Number(totalMilliseconds.toFixed(3)),
+          elapsed_ms: Number((prepared.prepareMilliseconds + inferenceMilliseconds).toFixed(3)),
           lines: lines.map((line, index) => {
             const exported = {
               index,
@@ -415,21 +869,124 @@
         };
         setExportEnabled(true);
         runCount += 1;
-        statsNode.textContent = `第 ${runCount} 次 · 引擎加载 ${(loadMilliseconds / 1000).toFixed(2)} s · 图像处理 ${decodeMilliseconds.toFixed(0)} ms · 推理 ${inferenceMilliseconds.toFixed(0)} ms · 总计 ${totalMilliseconds.toFixed(0)} ms · CLS ${clsInput.checked ? "开启" : "关闭"}`;
-        statusNode.textContent = `完成：${lineCount} 行`;
-      } catch (error) { statusNode.textContent = "识别失败：" + error; console.error(error); } finally { if (image && image.close) image.close(); running = false; runButton.disabled = !selectedFile || !moduleInstance; clsInput.disabled = false; }
+        statsNode.textContent = `第 ${runCount} 次 · ${backend === "worker" ? "后台线程" : "兼容模式"} · 图像准备 ${prepared.prepareMilliseconds.toFixed(0)} ms · 推理 ${inferenceMilliseconds.toFixed(0)} ms · 本次等待 ${totalMilliseconds.toFixed(0)} ms · CLS ${useCls ? "开启" : "关闭"}`;
+        statusNode.textContent = `完成：${lines.length} 行`;
+        setMobilePanel("results");
+        document.dispatchEvent(new CustomEvent("lwppocr:result", {detail: lastResults}));
+        return lastResults;
+      } catch (error) {
+        statusNode.textContent = "识别失败：" + error;
+        document.dispatchEvent(new CustomEvent("lwppocr:error", {detail: {message: String(error)}}));
+        console.error(error);
+        throw error;
+      } finally {
+        document.body.removeAttribute("aria-busy");
+        running = false;
+        runButton.disabled = !preparedImage || !runtimeSnapshot().ready;
+        clsInput.disabled = false;
+      }
     }
-    fileInput.addEventListener("change", previewSelectedFile);
-    clsInput.addEventListener("change", async () => { if (!moduleInstance || running) return; shutdownEngine(); runButton.disabled = true; statusNode.textContent = "正在切换 CLS 并重新加载引擎…"; await boot(); });
+
+    // ---------- UI events ----------
+    async function reconfigureCls() {
+      if (!runtimeSnapshot().ready || running) return;
+      if (!workerBridge) {
+        shutdownEngine();
+        if (preparedImage) {
+          preparedImage.sentToEngine = false;
+          preparedImage.pixels = canvasBgrBuffer();
+        }
+      }
+      runButton.disabled = true;
+      statusNode.textContent = "正在切换 CLS 并重新加载引擎…";
+      bootPromise = boot();
+      await bootPromise;
+    }
+
+    async function handleFileInput(event) {
+      try {
+        await prepareSelectedFile(event.target.files[0] || null);
+      } catch (error) {
+        console.error(error);
+      }
+    }
+
+    function selectResultLine(index) {
+      for (const node of resultsNode.querySelectorAll("[data-line-index]")) {
+        node.classList.toggle("active", Number(node.dataset.lineIndex) === index);
+      }
+      for (const node of overlay.querySelectorAll("[data-line-index]")) {
+        node.classList.toggle("active", Number(node.dataset.lineIndex) === index);
+      }
+    }
+
+    fileInput.addEventListener("change", handleFileInput);
+    cameraInput.addEventListener("change", handleFileInput);
+    clsInput.addEventListener("change", () => reconfigureCls().catch(error => console.error(error)));
     ["dragenter", "dragover"].forEach(event => dropzone.addEventListener(event, e => { e.preventDefault(); dropzone.classList.add("drag"); }));
     ["dragleave", "drop"].forEach(event => dropzone.addEventListener(event, e => { e.preventDefault(); dropzone.classList.remove("drag"); }));
-    dropzone.addEventListener("drop", event => { if (event.dataTransfer.files.length) { fileInput.files = event.dataTransfer.files; fileInput.dispatchEvent(new Event("change")); } });
-    runButton.addEventListener("click", runOcr);
+    dropzone.addEventListener("drop", event => {
+      if (event.dataTransfer.files.length) {
+        prepareSelectedFile(event.dataTransfer.files[0]).catch(error => console.error(error));
+      }
+    });
+    runButton.addEventListener("click", () => runOcr().catch(() => {}));
     copyTextButton.addEventListener("click", () => copyPlainText().catch(error => { statusNode.textContent = "复制失败：" + error; console.error(error); }));
+    shareResultButton.addEventListener("click", () => shareResult().catch(error => {
+      if (error && error.name !== "AbortError") {
+        statusNode.textContent = "分享失败：" + error;
+        console.error(error);
+      }
+    }));
     exportTxtButton.addEventListener("click", exportTxt);
     exportJsonButton.addEventListener("click", exportJson);
-    window.addEventListener("beforeunload", shutdownEngine);
-    boot();
+    showImageButton.addEventListener("click", () => setMobilePanel("image"));
+    showResultsButton.addEventListener("click", () => setMobilePanel("results"));
+    resultsNode.addEventListener("click", event => {
+      const line = event.target.closest("[data-line-index]");
+      if (line) selectResultLine(Number(line.dataset.lineIndex));
+    });
+    shareResultButton.hidden = !navigator.share;
+    if (matchMedia("(max-width: 760px)").matches) document.getElementById("support").open = false;
+
+    /*
+     * Public integration API
+     * ----------------------
+     * await lwPpocrDemo.ready()
+     * const result = await lwPpocrDemo.recognize(file, {useCls: false})
+     *
+     * file must be a browser File/Blob accepted by the image decoder.  The
+     * returned object is the same schema_version: 1 structure used by JSON
+     * export.  The lwppocr:ready, lwppocr:result and lwppocr:error document
+     * events are available to integrations that prefer event-driven updates.
+     */
+    window.lwPpocrDemo = Object.freeze({
+      apiVersion: 1,
+      ready: () => bootPromise,
+      selectImage: file => prepareSelectedFile(file),
+      async recognize(file, options = {}) {
+        await bootPromise;
+        if (!runtimeSnapshot().ready) throw new Error("OCR 引擎初始化失败");
+        if (typeof options.useCls === "boolean" && options.useCls !== clsInput.checked) {
+          clsInput.checked = options.useCls;
+          await reconfigureCls();
+        }
+        if (file) await prepareSelectedFile(file);
+        await runOcr();
+        return lastResults ? JSON.parse(JSON.stringify(lastResults)) : null;
+      },
+      getResult() {
+        return lastResults ? JSON.parse(JSON.stringify(lastResults)) : null;
+      },
+      getPlainText: plainTextResult,
+      getStatus: runtimeSnapshot
+    });
+
+    window.addEventListener("beforeunload", () => {
+      if (workerBridge) workerBridge.close();
+      else shutdownEngine();
+    });
+    bootPromise = boot();
   </script>
 </body>
 </html>
