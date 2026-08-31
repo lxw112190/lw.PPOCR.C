@@ -37,8 +37,16 @@ application concern, so the core itself stays dependency-free.
 ### Platform focus
 
 - Primary targets: Windows x64 and Linux x64.
+- A manual customer workflow builds native Linux ARM64 and an experimental
+  QEMU-validated Linux LoongArch64 package; physical customer hardware remains
+  a separate validation gate.
 - Windows 7 x86 compatibility is preserved by design.
 - The LWM v0.1 format is custom and not yet frozen.
+
+ARM64 and LoongArch64 currently use the portable scalar kernels. See the
+[platform matrix](docs/platform-matrix.md) and
+[development package guide](docs/package.md) before making compatibility or
+performance claims.
 
 ### Performance snapshot
 

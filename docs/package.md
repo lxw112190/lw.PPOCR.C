@@ -26,6 +26,7 @@ README.zh-CN.md
 THIRD-PARTY-NOTICES.md
 dependencies.lock.json
 sbom.cdx.json
+BUILD-ENVIRONMENT.txt         CI toolchain/baseline report when provided
 ```
 
 ## Run the packaged demo
@@ -160,6 +161,48 @@ CPack writes the archive and its `.sha256` checksum under `build/packages`.
 The package test installs to a clean staging directory, builds consumers using
 the installed CMake package, and runs the installed Demos against installed
 models, dictionary, and fixtures before packaging.
+
+## Build customer Linux architecture packages
+
+Run the manually dispatched `customer-linux-architectures` workflow from the
+GitHub Actions page. It prepares the platform-independent LWM/PPM assets once,
+then produces these independent CI artifacts:
+
+- `lw.PPOCR.C-linux-amd64-ubuntu22.04` on a native amd64 runner;
+- `lw.PPOCR.C-linux-arm64-ubuntu22.04` on a native ARM64 runner;
+- `lw.PPOCR.C-linux-loongarch64-debian13-qemu-experimental` under QEMU.
+
+The CPack filenames carry the same architecture/baseline suffix after the
+project version, so extracted files remain identifiable after being downloaded
+from the Actions artifact wrapper.
+
+The architecture jobs do not need ONNX Runtime or converter wheels. They reuse
+checksummed LWM assets, build both the static/shared runtime and native Demos,
+install into a clean staging directory, compile an installed-package consumer,
+and run real REC, DET, full OCR, and HTTP smoke tests. The resulting CPack
+archive and its `.sha256` file are uploaded together. Each archive includes
+`BUILD-ENVIRONMENT.txt` with its commit, compiler, CMake, glibc, architecture,
+and whether execution was native or emulated.
+
+The LoongArch64 artifact is an experimental customer-validation build. After
+checking its `.sha256`, run it on the customer's actual system and record at
+least the following before making a compatibility claim:
+
+```bash
+uname -m
+cat /etc/os-release
+getconf GNU_LIBC_VERSION
+file ./bin/lw-ocr-ppm
+ldd ./bin/lw-ocr-ppm
+./bin/lw-ocr-ppm ./models/det.lwm ./models/cls.lwm \
+  ./models/rec.lwm ./models/ppocr_keys.txt ./models/sample.ppm
+```
+
+ARM64 and LoongArch64 currently use the portable scalar kernels. They are
+functional-validation packages, not performance-equivalent replacements for
+the runtime-dispatched SSE2/AVX2 amd64 build. Do not attach these manual
+artifacts to a tagged release until their jobs are green and the intended
+support policy has been reviewed.
 
 ## Publish a tagged release
 

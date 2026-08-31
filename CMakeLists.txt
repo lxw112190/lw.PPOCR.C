@@ -8,6 +8,14 @@ option(LW_BUILD_CSHARP_DEMOS
     "Build the .NET Framework 3.5 WinForms Demo on Windows" OFF)
 option(LW_WASM_SIMD128
     "Enable portable WebAssembly SIMD128 for the standalone OCR HTML" ON)
+set(LW_PRECONVERTED_ASSETS_DIR "" CACHE PATH
+    "Directory containing preconverted LWM models and PPM fixtures")
+set(LW_BUILD_ENVIRONMENT_FILE "" CACHE FILEPATH
+    "Optional build-environment report installed in the package root")
+set(LW_STAGED_PACKAGE_TEST_TIMEOUT 240 CACHE STRING
+    "Timeout in seconds for the installed-package smoke test")
+set(LW_PACKAGE_PLATFORM_OVERRIDE "" CACHE STRING
+    "Optional explicit platform suffix for the CPack archive name")
 
 if(LW_BUILD_HTTP_DEMO)
     enable_language(CXX)
@@ -53,51 +61,93 @@ add_custom_target(analyze_models
     COMMENT "Analyzing bundled PP-OCRv6 tiny ONNX models"
     VERBATIM)
 
-add_custom_command(
-    OUTPUT "${LW_PPOCR_C_REC_LWM}" "${LW_PPOCR_C_REC_LWM_METADATA}"
-    COMMAND "${Python3_EXECUTABLE}" -m converter.convert_rec
-            --input "${LW_PPOCR_C_REC_ONNX}"
-            --output "${LW_PPOCR_C_REC_LWM}"
-            --metadata-output "${LW_PPOCR_C_REC_LWM_METADATA}"
-    DEPENDS
-        "${LW_PPOCR_C_REC_ONNX}"
-        "${CMAKE_CURRENT_SOURCE_DIR}/converter/convert_rec.py"
-        "${CMAKE_CURRENT_SOURCE_DIR}/converter/lwm_v0.py"
-    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
-    COMMENT "Converting PP-OCRv6 tiny REC to LWM v0.1"
-    VERBATIM)
+if(LW_PRECONVERTED_ASSETS_DIR)
+    get_filename_component(LW_PRECONVERTED_ASSETS_DIR
+        "${LW_PRECONVERTED_ASSETS_DIR}" ABSOLUTE)
+    foreach(asset IN ITEMS
+            rec.lwm rec-lwm.json cls.lwm cls-lwm.json det.lwm det-lwm.json
+            sample-crop.ppm sample.ppm)
+        if(NOT EXISTS "${LW_PRECONVERTED_ASSETS_DIR}/${asset}")
+            message(FATAL_ERROR
+                "LW_PRECONVERTED_ASSETS_DIR is missing required file: ${asset}")
+        endif()
+    endforeach()
+    message(STATUS
+        "Using preconverted models and fixtures from ${LW_PRECONVERTED_ASSETS_DIR}")
+
+    function(lw_copy_preconverted_pair output_a name_a output_b name_b label)
+        add_custom_command(
+            OUTPUT "${output_a}" "${output_b}"
+            COMMAND "${CMAKE_COMMAND}" -E make_directory
+                    "${CMAKE_CURRENT_BINARY_DIR}/models"
+            COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+                    "${LW_PRECONVERTED_ASSETS_DIR}/${name_a}" "${output_a}"
+            COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+                    "${LW_PRECONVERTED_ASSETS_DIR}/${name_b}" "${output_b}"
+            DEPENDS
+                "${LW_PRECONVERTED_ASSETS_DIR}/${name_a}"
+                "${LW_PRECONVERTED_ASSETS_DIR}/${name_b}"
+            COMMENT "Copying preconverted ${label} assets"
+            VERBATIM)
+    endfunction()
+
+    lw_copy_preconverted_pair(
+        "${LW_PPOCR_C_REC_LWM}" rec.lwm
+        "${LW_PPOCR_C_REC_LWM_METADATA}" rec-lwm.json REC)
+    lw_copy_preconverted_pair(
+        "${LW_PPOCR_C_CLS_LWM}" cls.lwm
+        "${LW_PPOCR_C_CLS_LWM_METADATA}" cls-lwm.json CLS)
+    lw_copy_preconverted_pair(
+        "${LW_PPOCR_C_DET_LWM}" det.lwm
+        "${LW_PPOCR_C_DET_LWM_METADATA}" det-lwm.json DET)
+else()
+    add_custom_command(
+        OUTPUT "${LW_PPOCR_C_REC_LWM}" "${LW_PPOCR_C_REC_LWM_METADATA}"
+        COMMAND "${Python3_EXECUTABLE}" -m converter.convert_rec
+                --input "${LW_PPOCR_C_REC_ONNX}"
+                --output "${LW_PPOCR_C_REC_LWM}"
+                --metadata-output "${LW_PPOCR_C_REC_LWM_METADATA}"
+        DEPENDS
+            "${LW_PPOCR_C_REC_ONNX}"
+            "${CMAKE_CURRENT_SOURCE_DIR}/converter/convert_rec.py"
+            "${CMAKE_CURRENT_SOURCE_DIR}/converter/lwm_v0.py"
+        WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+        COMMENT "Converting PP-OCRv6 tiny REC to LWM v0.1"
+        VERBATIM)
+
+    add_custom_command(
+        OUTPUT "${LW_PPOCR_C_CLS_LWM}" "${LW_PPOCR_C_CLS_LWM_METADATA}"
+        COMMAND "${Python3_EXECUTABLE}" -m converter.convert_cls
+                --input "${LW_PPOCR_C_CLS_ONNX}"
+                --output "${LW_PPOCR_C_CLS_LWM}"
+                --metadata-output "${LW_PPOCR_C_CLS_LWM_METADATA}"
+        DEPENDS
+            "${LW_PPOCR_C_CLS_ONNX}"
+            "${CMAKE_CURRENT_SOURCE_DIR}/converter/convert_cls.py"
+            "${CMAKE_CURRENT_SOURCE_DIR}/converter/lwm_v0.py"
+        WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+        COMMENT "Converting PP-OCRv6 tiny CLS to LWM v0.1"
+        VERBATIM)
+
+    add_custom_command(
+        OUTPUT "${LW_PPOCR_C_DET_LWM}" "${LW_PPOCR_C_DET_LWM_METADATA}"
+        COMMAND "${Python3_EXECUTABLE}" -m converter.convert_det
+                --input "${LW_PPOCR_C_DET_ONNX}"
+                --output "${LW_PPOCR_C_DET_LWM}"
+                --metadata-output "${LW_PPOCR_C_DET_LWM_METADATA}"
+        DEPENDS
+            "${LW_PPOCR_C_DET_ONNX}"
+            "${CMAKE_CURRENT_SOURCE_DIR}/converter/convert_det.py"
+            "${CMAKE_CURRENT_SOURCE_DIR}/converter/lwm_v0.py"
+        WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+        COMMENT "Converting PP-OCRv6 tiny DET to LWM v0.1"
+        VERBATIM)
+endif()
+
 add_custom_target(convert_rec_model ALL
     DEPENDS "${LW_PPOCR_C_REC_LWM}" "${LW_PPOCR_C_REC_LWM_METADATA}")
-
-add_custom_command(
-    OUTPUT "${LW_PPOCR_C_CLS_LWM}" "${LW_PPOCR_C_CLS_LWM_METADATA}"
-    COMMAND "${Python3_EXECUTABLE}" -m converter.convert_cls
-            --input "${LW_PPOCR_C_CLS_ONNX}"
-            --output "${LW_PPOCR_C_CLS_LWM}"
-            --metadata-output "${LW_PPOCR_C_CLS_LWM_METADATA}"
-    DEPENDS
-        "${LW_PPOCR_C_CLS_ONNX}"
-        "${CMAKE_CURRENT_SOURCE_DIR}/converter/convert_cls.py"
-        "${CMAKE_CURRENT_SOURCE_DIR}/converter/lwm_v0.py"
-    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
-    COMMENT "Converting PP-OCRv6 tiny CLS to LWM v0.1"
-    VERBATIM)
 add_custom_target(convert_cls_model ALL
     DEPENDS "${LW_PPOCR_C_CLS_LWM}" "${LW_PPOCR_C_CLS_LWM_METADATA}")
-
-add_custom_command(
-    OUTPUT "${LW_PPOCR_C_DET_LWM}" "${LW_PPOCR_C_DET_LWM_METADATA}"
-    COMMAND "${Python3_EXECUTABLE}" -m converter.convert_det
-            --input "${LW_PPOCR_C_DET_ONNX}"
-            --output "${LW_PPOCR_C_DET_LWM}"
-            --metadata-output "${LW_PPOCR_C_DET_LWM_METADATA}"
-    DEPENDS
-        "${LW_PPOCR_C_DET_ONNX}"
-        "${CMAKE_CURRENT_SOURCE_DIR}/converter/convert_det.py"
-        "${CMAKE_CURRENT_SOURCE_DIR}/converter/lwm_v0.py"
-    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
-    COMMENT "Converting PP-OCRv6 tiny DET to LWM v0.1"
-    VERBATIM)
 add_custom_target(convert_det_model ALL
     DEPENDS "${LW_PPOCR_C_DET_LWM}" "${LW_PPOCR_C_DET_LWM_METADATA}")
 
@@ -285,32 +335,58 @@ endif()
 
 set(LW_PPOCR_C_REC_DEMO_PPM
     "${CMAKE_CURRENT_BINARY_DIR}/models/sample-crop.ppm")
-add_custom_command(
-    OUTPUT "${LW_PPOCR_C_REC_DEMO_PPM}"
-    COMMAND "${Python3_EXECUTABLE}"
+if(LW_PRECONVERTED_ASSETS_DIR)
+    add_custom_command(
+        OUTPUT "${LW_PPOCR_C_REC_DEMO_PPM}"
+        COMMAND "${CMAKE_COMMAND}" -E make_directory
+                "${CMAKE_CURRENT_BINARY_DIR}/models"
+        COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+                "${LW_PRECONVERTED_ASSETS_DIR}/sample-crop.ppm"
+                "${LW_PPOCR_C_REC_DEMO_PPM}"
+        DEPENDS "${LW_PRECONVERTED_ASSETS_DIR}/sample-crop.ppm"
+        COMMENT "Copying preconverted REC demo fixture"
+        VERBATIM)
+else()
+    add_custom_command(
+        OUTPUT "${LW_PPOCR_C_REC_DEMO_PPM}"
+        COMMAND "${Python3_EXECUTABLE}"
+                "${CMAKE_CURRENT_SOURCE_DIR}/tools/create_rec_demo_fixture.py"
+                --input "${CMAKE_CURRENT_SOURCE_DIR}/models/ppocrv6-tiny/sample.jpg"
+                --output "${LW_PPOCR_C_REC_DEMO_PPM}"
+        DEPENDS
             "${CMAKE_CURRENT_SOURCE_DIR}/tools/create_rec_demo_fixture.py"
-            --input "${CMAKE_CURRENT_SOURCE_DIR}/models/ppocrv6-tiny/sample.jpg"
-            --output "${LW_PPOCR_C_REC_DEMO_PPM}"
-    DEPENDS
-        "${CMAKE_CURRENT_SOURCE_DIR}/tools/create_rec_demo_fixture.py"
-        "${CMAKE_CURRENT_SOURCE_DIR}/models/ppocrv6-tiny/sample.jpg"
-    COMMENT "Creating dependency-free REC demo PPM fixture"
-    VERBATIM)
+            "${CMAKE_CURRENT_SOURCE_DIR}/models/ppocrv6-tiny/sample.jpg"
+        COMMENT "Creating dependency-free REC demo PPM fixture"
+        VERBATIM)
+endif()
 add_custom_target(rec_demo_fixture ALL DEPENDS "${LW_PPOCR_C_REC_DEMO_PPM}")
 
 set(LW_PPOCR_C_DET_DEMO_PPM
     "${CMAKE_CURRENT_BINARY_DIR}/models/sample.ppm")
-add_custom_command(
-    OUTPUT "${LW_PPOCR_C_DET_DEMO_PPM}"
-    COMMAND "${Python3_EXECUTABLE}"
+if(LW_PRECONVERTED_ASSETS_DIR)
+    add_custom_command(
+        OUTPUT "${LW_PPOCR_C_DET_DEMO_PPM}"
+        COMMAND "${CMAKE_COMMAND}" -E make_directory
+                "${CMAKE_CURRENT_BINARY_DIR}/models"
+        COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+                "${LW_PRECONVERTED_ASSETS_DIR}/sample.ppm"
+                "${LW_PPOCR_C_DET_DEMO_PPM}"
+        DEPENDS "${LW_PRECONVERTED_ASSETS_DIR}/sample.ppm"
+        COMMENT "Copying preconverted DET demo fixture"
+        VERBATIM)
+else()
+    add_custom_command(
+        OUTPUT "${LW_PPOCR_C_DET_DEMO_PPM}"
+        COMMAND "${Python3_EXECUTABLE}"
+                "${CMAKE_CURRENT_SOURCE_DIR}/tools/create_det_demo_fixture.py"
+                --input "${CMAKE_CURRENT_SOURCE_DIR}/models/ppocrv6-tiny/sample.jpg"
+                --output "${LW_PPOCR_C_DET_DEMO_PPM}"
+        DEPENDS
             "${CMAKE_CURRENT_SOURCE_DIR}/tools/create_det_demo_fixture.py"
-            --input "${CMAKE_CURRENT_SOURCE_DIR}/models/ppocrv6-tiny/sample.jpg"
-            --output "${LW_PPOCR_C_DET_DEMO_PPM}"
-    DEPENDS
-        "${CMAKE_CURRENT_SOURCE_DIR}/tools/create_det_demo_fixture.py"
-        "${CMAKE_CURRENT_SOURCE_DIR}/models/ppocrv6-tiny/sample.jpg"
-    COMMENT "Creating dependency-free DET demo PPM fixture"
-    VERBATIM)
+            "${CMAKE_CURRENT_SOURCE_DIR}/models/ppocrv6-tiny/sample.jpg"
+        COMMENT "Creating dependency-free DET demo PPM fixture"
+        VERBATIM)
+endif()
 add_custom_target(det_demo_fixture ALL DEPENDS "${LW_PPOCR_C_DET_DEMO_PPM}")
 
 if(NOT EMSCRIPTEN)
@@ -1149,6 +1225,15 @@ install(FILES
     dependencies.lock.json
     sbom.cdx.json
     DESTINATION .)
+if(LW_BUILD_ENVIRONMENT_FILE)
+    if(NOT EXISTS "${LW_BUILD_ENVIRONMENT_FILE}")
+        message(FATAL_ERROR
+            "LW_BUILD_ENVIRONMENT_FILE does not exist: ${LW_BUILD_ENVIRONMENT_FILE}")
+    endif()
+    install(FILES "${LW_BUILD_ENVIRONMENT_FILE}"
+        DESTINATION .
+        RENAME BUILD-ENVIRONMENT.txt)
+endif()
 install(FILES
     licenses/PaddleOCR-models-APACHE-2.0.txt
     licenses/cpp-httplib-MIT.txt
@@ -1190,10 +1275,18 @@ if(BUILD_TESTING AND NOT EMSCRIPTEN)
                 -DLW_TEST_SCRIPT=${CMAKE_CURRENT_SOURCE_DIR}/tests/test_staged_package.py
                 -DLW_HTTP_TEST_SCRIPT=${CMAKE_CURRENT_SOURCE_DIR}/tests/test_http_demo.py
                 -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/run_staged_package_test.cmake")
-    set_tests_properties(staged_package PROPERTIES TIMEOUT 240)
+    set_tests_properties(staged_package PROPERTIES
+        TIMEOUT "${LW_STAGED_PACKAGE_TEST_TIMEOUT}")
 endif()
 
-if(WIN32)
+if(LW_PACKAGE_PLATFORM_OVERRIDE)
+    set(LW_PACKAGE_PLATFORM "${LW_PACKAGE_PLATFORM_OVERRIDE}")
+    if(WIN32)
+        set(CPACK_GENERATOR ZIP)
+    else()
+        set(CPACK_GENERATOR TGZ)
+    endif()
+elseif(WIN32)
     if(CMAKE_SIZEOF_VOID_P EQUAL 8)
         set(LW_PACKAGE_PLATFORM windows-x64-msvc)
     else()

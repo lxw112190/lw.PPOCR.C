@@ -211,5 +211,11 @@ The WinForms Demo targets .NET Framework 3.5 and follows the referenced
 project's Win7-tested interop patterns. The HTTP Demo uses its vendored
 Win7-compatible cpp-httplib header. These new binaries are not themselves
 claimed as Win7-verified until the same physical-machine checks are repeated.
-Windows x64 and Linux x64 are the first implementation targets. Linux ARM64 is
-a planned primary target, not yet CI-verified.
+Windows x64 and Linux x64 are the first implementation targets. The manual
+customer workflow provides a native Ubuntu 22.04 ARM64 gate and an experimental
+Debian 13 LoongArch64 gate under pinned QEMU/container images. Until those jobs
+run successfully, their matrix entries remain pending; even after CI succeeds,
+LoongArch64 customer-distribution and performance claims require the exact
+archive to pass on physical customer hardware. Both non-x86 architectures use
+the portable scalar kernels until architecture-specific SIMD work is added and
+profiled.

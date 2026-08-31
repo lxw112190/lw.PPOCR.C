@@ -53,12 +53,15 @@ PP-OCR ONNX 模型
 - 线程模型：单个 OCR 句柄仍由调用方串行使用，但句柄内部可并行处理不同文字行；
   多个句柄也可以由应用自行并行调度；
 - 首要平台：Windows x64、Linux x64；
+- 手动客户构建工作流可生成原生 Linux ARM64 包，以及经 QEMU 验证的实验性 Linux
+  LoongArch64 包；客户实体机验证仍是独立门槛；
 - 兼容目标：Windows 7 x86；
 - 模型格式：LWM v0.1，目前尚未冻结为稳定格式。
 
 平台支持分为源码兼容、CI 验证和实体机验证三个层次。不要仅凭某个平台能够编译，便认为
 所有发行版和硬件都已经得到验证。具体说明请查看
 [`docs/package.md`](docs/package.md) 和 [`docs/architecture.md`](docs/architecture.md)。
+ARM64 和 LoongArch64 当前使用可移植标量算子，不能直接套用 amd64 的 SSE2/AVX2 性能数据。
 
 ## 性能口径说明
 

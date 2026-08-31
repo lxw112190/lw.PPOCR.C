@@ -1,0 +1,204 @@
+name: customer-linux-architectures
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  prepare-assets:
+    name: Prepare architecture-independent OCR assets
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements-converter.txt
+      - name: Install converter dependencies
+        run: python -m pip install -r requirements-converter.txt
+      - name: Convert models and fixtures once
+        run: |
+          set -euo pipefail
+          cmake -S . -B build-assets -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DBUILD_TESTING=OFF \
+            -DLW_BUILD_HTTP_DEMO=OFF
+          cmake --build build-assets --parallel 2 --target \
+            convert_rec_model convert_cls_model convert_det_model \
+            rec_demo_fixture det_demo_fixture
+          mkdir -p prepared-assets
+          cp build-assets/models/rec.lwm prepared-assets/
+          cp build-assets/models/rec-lwm.json prepared-assets/
+          cp build-assets/models/cls.lwm prepared-assets/
+          cp build-assets/models/cls-lwm.json prepared-assets/
+          cp build-assets/models/det.lwm prepared-assets/
+          cp build-assets/models/det-lwm.json prepared-assets/
+          cp build-assets/models/sample-crop.ppm prepared-assets/
+          cp build-assets/models/sample.ppm prepared-assets/
+          (cd prepared-assets && sha256sum \
+            rec.lwm rec-lwm.json cls.lwm cls-lwm.json \
+            det.lwm det-lwm.json sample-crop.ppm sample.ppm > SHA256SUMS)
+      - name: Upload prepared OCR assets
+        uses: actions/upload-artifact@v7
+        with:
+          name: prepared-ocr-assets
+          path: prepared-assets/
+          if-no-files-found: error
+          retention-days: 7
+
+  native-linux:
+    name: ${{ matrix.label }} native package
+    needs: prepare-assets
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: Linux amd64 (Ubuntu 22.04)
+            runner: ubuntu-22.04
+            arch: amd64
+            elf_machine: Advanced Micro Devices X86-64
+            artifact: lw.PPOCR.C-linux-amd64-ubuntu22.04
+          - label: Linux arm64 (Ubuntu 22.04)
+            runner: ubuntu-22.04-arm
+            arch: arm64
+            elf_machine: AArch64
+            artifact: lw.PPOCR.C-linux-arm64-ubuntu22.04
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Download prepared OCR assets
+        uses: actions/download-artifact@v8
+        with:
+          name: prepared-ocr-assets
+          path: .ci/preconverted
+      - name: Verify prepared OCR assets
+        run: (cd .ci/preconverted && sha256sum --check SHA256SUMS)
+      - name: Record native build environment
+        run: |
+          set -euo pipefail
+          mkdir -p .ci
+          {
+            echo "project=lw.PPOCR.C"
+            echo "commit=${GITHUB_SHA}"
+            echo "verification=native-github-hosted-runner"
+            echo "requested_architecture=${{ matrix.arch }}"
+            echo "uname=$(uname -a)"
+            echo "glibc=$(ldd --version 2>&1 | sed -n '1p')"
+            echo "c_compiler=$(cc --version | sed -n '1p')"
+            echo "cxx_compiler=$(c++ --version | sed -n '1p')"
+            echo "cmake=$(cmake --version | sed -n '1p')"
+          } > .ci/BUILD-ENVIRONMENT-${{ matrix.arch }}.txt
+          cat .ci/BUILD-ENVIRONMENT-${{ matrix.arch }}.txt
+      - name: Configure and build native package
+        run: |
+          set -euo pipefail
+          cmake -S . -B build-${{ matrix.arch }} -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DBUILD_TESTING=ON \
+            -DLW_PRECONVERTED_ASSETS_DIR="$GITHUB_WORKSPACE/.ci/preconverted" \
+            -DLW_BUILD_ENVIRONMENT_FILE="$GITHUB_WORKSPACE/.ci/BUILD-ENVIRONMENT-${{ matrix.arch }}.txt" \
+            -DLW_PACKAGE_PLATFORM_OVERRIDE=linux-${{ matrix.arch }}-ubuntu22.04 \
+            -DLW_STAGED_PACKAGE_TEST_TIMEOUT=900
+          cmake --build build-${{ matrix.arch }} --parallel 2
+      - name: Test installed native package with real OCR
+        run: >-
+          ctest --test-dir build-${{ matrix.arch }}
+          --output-on-failure -R '^staged_package$'
+      - name: Inspect native ELF and dependencies
+        run: |
+          set -euo pipefail
+          package_root="build-${{ matrix.arch }}/stage-test"
+          test -f "$package_root/BUILD-ENVIRONMENT.txt"
+          file "$package_root/bin/lw-ocr-ppm"
+          readelf -h "$package_root/bin/lw-ocr-ppm" | tee ".ci/readelf-${{ matrix.arch }}.txt"
+          grep -F "${{ matrix.elf_machine }}" ".ci/readelf-${{ matrix.arch }}.txt"
+          ldd "$package_root/bin/lw-ocr-ppm" | tee ".ci/ldd-${{ matrix.arch }}.txt"
+          if grep -Fq "not found" ".ci/ldd-${{ matrix.arch }}.txt"; then
+            exit 1
+          fi
+      - name: Create native archive and checksum
+        run: cpack --config build-${{ matrix.arch }}/CPackConfig.cmake -C Release
+      - name: Upload native customer package
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ matrix.artifact }}
+          path: build-${{ matrix.arch }}/packages/*
+          if-no-files-found: error
+          retention-days: 14
+
+  loongarch64-qemu:
+    name: Linux loongarch64 experimental package (Debian 13 / QEMU)
+    needs: prepare-assets
+    runs-on: ubuntu-22.04
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v7
+      - name: Download prepared OCR assets
+        uses: actions/download-artifact@v8
+        with:
+          name: prepared-ocr-assets
+          path: .ci/preconverted
+      - name: Register pinned LoongArch64 emulator
+        run: >-
+          docker run --privileged --rm
+          ghcr.io/loong64/binfmt@sha256:abe730caa95d5495aa1b888e2d77eadc41b3ea303ef75e2d82f8dad420b7f4d9
+          --install all
+      - name: Build and test inside pinned LoongArch64 Debian
+        run: |
+          set -euo pipefail
+          docker run --rm --platform linux/loong64 \
+            -e GITHUB_SHA \
+            -v "$GITHUB_WORKSPACE:/workspace" \
+            -w /workspace \
+            ghcr.io/loong64/debian@sha256:30490c885a68aaffc3c1e4bbebf068bd5c52f8f8cebd728caaf06bf4093cb1be \
+            bash -euo pipefail -c '
+              apt-get update
+              DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+                build-essential cmake ninja-build python3 file binutils ca-certificates
+              (cd .ci/preconverted && sha256sum --check SHA256SUMS)
+              {
+                echo "project=lw.PPOCR.C"
+                echo "commit=${GITHUB_SHA}"
+                echo "verification=qemu-user-emulation-not-physical-hardware"
+                echo "requested_architecture=loongarch64"
+                echo "baseline=Debian 13 trixie"
+                echo "uname=$(uname -a)"
+                echo "glibc=$(ldd --version 2>&1 | sed -n "1p")"
+                echo "c_compiler=$(cc --version | sed -n "1p")"
+                echo "cxx_compiler=$(c++ --version | sed -n "1p")"
+                echo "cmake=$(cmake --version | sed -n "1p")"
+              } > .ci/BUILD-ENVIRONMENT-loongarch64.txt
+              cat .ci/BUILD-ENVIRONMENT-loongarch64.txt
+              cmake -S . -B build-loongarch64 -G Ninja \
+                -DCMAKE_BUILD_TYPE=Release \
+                -DBUILD_TESTING=ON \
+                -DLW_PRECONVERTED_ASSETS_DIR=/workspace/.ci/preconverted \
+                -DLW_BUILD_ENVIRONMENT_FILE=/workspace/.ci/BUILD-ENVIRONMENT-loongarch64.txt \
+                -DLW_PACKAGE_PLATFORM_OVERRIDE=linux-loongarch64-debian13-qemu-experimental \
+                -DLW_STAGED_PACKAGE_TEST_TIMEOUT=1800
+              cmake --build build-loongarch64 --parallel 2
+              ctest --test-dir build-loongarch64 \
+                --output-on-failure -R "^staged_package$"
+              package_root=build-loongarch64/stage-test
+              test -f "${package_root}/BUILD-ENVIRONMENT.txt"
+              file "${package_root}/bin/lw-ocr-ppm"
+              readelf -h "${package_root}/bin/lw-ocr-ppm" | tee .ci/readelf-loongarch64.txt
+              grep -F LoongArch .ci/readelf-loongarch64.txt
+              ldd "${package_root}/bin/lw-ocr-ppm" | tee .ci/ldd-loongarch64.txt
+              if grep -Fq "not found" .ci/ldd-loongarch64.txt; then
+                exit 1
+              fi
+              cpack --config build-loongarch64/CPackConfig.cmake -C Release
+            '
+      - name: Upload experimental LoongArch64 customer package
+        uses: actions/upload-artifact@v7
+        with:
+          name: lw.PPOCR.C-linux-loongarch64-debian13-qemu-experimental
+          path: build-loongarch64/packages/*
+          if-no-files-found: error
+          retention-days: 14
