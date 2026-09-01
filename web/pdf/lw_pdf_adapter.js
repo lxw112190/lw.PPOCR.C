@@ -11,6 +11,23 @@
   const PDFJS_CORE_BASE64 = "__LW_PDFJS_CORE_BASE64__";
   const PDFJS_WORKER_BASE64 = "__LW_PDFJS_WORKER_BASE64__";
   const WORKER_START_TIMEOUT_MS = 2500;
+  const PROMISE_WITH_RESOLVERS_POLYFILL = `
+if (typeof Promise.withResolvers !== "function") {
+  Object.defineProperty(Promise, "withResolvers", {
+    configurable: true,
+    writable: true,
+    value: function () {
+      let resolve;
+      let reject;
+      const promise = new Promise(function (resolvePromise, rejectPromise) {
+        resolve = resolvePromise;
+        reject = rejectPromise;
+      });
+      return {promise: promise, resolve: resolve, reject: reject};
+    }
+  });
+}
+`;
   let modulePromise = null;
   let coreUrl = null;
   let workerUrl = null;
@@ -19,6 +36,8 @@
   let workerBackend = "not-loaded";
   let workerFallbackReason = null;
   let lastError = null;
+  let promiseWithResolversBackend =
+    typeof Promise.withResolvers === "function" ? "native" : "not-loaded";
 
   class LwPdfError extends Error {
     constructor(message, code, phase, cause) {
@@ -54,7 +73,8 @@
       has_worker: typeof global.Worker === "function",
       has_file_reader: typeof global.FileReader === "function",
       has_blob_array_buffer: typeof global.Blob === "function" &&
-        typeof global.Blob.prototype.arrayBuffer === "function"
+        typeof global.Blob.prototype.arrayBuffer === "function",
+      promise_with_resolvers: promiseWithResolversBackend
     };
   }
 
@@ -70,13 +90,37 @@
     };
   }
 
-  function base64BlobUrl(encoded) {
+  function installPromiseWithResolversPolyfill() {
+    if (typeof Promise.withResolvers === "function") {
+      if (promiseWithResolversBackend === "not-loaded") {
+        promiseWithResolversBackend = "native";
+      }
+      return;
+    }
+    const withResolvers = function() {
+      let resolve;
+      let reject;
+      const promise = new Promise((resolvePromise, rejectPromise) => {
+        resolve = resolvePromise;
+        reject = rejectPromise;
+      });
+      return {promise, resolve, reject};
+    };
+    Object.defineProperty(Promise, "withResolvers", {
+      configurable: true,
+      writable: true,
+      value: withResolvers
+    });
+    promiseWithResolversBackend = "polyfill";
+  }
+
+  function base64BlobUrl(encoded, prefix = "") {
     const binary = atob(encoded);
     const bytes = new Uint8Array(binary.length);
     for (let offset = 0; offset < binary.length; offset += 1) {
       bytes[offset] = binary.charCodeAt(offset);
     }
-    return URL.createObjectURL(new Blob([bytes], {type: "text/javascript"}));
+    return URL.createObjectURL(new Blob([prefix, bytes], {type: "text/javascript"}));
   }
 
   function closeWorkerPort() {
@@ -156,8 +200,17 @@
     if (!modulePromise) {
       state = "loading";
       modulePromise = (async () => {
+        // PDF.js 6's legacy build targets Chrome 118+. Some Android vendor
+        // browsers still expose an older Chromium engine (for example Chrome
+        // 115) without Promise.withResolvers(). Install the small standards-
+        // compatible shim in both the page and PDF Worker realms before the
+        // vendored modules execute.
+        installPromiseWithResolversPolyfill();
         coreUrl = base64BlobUrl(PDFJS_CORE_BASE64);
-        workerUrl = base64BlobUrl(PDFJS_WORKER_BASE64);
+        workerUrl = base64BlobUrl(
+          PDFJS_WORKER_BASE64,
+          PROMISE_WITH_RESOLVERS_POLYFILL
+        );
         const pdfjs = await import(coreUrl);
         await configurePdfWorker(pdfjs);
         state = "ready";

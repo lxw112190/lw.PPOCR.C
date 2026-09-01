@@ -336,8 +336,10 @@ def main() -> int:
 
             # Simulate a restrictive/older mobile WebView after the OCR engine
             # has initialized: PDF Blob module Workers are blocked and
-            # Blob.arrayBuffer is missing. PDF parsing must fall back to the
-            # main thread and FileReader while OCR keeps its existing Worker.
+            # Blob.arrayBuffer and Promise.withResolvers are missing. PDF
+            # parsing must install its standards-compatible Promise shim, then
+            # fall back to the main thread and FileReader while OCR keeps its
+            # existing Worker.
             compatibility_page = browser.new_page(
                 viewport={"width": 390, "height": 844}
             )
@@ -364,6 +366,11 @@ def main() -> int:
                     writable: true,
                     value: undefined
                   });
+                  Object.defineProperty(Promise, 'withResolvers', {
+                    configurable: true,
+                    writable: true,
+                    value: undefined
+                  });
                 }"""
             )
             compatibility_page.locator("#file").set_input_files(str(fixture))
@@ -377,6 +384,10 @@ def main() -> int:
                 "window.__lwOcrTest.pdfStatus()"
             )
             assert compatibility_status["environment"]["has_blob_array_buffer"] is False
+            assert (
+                compatibility_status["environment"]["promise_with_resolvers"]
+                == "polyfill"
+            )
             assert "mobile WebView" in compatibility_status["worker_fallback_reason"]
             assert "兼容模式" in compatibility_page.locator("#status").inner_text()
             compatibility_page.locator("#pdf-scope").select_option("current")

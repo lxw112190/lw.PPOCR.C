@@ -143,7 +143,38 @@
       <input id="camera" type="file" accept="image/*" capture="environment">
       <label class="options"><input id="use-cls" type="checkbox" disabled> 启用方向分类（CLS）</label>
       <button id="run" type="button" disabled>开始识别</button>
-      <span id="status" role="status" aria-live="polite">正在加载 WASM 和模型…</span>
+      <span id="status" role="status" aria-live="polite" data-loading="true">正在下载离线引擎…</span>
+      <script>
+        // This tiny status controller runs before the large embedded SDK/model
+        // payload at the end of the document has finished downloading. It
+        // prevents slow mobile HTTP loads from looking like a frozen WASM init.
+        (function () {
+          var node = document.getElementById("status");
+          var started = Date.now();
+          var phase = "正在下载并解析离线引擎";
+          var active = true;
+          function render() {
+            if (!active) return;
+            var seconds = Math.max(0, Math.floor((Date.now() - started) / 1000));
+            node.textContent = phase + " · 已等待 " + seconds + " 秒";
+          }
+          var timer = window.setInterval(render, 1000);
+          window.__lwOcrBootStatus = Object.freeze({
+            setPhase: function (message) {
+              if (!active) return;
+              phase = message;
+              render();
+            },
+            finish: function () {
+              if (!active) return;
+              active = false;
+              window.clearInterval(timer);
+              node.removeAttribute("data-loading");
+            }
+          });
+          render();
+        })();
+      </script>
     </div>
     <section id="pdf-controls" class="pdf-controls card" hidden aria-label="PDF 识别选项">
       <div id="pdf-meta" class="pdf-meta"></div>

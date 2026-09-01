@@ -65,6 +65,7 @@ def main() -> int:
             timeout=180_000,
         )
         assert page.locator("#use-cls").is_enabled()
+        assert page.locator("#status").get_attribute("data-loading") is None
 
         assert page.evaluate("typeof window.LwPpocr.create") == "function"
         assert page.evaluate("window.LwPpocr.webAbiVersion") == 1

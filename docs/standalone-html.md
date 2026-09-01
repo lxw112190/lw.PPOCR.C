@@ -40,7 +40,39 @@ that Worker directly, avoiding PDF.js's nested Blob wrapper on `file://` pages.
 If a mobile browser or embedded WebView rejects module Workers, PDF parsing and
 rendering automatically use a main-thread compatibility mode. OCR keeps its
 already initialized backend. Older browsers without `Blob.arrayBuffer()` use a
-`FileReader` fallback.
+`FileReader` fallback. The PDF frontend also supplies
+`Promise.withResolvers()` in both the page and PDF Worker when an older
+Chromium-based browser does not provide it.
+
+## Online deployment
+
+The PDF-enabled standalone HTML is a large self-contained file because the
+WASM runtime, OCR models, PDF.js, and both Workers are embedded. Its small
+loading timer starts before those payloads have finished downloading, so a
+phone can distinguish network transfer from WASM initialization.
+
+Enable HTTP compression when serving the file. Without `Content-Encoding:
+gzip` or Brotli, the browser must transfer the full Base64 HTML before the
+scripts at the end of the document can initialize OCR. A minimal nginx setup
+is:
+
+~~~nginx
+gzip on;
+gzip_min_length 1024;
+gzip_comp_level 6;
+gzip_vary on;
+gzip_types application/javascript application/json application/wasm
+           text/css text/plain image/svg+xml;
+
+location = /manual/ocr-demo.html {
+    add_header Cache-Control "no-cache";
+}
+~~~
+
+nginx compresses `text/html` when gzip is enabled, so it does not need to be
+listed in `gzip_types`. Use HTTPS for production deployment. If releases keep
+the same URL, retain ETag/Last-Modified validation or use `no-cache` as above
+so phones do not keep an old standalone artifact.
 
 ## Mobile PDF troubleshooting
 
@@ -59,11 +91,11 @@ The most useful error codes are:
 - `LW_PDF_RENDER_FAILED`: the PDF opened but the current page could not render;
 - `LW_PDF_PASSWORD_REQUIRED`: encrypted PDFs are not supported by this UI.
 
-CI opens the final artifact through `file://`, blocks Worker and
-`Blob.arrayBuffer()` to verify both compatibility fallbacks, and checks a
-390-pixel layout. That is not a physical Android/iOS browser certification;
-release compatibility claims still require testing the exact artifact on the
-target phone and browser.
+CI opens the final artifact through `file://`, blocks Worker, removes
+`Blob.arrayBuffer()` and `Promise.withResolvers()`, verifies the compatibility
+fallbacks, and checks a 390-pixel layout. That is not a physical Android/iOS
+browser certification; release compatibility claims still require testing the
+exact artifact on the target phone and browser.
 
 ## Customize the Demo
 

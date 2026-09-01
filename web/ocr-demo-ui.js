@@ -556,6 +556,9 @@
   async function createEngine() {
     clsInput.disabled = true;
     statusNode.textContent = "正在加载 WASM 和模型…";
+    if (window.__lwOcrBootStatus) {
+      window.__lwOcrBootStatus.setPhase("正在初始化 WASM 和模型");
+    }
     try {
       const instance = await LwPpocr.create({
         useCls: clsInput.checked,
@@ -564,6 +567,7 @@
         maxImageSide: 0
       });
       engine = instance;
+      if (window.__lwOcrBootStatus) window.__lwOcrBootStatus.finish();
       updateStats(instance.getStatus());
       runButton.disabled = !source;
       statusNode.textContent = source ?
@@ -904,6 +908,7 @@
   });
   enginePromise = createEngine().catch(error => {
     engine = null;
+    if (window.__lwOcrBootStatus) window.__lwOcrBootStatus.finish();
     statsNode.textContent = "引擎加载失败";
     statusNode.textContent = "WASM 初始化失败：" + error;
     document.dispatchEvent(new CustomEvent("lwppocr:error", {
