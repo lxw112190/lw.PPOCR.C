@@ -153,6 +153,25 @@ across repeated OCR runs. See the [Browser JavaScript SDK](docs/web-sdk.md),
 [standalone HTML usage](docs/standalone-html.md), and
 [OCR result export schema](docs/ocr-export-schema.md).
 
+## Node.js WASM distribution
+
+The Emscripten build also provides an official raw Node.js package. It contains
+`runtime.cjs`, the PP-OCRv6 tiny LWM models, the dictionary, a manifest, and
+checksums; it does not depend on the standalone HTML demo or any npm runtime
+package:
+
+```bash
+cmake --build build-wasm --target lw-node-wasm-package
+node tests/node/smoke.cjs \
+  --package build-wasm/node-wasm \
+  --sample build-wasm/models/sample.ppm
+```
+
+The generated `lw.PPOCR.C-<version>-node-wasm.zip` supports Node.js 18 or
+newer. The runtime accepts BGR8 pixels through the existing WASM Host ABI;
+applications provide their own JPEG/PNG decoder and create separate Worker
+instances for concurrency. See [Node/WASM distribution](docs/NODE_WASM_DISTRIBUTION.md).
+
 ## Documentation
 
 - [Supported operators and model analysis](docs/SUPPORTED_OPS_V0.md)
@@ -170,6 +189,7 @@ across repeated OCR runs. See the [Browser JavaScript SDK](docs/web-sdk.md),
 - [Correctness-gated full-OCR comparison with OpenCV DNN](docs/opencv-dnn-comparison.md)
 - [Browser JavaScript SDK](docs/web-sdk.md) and
   [standalone HTML usage](docs/standalone-html.md)
+- [Node.js/WASM distribution](docs/NODE_WASM_DISTRIBUTION.md)
 - [Development package and managed demos](docs/package.md) and
   [C#/HTTP/web integration](docs/managed-demos.md)
 

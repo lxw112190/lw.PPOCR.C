@@ -225,3 +225,11 @@ three jobs succeed. The Release contains the native archives, reusable
 JavaScript SDK, offline HTML, and a SHA-256 file for every downloadable asset.
 Tags with a `0.x` version or a prerelease suffix are automatically marked as
 GitHub prereleases.
+
+The browser WASM workflow also publishes
+`lw.PPOCR.C-<version>-node-wasm.zip`. This is a raw Node.js/WASM distribution,
+not an npm package: it contains `runtime.cjs`, the LWM models, dictionary,
+manifest, checksums, and license notices. Node 18/20/22 smoke jobs load the
+exact archive contents and run the PPM full-OCR regression before the Release
+job can publish it. See [Node/WASM distribution](NODE_WASM_DISTRIBUTION.md)
+for the ABI and application integration contract.

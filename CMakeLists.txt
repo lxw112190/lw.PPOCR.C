@@ -392,6 +392,78 @@ if(EMSCRIPTEN)
         COMMENT "Packaging the standalone offline OCR HTML demo"
         VERBATIM)
     add_custom_target(lw-ocr-html DEPENDS "${LW_PPOCR_C_WEB_HTML}")
+
+    # Node consumes the same WASM Host ABI as the browser. Keep this target
+    # separate from the browser SDK so the Node release never needs to parse
+    # or extract assets from ocr-demo.html.
+    add_executable(lw_ppocr_node web/lw_web_api.c)
+    target_link_libraries(lw_ppocr_node PRIVATE lw_ppocr_c)
+    target_include_directories(lw_ppocr_node PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/include")
+    target_compile_features(lw_ppocr_node PRIVATE c_std_11)
+    target_compile_options(lw_ppocr_node PRIVATE -O3 -Wall -Wextra -Wpedantic -Werror)
+    if(LW_WASM_SIMD128)
+        target_compile_options(lw_ppocr_node PRIVATE -msimd128 -msse2)
+        target_link_options(lw_ppocr_node PRIVATE -msimd128)
+    endif()
+    target_link_options(lw_ppocr_node PRIVATE
+        -O3
+        "-sMODULARIZE=1" "-sEXPORT_NAME=LwPpocrModule" "-sSINGLE_FILE=1"
+        "-sENVIRONMENT=node" "-sFORCE_FILESYSTEM=1" "-sALLOW_MEMORY_GROWTH=1"
+        "-sNO_EXIT_RUNTIME=1"
+        "-sEXPORTED_RUNTIME_METHODS=['FS','HEAPU8','HEAPU32','HEAPF32']"
+        "-sEXPORTED_FUNCTIONS=['_lw_web_init','_lw_web_shutdown','_lw_web_info_size','_lw_web_get_info','_lw_web_run','_lw_web_last_error','_lw_web_malloc','_lw_web_free']"
+        "--no-entry")
+    set_target_properties(lw_ppocr_node PROPERTIES OUTPUT_NAME "lw_ppocr_node")
+    add_dependencies(lw_ppocr_node convert_det_model convert_cls_model convert_rec_model)
+
+    set(LW_PPOCR_C_NODE_RUNTIME
+        "${CMAKE_CURRENT_BINARY_DIR}/runtime.cjs")
+    add_custom_command(
+        OUTPUT "${LW_PPOCR_C_NODE_RUNTIME}"
+        COMMAND "${CMAKE_COMMAND}" -E make_directory
+                "${CMAKE_CURRENT_BINARY_DIR}/node-wasm"
+        COMMAND "${CMAKE_COMMAND}" -E copy
+                "$<TARGET_FILE:lw_ppocr_node>" "${LW_PPOCR_C_NODE_RUNTIME}"
+        DEPENDS lw_ppocr_node
+        COMMENT "Preparing the Node.js WASM runtime"
+        VERBATIM)
+    add_custom_target(lw-node-wasm DEPENDS "${LW_PPOCR_C_NODE_RUNTIME}")
+
+    set(LW_PPOCR_C_NODE_PACKAGE_DIR
+        "${CMAKE_CURRENT_BINARY_DIR}/node-wasm")
+    set(LW_PPOCR_C_NODE_PACKAGE_ARCHIVE
+        "${CMAKE_CURRENT_BINARY_DIR}/lw.PPOCR.C-${PROJECT_VERSION}-node-wasm.zip")
+    set(LW_PPOCR_C_NODE_PACKAGE_CHECKSUM
+        "${LW_PPOCR_C_NODE_PACKAGE_ARCHIVE}.sha256")
+    add_custom_command(
+        OUTPUT "${LW_PPOCR_C_NODE_PACKAGE_ARCHIVE}"
+               "${LW_PPOCR_C_NODE_PACKAGE_CHECKSUM}"
+        COMMAND "${Python3_EXECUTABLE}"
+                "${CMAKE_CURRENT_SOURCE_DIR}/tools/package_node_wasm.py"
+                --runtime "${LW_PPOCR_C_NODE_RUNTIME}"
+                --det "${LW_PPOCR_C_DET_LWM}"
+                --cls "${LW_PPOCR_C_CLS_LWM}"
+                --rec "${LW_PPOCR_C_REC_LWM}"
+                --dictionary
+                "${CMAKE_CURRENT_SOURCE_DIR}/models/ppocrv6-tiny/ppocr_keys.txt"
+                --license "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE"
+                --model-license
+                "${CMAKE_CURRENT_SOURCE_DIR}/licenses/PaddleOCR-models-APACHE-2.0.txt"
+                --notices "${CMAKE_CURRENT_SOURCE_DIR}/THIRD-PARTY-NOTICES.md"
+                --version "${PROJECT_VERSION}"
+                --output-dir "${LW_PPOCR_C_NODE_PACKAGE_DIR}"
+                --archive "${LW_PPOCR_C_NODE_PACKAGE_ARCHIVE}"
+        DEPENDS lw-node-wasm
+                "${LW_PPOCR_C_DET_LWM}" "${LW_PPOCR_C_CLS_LWM}" "${LW_PPOCR_C_REC_LWM}"
+                "${CMAKE_CURRENT_SOURCE_DIR}/tools/package_node_wasm.py"
+                "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE"
+                "${CMAKE_CURRENT_SOURCE_DIR}/licenses/PaddleOCR-models-APACHE-2.0.txt"
+                "${CMAKE_CURRENT_SOURCE_DIR}/THIRD-PARTY-NOTICES.md"
+        COMMENT "Packaging the Node.js WASM distribution"
+        VERBATIM)
+    add_custom_target(lw-node-wasm-package
+        DEPENDS "${LW_PPOCR_C_NODE_PACKAGE_ARCHIVE}"
+                "${LW_PPOCR_C_NODE_PACKAGE_CHECKSUM}")
 endif()
 
 set(LW_PPOCR_C_REC_DEMO_PPM

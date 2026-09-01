@@ -59,6 +59,7 @@ jobs:
         uses: actions/download-artifact@v8
         with:
           path: release-assets
+          pattern: lw.PPOCR.C-*
           merge-multiple: true
 
       - name: Verify and prepare release assets
@@ -71,6 +72,7 @@ jobs:
           linux="lw.PPOCR.C-${VERSION}-linux-x86_64.tar.gz"
           wasm="lw.PPOCR.C-${VERSION}-ocr-demo.html"
           websdk="lw.PPOCR.C-${VERSION}-web-sdk.js"
+          nodewasm="lw.PPOCR.C-${VERSION}-node-wasm.zip"
 
           test -s "release-assets/${windows}"
           test -s "release-assets/${windows}.sha256"
@@ -78,6 +80,8 @@ jobs:
           test -s "release-assets/${linux}.sha256"
           test -s "release-assets/ocr-demo.html"
           test -s "release-assets/lw-ppocr.js"
+          test -s "release-assets/${nodewasm}"
+          test -s "release-assets/${nodewasm}.sha256"
 
           (
             cd release-assets
@@ -91,6 +95,7 @@ jobs:
             mv lw-ppocr.js "${websdk}"
             sha256sum "${wasm}" > "${wasm}.sha256"
             sha256sum "${websdk}" > "${websdk}.sha256"
+            sha256sum -c "${nodewasm}.sha256"
           )
 
           find release-assets -maxdepth 1 -type f -printf '%f\n' | sort
@@ -111,8 +116,8 @@ jobs:
           fi
 
           mapfile -t assets < <(find release-assets -maxdepth 1 -type f -print | sort)
-          if [[ "${#assets[@]}" -ne 8 ]]; then
-            echo "expected eight release assets, found ${#assets[@]}" >&2
+          if [[ "${#assets[@]}" -ne 10 ]]; then
+            echo "expected ten release assets, found ${#assets[@]}" >&2
             printf '%s\n' "${assets[@]}" >&2
             exit 1
           fi

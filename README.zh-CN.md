@@ -204,6 +204,24 @@ SDK 会按照 Runtime 返回的真实容量分配并复用输入/输出缓冲区
 [`docs/standalone-html.md`](docs/standalone-html.md)，导出字段见
 [`docs/ocr-export-schema.md`](docs/ocr-export-schema.md)。
 
+### Node.js WASM 发行包
+
+Emscripten 构建同时提供官方 Node.js 原始发行包，包含 `runtime.cjs`、
+PP-OCRv6 tiny 的 DET/CLS/REC LWM 模型、字典、manifest 和校验文件，不需要
+从单文件 HTML 中解析 Runtime，也不依赖 npm 运行时包：
+
+```bash
+cmake --build build-wasm --target lw-node-wasm-package
+node tests/node/smoke.cjs \
+  --package build-wasm/node-wasm \
+  --sample build-wasm/models/sample.ppm
+```
+
+生成的 `lw.PPOCR.C-<version>-node-wasm.zip` 支持 Node.js 18 及以上版本。
+Runtime 通过现有 WASM Host ABI 接收 BGR8 像素，JPEG/PNG 解码由应用自行负责；
+需要并发时，请为每个 Node Worker 创建独立 Runtime 实例。详见
+[`docs/NODE_WASM_DISTRIBUTION.md`](docs/NODE_WASM_DISTRIBUTION.md)。
+
 ### C# WinForms Demo
 
 WinForms Demo 面向 .NET Framework 3.5，通过 `DllImport` 直接调用公共 C ABI，并使用
@@ -271,6 +289,7 @@ HTTP Demo 和正式发布包均不链接、加载或携带 OpenCV。
 - [完整 OCR 分阶段与算子性能分析](docs/full-ocr-profile.md)
 - [浏览器 JavaScript SDK](docs/web-sdk.md)
 - [单文件离线 HTML 使用与定制](docs/standalone-html.md)
+- [Node.js/WASM 发行包](docs/NODE_WASM_DISTRIBUTION.md)
 - [开发包说明](docs/package.md)
 - [C# 与 HTTP/Web Demo](docs/managed-demos.md)
 

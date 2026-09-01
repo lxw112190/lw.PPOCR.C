@@ -54,20 +54,28 @@ jobs:
           -DLW_BUILD_CSHARP_DEMOS=OFF
           -DBUILD_TESTING=OFF
 
-      - name: Build browser SDK and standalone HTML
-        run: cmake --build build-wasm --target lw-ocr-js lw-ocr-html --parallel
+      - name: Build browser and Node WASM distributions
+        run: >-
+          cmake --build build-wasm
+          --target lw-ocr-js lw-ocr-html lw-node-wasm-package det_demo_fixture
+          --parallel
 
-      - name: Verify browser artifacts
+      - name: Verify browser and Node artifacts
         shell: bash
         run: |
           test -s build-wasm/lw-ppocr.js
           test -s build-wasm/ocr-demo.html
+          test -s build-wasm/node-wasm/runtime.cjs
+          node_archive="$(find build-wasm -maxdepth 1 -type f -name 'lw.PPOCR.C-*-node-wasm.zip' -print -quit)"
+          test -n "${node_archive}" && test -s "${node_archive}"
+          test -s "${node_archive}.sha256"
           ! grep -a -q '__LW_' build-wasm/lw-ppocr.js
           ! grep -a -q '__LW_' build-wasm/ocr-demo.html
           ! grep -a -q 'LwPdf' build-wasm/lw-ppocr.js
           grep -a -q '6.3.289' build-wasm/ocr-demo.html
           echo 'f401927e692efc7735e0cd528c490d0dd31b7f0972c122b7040df805be45cce4  web/vendor/pdfjs/pdf.min.mjs' | sha256sum -c -
           echo 'a33cfe728c584fdba4fcc1fd54bcdc2f9f2f13889ddbb5b2bd1d0f8cbe49b84e  web/vendor/pdfjs/pdf.worker.min.mjs' | sha256sum -c -
+          sha256sum -c "${node_archive}.sha256"
 
       - name: Run browser SDK contract and memory test
         run: >-
@@ -94,5 +102,55 @@ jobs:
           path: |
             build-wasm/lw-ppocr.js
             build-wasm/ocr-demo.html
+            build-wasm/lw.PPOCR.C-*-node-wasm.zip
+            build-wasm/lw.PPOCR.C-*-node-wasm.zip.sha256
           if-no-files-found: error
           retention-days: 14
+
+      - name: Upload Node regression fixture
+        uses: actions/upload-artifact@v7
+        with:
+          name: node-regression-fixture-${{ github.sha }}
+          path: build-wasm/models/sample.ppm
+          if-no-files-found: error
+          retention-days: 14
+
+  node-smoke:
+    name: Node.js ${{ matrix.node-version }} WASM smoke and OCR regression
+    needs: build
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version: [18, 20, 22]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+
+      - name: Download packaged Node/WASM artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: lw.PPOCR.C-browser-${{ github.sha }}
+          path: node-artifacts
+
+      - name: Download Node regression fixture
+        uses: actions/download-artifact@v8
+        with:
+          name: node-regression-fixture-${{ github.sha }}
+          path: node-artifacts
+
+      - name: Run Node smoke and OCR regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          archive="$(find node-artifacts -maxdepth 1 -type f -name '*-node-wasm.zip' -print -quit)"
+          test -n "${archive}"
+          unzip -q "${archive}" -d node-package
+          package_dir="$(find node-package -mindepth 1 -maxdepth 1 -type d -name '*-node-wasm' -print -quit)"
+          test -n "${package_dir}"
+          node tests/node/smoke.cjs \
+            --package "${package_dir}" \
+            --sample node-artifacts/sample.ppm
