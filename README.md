@@ -138,6 +138,13 @@ The build produces two self-contained browser artifacts:
   UI and a lazy, offline PDF.js frontend. It can be opened directly without the
   native HTTP Demo. PDF.js is not included in `lw-ppocr.js` or the C runtime.
 
+For restrictive mobile WebViews, PDF.js automatically falls back from its Blob
+module Worker to main-thread parsing and from `Blob.arrayBuffer()` to
+`FileReader`. A visible diagnostic report distinguishes initialization, file
+read, parse, and render failures. Phone support claims still require testing
+the exact artifact on the target device; desktop viewport emulation only gates
+responsive layout.
+
 The SDK queries the Web ABI for actual output capacities and reuses buffers
 across repeated OCR runs. See the [Browser JavaScript SDK](docs/web-sdk.md),
 [standalone HTML usage](docs/standalone-html.md), and

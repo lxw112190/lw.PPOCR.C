@@ -153,6 +153,8 @@ def main() -> int:
             )
             snapshot = page.evaluate("window.__lwOcrTest.snapshot()")
             assert snapshot["pdfCurrentPage"] == 1, snapshot
+            assert snapshot["pdfWorkerBackend"] == "module-worker", snapshot
+            assert page.evaluate("window.__lwOcrTest.pdfStatus().state") == "ready"
             assert page.locator("#pdf-controls").is_visible()
             assert page.locator("#pdf-page-label").inner_text() == "1 / 2"
             assert page.locator("#canvas").evaluate("canvas => canvas.width > 0")
@@ -300,15 +302,97 @@ def main() -> int:
                 }
             )
             page.wait_for_function(
-                "() => document.querySelector('#status').textContent.includes('无法打开 PDF')",
+                "() => window.__lwOcrTest.snapshot().pdfErrorCode === "
+                "'LW_PDF_LOAD_FAILED'",
                 timeout=180_000,
             )
             assert not page.evaluate("window.__lwOcrTest.snapshot().hasResults")
+            assert page.locator("#pdf-diagnostics").is_visible()
+            diagnostics = json.loads(page.locator("#pdf-diagnostics-text").inner_text())
+            assert diagnostics["error_code"] == "LW_PDF_LOAD_FAILED"
+            assert diagnostics["error_phase"] == "open"
+            assert diagnostics["pdf"]["environment"]["protocol"] == "file:"
+            page.locator("#copy-pdf-diagnostics").click()
+            page.wait_for_function(
+                "() => document.querySelector('#status').textContent.includes('诊断信息已复制')"
+            )
+
+            # A malformed document must not poison the shared PDF worker.
+            page.locator("#file").set_input_files(str(fixture))
+            page.wait_for_function(
+                "() => window.__lwOcrTest.snapshot().sourceKind === 'pdf' && "
+                "window.__lwOcrTest.snapshot().pdfErrorCode === null && "
+                "!document.querySelector('#run').disabled",
+                timeout=180_000,
+            )
+            assert page.locator("#pdf-diagnostics").is_hidden()
 
             page.set_viewport_size({"width": 390, "height": 844})
             assert page.evaluate(
                 "document.documentElement.scrollWidth <= "
                 "document.documentElement.clientWidth"
+            )
+            page.close()
+
+            # Simulate a restrictive/older mobile WebView after the OCR engine
+            # has initialized: PDF Blob module Workers are blocked and
+            # Blob.arrayBuffer is missing. PDF parsing must fall back to the
+            # main thread and FileReader while OCR keeps its existing Worker.
+            compatibility_page = browser.new_page(
+                viewport={"width": 390, "height": 844}
+            )
+            compatibility_page.on("console", capture_console)
+            compatibility_page.on(
+                "pageerror",
+                lambda error: browser_messages.append(f"pageerror: {error}"),
+            )
+            compatibility_page.on("request", capture_request)
+            compatibility_page.goto(
+                html.as_uri(), wait_until="load", timeout=180_000
+            )
+            compatibility_page.wait_for_function(
+                "() => window.__lwOcrTest && window.__lwOcrTest.snapshot().ready",
+                timeout=180_000,
+            )
+            compatibility_page.evaluate(
+                """() => {
+                  window.Worker = function () {
+                    throw new Error('module Worker blocked by mobile WebView');
+                  };
+                  Object.defineProperty(Blob.prototype, 'arrayBuffer', {
+                    configurable: true,
+                    writable: true,
+                    value: undefined
+                  });
+                }"""
+            )
+            compatibility_page.locator("#file").set_input_files(str(fixture))
+            compatibility_page.wait_for_function(
+                "() => window.__lwOcrTest.snapshot().sourceKind === 'pdf' && "
+                "window.__lwOcrTest.snapshot().pdfWorkerBackend === 'main-thread' && "
+                "!document.querySelector('#run').disabled",
+                timeout=180_000,
+            )
+            compatibility_status = compatibility_page.evaluate(
+                "window.__lwOcrTest.pdfStatus()"
+            )
+            assert compatibility_status["environment"]["has_blob_array_buffer"] is False
+            assert "mobile WebView" in compatibility_status["worker_fallback_reason"]
+            assert "兼容模式" in compatibility_page.locator("#status").inner_text()
+            compatibility_page.locator("#pdf-scope").select_option("current")
+            compatibility_page.locator("#run").click()
+            compatibility_page.wait_for_function(
+                "() => window.__lwOcrTest.snapshot().processedPages === 1 && "
+                "document.querySelector('#run').textContent === '开始识别'",
+                timeout=300_000,
+            )
+            compatibility_result = compatibility_page.evaluate(
+                "window.__lwOcrTest.structuredResult()"
+            )
+            assert len(compatibility_result["pages"]) == 1
+            assert len(compatibility_result["pages"][0]["lines"]) == 16
+            assert compatibility_result["pages"][0]["lines"][0]["text"] == (
+                EXPECTED_FIRST_LINE
             )
             browser.close()
 
@@ -316,7 +400,12 @@ def main() -> int:
         raise AssertionError("browser console diagnostics:\n" + "\n".join(browser_messages))
     if network_requests:
         raise AssertionError("standalone PDF made network requests: " + repr(network_requests))
-    print(json.dumps({"pages": 2, "lines": 32, "network_requests": 0}, sort_keys=True))
+    print(json.dumps({
+        "fallback_backend": "main-thread",
+        "lines": 32,
+        "network_requests": 0,
+        "pages": 2,
+    }, sort_keys=True))
     return 0
 
 

@@ -261,3 +261,9 @@ real main-thread fallback OCR, repeated inference, and the post-warm-up
 WebAssembly heap high-water mark. The HTML test separately covers the example
 UI, CLS initialization lifecycle, v1 elapsed-time semantics, exports,
 compatibility adapter, and phone layout.
+The PDF test additionally verifies the standalone adapter's direct module
+Worker, explicit main-thread fallback when Worker creation is blocked,
+`FileReader` fallback when `Blob.arrayBuffer()` is absent, stable error
+diagnostics, malformed-input recovery, and zero external requests. Its phone
+viewport check is a layout gate, not a substitute for physical Android/iOS
+browser validation.

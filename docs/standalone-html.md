@@ -35,6 +35,36 @@ responsive. If local browser policy rejects Blob Workers, the embedded SDK
 uses its compatible main-thread fallback. The default build enables
 WebAssembly SIMD128.
 
+PDF.js also prefers its own Blob module Worker. The standalone page constructs
+that Worker directly, avoiding PDF.js's nested Blob wrapper on `file://` pages.
+If a mobile browser or embedded WebView rejects module Workers, PDF parsing and
+rendering automatically use a main-thread compatibility mode. OCR keeps its
+already initialized backend. Older browsers without `Blob.arrayBuffer()` use a
+`FileReader` fallback.
+
+## Mobile PDF troubleshooting
+
+Open the HTML with the current system Chrome or Safari rather than a file
+manager, messaging-app, or office-app preview WebView. When PDF opening fails,
+the page shows a **PDF 打开失败 · 查看诊断信息** panel. Copy that report when
+filing an issue; it contains the stable error code, failure phase, PDF worker
+backend, browser capabilities, protocol, and user agent, but no PDF contents or
+local path.
+
+The most useful error codes are:
+
+- `LW_PDF_INIT_FAILED`: PDF.js or its compatibility backend could not start;
+- `LW_PDF_READ_FAILED`: the selected browser could not read the local file;
+- `LW_PDF_LOAD_FAILED`: PDF parsing failed;
+- `LW_PDF_RENDER_FAILED`: the PDF opened but the current page could not render;
+- `LW_PDF_PASSWORD_REQUIRED`: encrypted PDFs are not supported by this UI.
+
+CI opens the final artifact through `file://`, blocks Worker and
+`Blob.arrayBuffer()` to verify both compatibility fallbacks, and checks a
+390-pixel layout. That is not a physical Android/iOS browser certification;
+release compatibility claims still require testing the exact artifact on the
+target phone and browser.
+
 ## Customize the Demo
 
 The source is deliberately split into four layers:
@@ -77,7 +107,8 @@ The Demo also dispatches:
 
 - **lwppocr:ready** with **{backend}**;
 - **lwppocr:result** with the successful export object;
-- **lwppocr:error** with **{phase, message}**.
+- **lwppocr:error** with **{phase, code, message, diagnostics}** for PDF errors
+  (non-PDF failures may omit `code` and `diagnostics`).
 
 The test hook, Worker messages, embedded model variables, Emscripten members,
 and DOM state are implementation details, not public API.

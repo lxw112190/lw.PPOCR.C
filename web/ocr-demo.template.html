@@ -41,6 +41,13 @@
     .pdf-progress[hidden] { display: none; }
     .pdf-progress progress { width: 100%; height: 10px; accent-color: #2878d4; }
     #pdf-progress-label { min-width: 76px; color: #607086; font-size: 12px; text-align: right; }
+    .pdf-diagnostics { margin: -2px 0 18px; border-color: #efc6c4; background: #fffafa; }
+    .pdf-diagnostics[hidden] { display: none; }
+    .pdf-diagnostics summary { padding: 12px 16px; color: #9c302d; font-size: 13px; font-weight: 700; cursor: pointer; }
+    .pdf-diagnostics-body { padding: 0 16px 16px; }
+    .pdf-diagnostics p { margin: 0 0 10px; color: #704846; font-size: 12px; line-height: 1.6; }
+    .pdf-diagnostics pre { max-height: 220px; margin: 0 0 10px; overflow: auto; border: 1px solid #ead3d1; border-radius: 7px; padding: 10px; background: #fff; color: #4d3c3b; white-space: pre-wrap; overflow-wrap: anywhere; font: 11px/1.5 ui-monospace, Consolas, monospace; }
+    .pdf-diagnostics button { min-height: 38px; padding: 8px 12px; font-size: 12px; }
     .mobile-tabs { display: none; }
     .grid { display: grid; grid-template-columns: minmax(0, 1.65fr) minmax(300px, 1fr); gap: 18px; }
     .card { overflow: hidden; border: 1px solid #e0e7ef; border-radius: 12px; background: #fff; box-shadow: 0 4px 14px #1c35570d; }
@@ -163,6 +170,14 @@
         <span id="pdf-progress-label">0 / 0</span>
       </div>
     </section>
+    <details id="pdf-diagnostics" class="pdf-diagnostics card" hidden>
+      <summary>PDF 打开失败 · 查看诊断信息</summary>
+      <div class="pdf-diagnostics-body">
+        <p>可复制以下信息反馈给项目维护者；其中不包含 PDF 内容和本地文件路径。</p>
+        <pre id="pdf-diagnostics-text"></pre>
+        <button id="copy-pdf-diagnostics" type="button">复制诊断信息</button>
+      </div>
+    </details>
     <div id="stats">引擎状态：加载中</div>
     <nav class="mobile-tabs" aria-label="工作区视图">
       <button id="show-image" class="active" type="button" aria-pressed="true">图片</button>

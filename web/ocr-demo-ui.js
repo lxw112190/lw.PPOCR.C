@@ -41,6 +41,9 @@
   const pdfProgress = document.getElementById("pdf-progress");
   const pdfProgressBar = document.getElementById("pdf-progress-bar");
   const pdfProgressLabel = document.getElementById("pdf-progress-label");
+  const pdfDiagnostics = document.getElementById("pdf-diagnostics");
+  const pdfDiagnosticsText = document.getElementById("pdf-diagnostics-text");
+  const copyPdfDiagnosticsButton = document.getElementById("copy-pdf-diagnostics");
   const pdfResultTabs = document.getElementById("pdf-result-tabs");
   const showPageResultButton = document.getElementById("show-page-result");
   const showFullResultButton = document.getElementById("show-full-result");
@@ -80,6 +83,42 @@
   function sourceKind(file) {
     return file && (file.type === "application/pdf" || /\.pdf$/i.test(file.name || "")) ?
       "pdf" : "image";
+  }
+  function pdfStatus() {
+    return window.LwPdf && typeof LwPdf.getStatus === "function" ?
+      LwPdf.getStatus() : null;
+  }
+  function clearPdfDiagnostics() {
+    pdfDiagnostics.hidden = true;
+    pdfDiagnostics.open = false;
+    pdfDiagnosticsText.textContent = "";
+  }
+  function pdfErrorMessage(error) {
+    const code = error && error.code ? error.code : "LW_PDF_UNKNOWN";
+    const messages = {
+      LW_PDF_INIT_FAILED: "当前浏览器无法初始化 PDF 组件，请更新浏览器或改用系统 Chrome/Safari 打开。",
+      LW_PDF_INPUT_REQUIRED: "浏览器没有提供可读取的 PDF 文件。",
+      LW_PDF_READ_FAILED: "当前浏览器无法读取所选 PDF，请尝试系统 Chrome/Safari 或重新选择文件。",
+      LW_PDF_READ_CANCELLED: "PDF 文件读取已取消。",
+      LW_PDF_PASSWORD_REQUIRED: "此 PDF 已加密，当前版本暂不支持密码输入。",
+      LW_PDF_PASSWORD_INVALID: "PDF 密码错误。",
+      LW_PDF_RENDER_FAILED: "PDF 已打开，但首页渲染失败；浏览器兼容性或可用内存可能不足。",
+      LW_PDF_LOAD_FAILED: "PDF 解析失败：文件可能损坏，或当前浏览器不支持该 PDF。"
+    };
+    return (messages[code] || "PDF 打开失败，请查看诊断信息。") + "（" + code + "）";
+  }
+  function showPdfDiagnostics(error) {
+    const status = pdfStatus() || {};
+    const report = {
+      error_code: error && error.code ? error.code : "LW_PDF_UNKNOWN",
+      error_phase: error && error.phase ? error.phase : "unknown",
+      pdf: status,
+      ocr_backend: engine ? engine.getStatus().backend : "not-ready"
+    };
+    pdfDiagnosticsText.textContent = JSON.stringify(report, null, 2);
+    pdfDiagnostics.hidden = false;
+    pdfDiagnostics.open = true;
+    return report;
   }
   function setExportEnabled(enabled) {
     for (const button of resultActionButtons) button.disabled = !enabled;
@@ -130,10 +169,7 @@
     anchor.remove();
     setTimeout(() => URL.revokeObjectURL(url), 0);
   }
-  async function copyPlainText() {
-    if (!lastResults) return;
-    const result = lastResults;
-    const text = plainTextResult();
+  async function copyTextValue(text) {
     try {
       if (!navigator.clipboard || !navigator.clipboard.writeText) {
         throw new Error("Clipboard API unavailable");
@@ -151,6 +187,12 @@
       textarea.remove();
       if (!copied) throw clipboardError;
     }
+  }
+  async function copyPlainText() {
+    if (!lastResults) return;
+    const result = lastResults;
+    const text = plainTextResult();
+    await copyTextValue(text);
     if (lastResults === result) {
       statusNode.textContent = "已复制 " + resultLineCount(result) + " 行文本。";
     }
@@ -322,9 +364,12 @@
           rendered.height / pageResult.image.height);
       }
       renderPdfResultView();
+      const compatibility = pdfStatus() &&
+        pdfStatus().worker_backend === "main-thread" ? " · PDF 兼容模式" : "";
       statusNode.textContent = pageResult ?
-        "第 " + pageNumber + " 页已识别，共 " + pageResult.lines.length + " 行。" :
-        "PDF 已准备好，点击“开始识别”。";
+        "第 " + pageNumber + " 页已识别，共 " + pageResult.lines.length + " 行" +
+          compatibility + "。" :
+        "PDF 已准备好" + compatibility + "，点击“开始识别”。";
     } catch (error) {
       if (!(error && error.code === "LW_PDF_CANCELLED")) throw error;
     } finally {
@@ -347,6 +392,7 @@
     source = null;
     preparedSource = null;
     clearLastResults();
+    clearPdfDiagnostics();
     runButton.disabled = true;
     setMobilePanel("image");
     updatePdfControls();
@@ -422,12 +468,16 @@
       if (sequence === previewSequence) {
         source = null;
         updatePdfControls();
-        const message = error && error.code === "LW_PDF_PASSWORD_REQUIRED" ?
-          "此 PDF 已加密，当前版本暂不支持密码输入。" :
-          "无法打开 PDF：文件可能损坏或格式不受支持。";
+        const message = pdfErrorMessage(error);
+        const diagnostics = showPdfDiagnostics(error);
         statusNode.textContent = message;
         document.dispatchEvent(new CustomEvent("lwppocr:error", {
-          detail: {phase: "pdf-open", code: error && error.code, message}
+          detail: {
+            phase: error && error.phase ? error.phase : "pdf-open",
+            code: error && error.code,
+            message,
+            diagnostics
+          }
         }));
       }
       throw error;
@@ -724,6 +774,7 @@
   function snapshot() {
     const status = engine ? engine.getStatus() : {ready: false, backend: "loading"};
     const pdf = source && source.kind === "pdf" ? source : null;
+    const documentStatus = pdfStatus();
     return {
       ...status,
       ready: Boolean(engine && status.ready),
@@ -733,6 +784,9 @@
       sourceKind: source ? source.kind : null,
       pdfPageCount: pdf ? pdf.pageCount : 0,
       pdfCurrentPage: pdf ? pdf.currentPage : 0,
+      pdfWorkerBackend: documentStatus ? documentStatus.worker_backend : null,
+      pdfErrorCode: documentStatus && documentStatus.last_error ?
+        documentStatus.last_error.code : null,
       processedPages: lastResults && lastResults.schema_version === 2 ?
         lastResults.document.processed_pages : 0,
       hasResults: Boolean(lastResults),
@@ -774,6 +828,12 @@
   }));
   exportTxtButton.addEventListener("click", exportTxt);
   exportJsonButton.addEventListener("click", exportJson);
+  copyPdfDiagnosticsButton.addEventListener("click", () =>
+    copyTextValue(pdfDiagnosticsText.textContent).then(() => {
+      statusNode.textContent = "PDF 诊断信息已复制。";
+    }).catch(error => {
+      statusNode.textContent = "复制诊断信息失败：" + error;
+    }));
   showImageButton.addEventListener("click", () => setMobilePanel("image"));
   showResultsButton.addEventListener("click", () => setMobilePanel("results"));
   showPageResultButton.addEventListener("click", () => {
@@ -832,6 +892,7 @@
     structuredResult: () => lastResults,
     timingBreakdown: () => lastTimingBreakdown ?
       JSON.parse(JSON.stringify(lastTimingBreakdown)) : null,
+    pdfStatus: () => pdfStatus(),
     selectFile,
     runOcr,
     cancelPdfOcr

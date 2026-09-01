@@ -23,5 +23,16 @@ page.release();
 await documentHandle.close();
 ```
 
+`LwPdf.getStatus()` returns the current PDF.js state, `module-worker` or
+`main-thread` backend, fallback reason, browser capability snapshot, and the
+last stable error. It is diagnostic information, not an OCR export field.
+
+The adapter first starts the embedded worker Blob directly. This avoids the
+nested Blob module wrapper PDF.js otherwise creates for a null-origin
+`file://` page. If module Workers are unavailable it imports the same pinned
+worker module on the main thread and lets PDF.js use its fake-worker protocol.
+`FileReader` is used when a mobile WebView does not expose
+`Blob.arrayBuffer()`.
+
 The adapter is injected only into `ocr-demo.html`. It is not part of
 `lw-ppocr.js`, the native runtime, or the C ABI.
