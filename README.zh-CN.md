@@ -219,7 +219,8 @@ node tests/node/smoke.cjs \
 
 生成的 `lw.PPOCR.C-<version>-node-wasm.zip` 支持 Node.js 18 及以上版本。
 Runtime 通过现有 WASM Host ABI 接收 BGR8 像素，JPEG/PNG 解码由应用自行负责；
-需要并发时，请为每个 Node Worker 创建独立 Runtime 实例。详见
+需要并发时，请为每个 Node Worker 创建独立 Runtime 实例。manifest 会记录实际使用的
+`wasm128` 或 scalar 后端。详见
 [`docs/NODE_WASM_DISTRIBUTION.md`](docs/NODE_WASM_DISTRIBUTION.md)。
 
 ### C# WinForms Demo

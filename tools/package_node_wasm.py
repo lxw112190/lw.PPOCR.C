@@ -39,13 +39,16 @@ def write_text(path: Path, value: str) -> None:
     path.write_text(value, encoding="utf-8", newline="\n")
 
 
-def package_readme(version: str) -> str:
+def package_readme(version: str, abi_version: int, lwm_version: str, backend: str) -> str:
     return f"""# lw.PPOCR.C Node/WASM runtime ({version})
 
 This archive contains the standalone Emscripten runtime and the bundled
 PP-OCRv6 tiny LWM assets. It has no npm runtime dependencies and does not
 decode JPEG/PNG files. Applications should provide BGR8 pixels to the WASM
 Host ABI.
+
+This package uses WASM Host ABI v{abi_version}, LWM format {lwm_version}, and
+the `{backend}` execution backend.
 
 ## Requirements
 
@@ -75,7 +78,7 @@ async function main() {{
 main().catch(error => {{ console.error(error); process.exitCode = 1; }});
 ```
 
-The exported `lw_web_*` symbols are the stable WASM Host ABI v1. Use one
+The exported `lw_web_*` symbols are the stable WASM Host ABI v{abi_version}. Use one
 runtime instance from one request at a time; create separate Node Worker
 instances when an application needs concurrency. See `manifest.json` and
 `SHA256SUMS.txt` before loading assets.
@@ -109,9 +112,14 @@ def main() -> int:
     parser.add_argument("--model-license", type=Path, required=True)
     parser.add_argument("--notices", type=Path, required=True)
     parser.add_argument("--version", required=True)
+    parser.add_argument("--wasm-backend", choices=("scalar", "wasm128"), required=True)
+    parser.add_argument("--wasm-host-abi-version", type=int, required=True)
+    parser.add_argument("--lwm-version", required=True)
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--archive", type=Path, required=True)
     args = parser.parse_args()
+    if args.wasm_host_abi_version <= 0:
+        raise SystemExit("WASM Host ABI version must be positive")
 
     staging = args.output_dir.resolve()
     archive = args.archive.resolve()
@@ -142,9 +150,10 @@ def main() -> int:
         "package": {"name": "lw.PPOCR.C-node-wasm", "version": args.version},
         "runtime": {
             "target": "node-wasm",
-            "wasmHostAbiVersion": 1,
-            "lwmVersion": "0.1",
-            "backend": "wasm128",
+            "wasmHostAbiVersion": args.wasm_host_abi_version,
+            "lwmVersion": args.lwm_version,
+            "backend": args.wasm_backend,
+            "simd": {"wasm128": args.wasm_backend == "wasm128"},
             "threading": "single-threaded",
         },
         "compatibility": {"node": ">=18"},
@@ -167,7 +176,15 @@ def main() -> int:
         },
     }
     write_text(staging / "manifest.json", json.dumps(manifest, indent=2) + "\n")
-    write_text(staging / "README.md", package_readme(args.version))
+    write_text(
+        staging / "README.md",
+        package_readme(
+            args.version,
+            args.wasm_host_abi_version,
+            args.lwm_version,
+            args.wasm_backend,
+        ),
+    )
 
     checksum_names = [
         "LICENSE",

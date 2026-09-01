@@ -20,7 +20,9 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define LW_WEB_ABI_VERSION 1u
+#ifndef LW_WEB_ABI_VERSION
+#  define LW_WEB_ABI_VERSION 1u
+#endif
 /* Article screenshots and mobile captures often contain one text line much
  * wider than the native 320-pixel REC preset. The converted REC graph accepts
  * dynamic widths, so the offline page keeps up to 960 pixels of horizontal

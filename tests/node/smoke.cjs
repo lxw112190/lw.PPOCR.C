@@ -154,6 +154,16 @@ async function main() {
   if (!fs.existsSync(root) || !fs.existsSync(sample)) fail("Node/WASM package or PPM fixture is missing");
   const manifest = verifyPackage(root);
   if (manifest.compatibility.node !== ">=18") fail("unexpected Node compatibility declaration");
+  const expectedBackend = argument("--expected-backend");
+  if (expectedBackend) {
+    if (manifest.runtime.backend !== expectedBackend) {
+      fail(`unexpected WASM backend: ${manifest.runtime.backend}`);
+    }
+    const simdEnabled = manifest.runtime.simd && manifest.runtime.simd.wasm128 === true;
+    if (simdEnabled !== (expectedBackend === "wasm128")) {
+      fail("manifest SIMD capability does not match the declared backend");
+    }
+  }
   const image = readPpm(sample);
   let expectedTexts = null;
   for (const useCls of [true, false, true]) {
@@ -172,7 +182,18 @@ async function main() {
   if (expectedTexts.length !== expectedCount) fail(`expected ${expectedCount} OCR lines, got ${expectedTexts.length}`);
   const expectedFirst = argument("--expected-first-line", "纯臻营养护发素");
   if (expectedFirst && expectedTexts[0] !== expectedFirst) fail(`unexpected first OCR line: ${expectedTexts[0]}`);
-  console.log(JSON.stringify({ok: true, node: process.versions.node, lines: expectedTexts.length, firstLine: expectedTexts[0]}));
+  const textSha256 = crypto.createHash("sha256").update(expectedTexts.join("\n"), "utf8").digest("hex");
+  const expectedTextSha256 = argument("--expected-text-sha256");
+  if (expectedTextSha256 && textSha256 !== expectedTextSha256) {
+    fail(`unexpected full OCR text SHA-256: ${textSha256}`);
+  }
+  console.log(JSON.stringify({
+    ok: true,
+    node: process.versions.node,
+    lines: expectedTexts.length,
+    firstLine: expectedTexts[0],
+    textSha256
+  }));
 }
 
 main().catch(error => {

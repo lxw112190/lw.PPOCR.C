@@ -170,7 +170,8 @@ node tests/node/smoke.cjs \
 The generated `lw.PPOCR.C-<version>-node-wasm.zip` supports Node.js 18 or
 newer. The runtime accepts BGR8 pixels through the existing WASM Host ABI;
 applications provide their own JPEG/PNG decoder and create separate Worker
-instances for concurrency. See [Node/WASM distribution](docs/NODE_WASM_DISTRIBUTION.md).
+instances for concurrency. The manifest records whether the build used
+`wasm128` or the scalar fallback. See [Node/WASM distribution](docs/NODE_WASM_DISTRIBUTION.md).
 
 ## Documentation
 

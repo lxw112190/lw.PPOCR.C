@@ -50,6 +50,15 @@ cmake --build build-wasm --target lw-node-wasm
 cmake --build build-wasm --target lw-node-wasm-package
 ```
 
+`LW_WASM_SIMD128=ON` (默认值) records `runtime.backend` as `wasm128` and
+sets `runtime.simd.wasm128` to `true`. When configured with
+`-DLW_WASM_SIMD128=OFF`, the same package is marked `scalar` and the SIMD flag
+is `false`; the manifest therefore always describes the actual build.
+
+The CMake cache variables `LW_WASM_HOST_ABI_VERSION` and
+`LW_LWM_FORMAT_VERSION` are passed to both the WASM adapter and the packager,
+so the manifest has one version source for each compatibility contract.
+
 产物位于 `build-wasm/`：
 
 ```text
@@ -134,7 +143,8 @@ WASM CI 会构建浏览器 SDK、离线 HTML 和 Node/WASM 包，并执行：
 1. `require("runtime.cjs")` 和异步 Runtime 初始化；
 2. manifest 与 SHA-256 校验；
 3. PPM fixture 的 DET/CLS/REC 完整 OCR；
-4. CLS 开关和 init/shutdown 生命周期回归；
-5. Node 产物与浏览器构建并列验证，互不依赖 HTML 提取。
+4. 16 行完整 OCR 文本的 SHA-256 回归校验；
+5. CLS 开关和 init/shutdown 生命周期回归；
+6. Node 产物与浏览器构建并列验证，互不依赖 HTML 提取。
 
 浏览器 `ocr-demo.html` 的打包流程保持不变，Node 包不会从 HTML 反向生成。

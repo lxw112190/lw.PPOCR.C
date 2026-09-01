@@ -75,7 +75,12 @@ jobs:
           grep -a -q '6.3.289' build-wasm/ocr-demo.html
           echo 'f401927e692efc7735e0cd528c490d0dd31b7f0972c122b7040df805be45cce4  web/vendor/pdfjs/pdf.min.mjs' | sha256sum -c -
           echo 'a33cfe728c584fdba4fcc1fd54bcdc2f9f2f13889ddbb5b2bd1d0f8cbe49b84e  web/vendor/pdfjs/pdf.worker.min.mjs' | sha256sum -c -
-          sha256sum -c "${node_archive}.sha256"
+          # The checksum file stores only the archive basename. Verify from
+          # the archive directory so sha256sum resolves that name correctly.
+          (
+            cd "$(dirname "${node_archive}")"
+            sha256sum -c "$(basename "${node_archive}").sha256"
+          )
 
       - name: Run browser SDK contract and memory test
         run: >-
@@ -153,4 +158,6 @@ jobs:
           test -n "${package_dir}"
           node tests/node/smoke.cjs \
             --package "${package_dir}" \
-            --sample node-artifacts/sample.ppm
+            --sample node-artifacts/sample.ppm \
+            --expected-backend wasm128 \
+            --expected-text-sha256 6ff42b9ea692cc19988c06af05ad7ac2542e2ff6f111202e73a0c900af988284

@@ -8,6 +8,10 @@ option(LW_BUILD_CSHARP_DEMOS
     "Build the .NET Framework 3.5 WinForms Demo on Windows" OFF)
 option(LW_WASM_SIMD128
     "Enable portable WebAssembly SIMD128 for the standalone OCR HTML" ON)
+set(LW_WASM_HOST_ABI_VERSION "1" CACHE STRING
+    "WASM Host ABI version embedded in the Web adapter and Node manifest")
+set(LW_LWM_FORMAT_VERSION "0.1" CACHE STRING
+    "LWM model format version recorded in distribution manifests")
 option(LW_WEB_PDF
     "Embed offline PDF.js support in the standalone OCR HTML" ON)
 set(LW_PRECONVERTED_ASSETS_DIR "" CACHE PATH
@@ -25,6 +29,13 @@ set(LW_PACKAGE_PLATFORM_OVERRIDE "" CACHE STRING
 
 if(LW_BUILD_HTTP_DEMO)
     enable_language(CXX)
+endif()
+
+if(NOT LW_WASM_HOST_ABI_VERSION MATCHES "^[0-9]+$")
+    message(FATAL_ERROR "LW_WASM_HOST_ABI_VERSION must be a positive integer")
+endif()
+if(NOT LW_LWM_FORMAT_VERSION MATCHES "^[0-9]+\\.[0-9]+$")
+    message(FATAL_ERROR "LW_LWM_FORMAT_VERSION must use the form major.minor")
 endif()
 
 include(CTest)
@@ -315,6 +326,8 @@ if(EMSCRIPTEN)
     target_include_directories(lw_ppocr_web PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/include")
     target_compile_features(lw_ppocr_web PRIVATE c_std_11)
     target_compile_options(lw_ppocr_web PRIVATE -O3 -Wall -Wextra -Wpedantic -Werror)
+    target_compile_definitions(lw_ppocr_web PRIVATE
+        LW_WEB_ABI_VERSION=${LW_WASM_HOST_ABI_VERSION})
     if(LW_WASM_SIMD128)
         target_compile_options(lw_ppocr_web PRIVATE -msimd128 -msse2)
         target_link_options(lw_ppocr_web PRIVATE -msimd128)
@@ -401,6 +414,8 @@ if(EMSCRIPTEN)
     target_include_directories(lw_ppocr_node PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/include")
     target_compile_features(lw_ppocr_node PRIVATE c_std_11)
     target_compile_options(lw_ppocr_node PRIVATE -O3 -Wall -Wextra -Wpedantic -Werror)
+    target_compile_definitions(lw_ppocr_node PRIVATE
+        LW_WEB_ABI_VERSION=${LW_WASM_HOST_ABI_VERSION})
     if(LW_WASM_SIMD128)
         target_compile_options(lw_ppocr_node PRIVATE -msimd128 -msse2)
         target_link_options(lw_ppocr_node PRIVATE -msimd128)
@@ -415,6 +430,12 @@ if(EMSCRIPTEN)
         "--no-entry")
     set_target_properties(lw_ppocr_node PROPERTIES OUTPUT_NAME "lw_ppocr_node")
     add_dependencies(lw_ppocr_node convert_det_model convert_cls_model convert_rec_model)
+
+    if(LW_WASM_SIMD128)
+        set(LW_NODE_WASM_BACKEND wasm128)
+    else()
+        set(LW_NODE_WASM_BACKEND scalar)
+    endif()
 
     set(LW_PPOCR_C_NODE_RUNTIME
         "${CMAKE_CURRENT_BINARY_DIR}/runtime.cjs")
@@ -451,6 +472,9 @@ if(EMSCRIPTEN)
                 "${CMAKE_CURRENT_SOURCE_DIR}/licenses/PaddleOCR-models-APACHE-2.0.txt"
                 --notices "${CMAKE_CURRENT_SOURCE_DIR}/THIRD-PARTY-NOTICES.md"
                 --version "${PROJECT_VERSION}"
+                --wasm-backend "${LW_NODE_WASM_BACKEND}"
+                --wasm-host-abi-version "${LW_WASM_HOST_ABI_VERSION}"
+                --lwm-version "${LW_LWM_FORMAT_VERSION}"
                 --output-dir "${LW_PPOCR_C_NODE_PACKAGE_DIR}"
                 --archive "${LW_PPOCR_C_NODE_PACKAGE_ARCHIVE}"
         DEPENDS lw-node-wasm
