@@ -25,6 +25,12 @@ typedef struct reading_column {
     uint32_t count;
 } reading_column;
 
+/* Keep the count comparison wider than uint32_t. GCC otherwise diagnoses a
+ * valid bounded allocation check as always false on 64-bit targets. */
+static int allocation_fits(uint64_t count, size_t element_size) {
+    return element_size != 0u && count <= (uint64_t)(SIZE_MAX / element_size);
+}
+
 int lw_reading_order_is_valid(uint32_t reading_order) {
     return reading_order <= (uint32_t)LW_READING_ORDER_VERTICAL_LTR;
 }
@@ -102,8 +108,8 @@ static lw_status vertical_sort(lw_detection_box* boxes, uint32_t count,
     uint32_t column_count = 0u;
     uint32_t index;
     if (count < 2u) return LW_STATUS_OK;
-    if ((size_t)count > SIZE_MAX / sizeof(*items) ||
-        (size_t)count > SIZE_MAX / sizeof(*columns))
+    if (!allocation_fits(count, sizeof(*items)) ||
+        !allocation_fits(count, sizeof(*columns)))
         return LW_STATUS_OUT_OF_BOUNDS;
     items = (reading_item*)malloc((size_t)count * sizeof(*items));
     columns = (reading_column*)calloc(count, sizeof(*columns));
