@@ -1,5 +1,6 @@
 #include "lw_infer.h"
 
+#include <stddef.h>
 #include <stdint.h>
 
 _Static_assert(sizeof(lw_error) == 264u, "lw_error ABI changed");
