@@ -141,6 +141,11 @@ The build produces two self-contained browser artifacts:
   UI and a lazy, offline PDF.js frontend. It can be opened directly without the
   native HTTP Demo. PDF.js is not included in `lw-ppocr.js` or the C runtime.
 
+The standalone page supports selectable reading order: horizontal
+left-to-right, vertical right-to-left for traditional books, and vertical
+left-to-right. This changes result ordering only; coordinates, scores, and
+model inference remain unchanged.
+
 For restrictive mobile WebViews, PDF.js automatically falls back from its Blob
 module Worker to main-thread parsing and from `Blob.arrayBuffer()` to
 `FileReader`. A visible diagnostic report distinguishes initialization, file

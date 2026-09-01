@@ -194,6 +194,9 @@ Windows 下可在 emsdk 目录运行 `emsdk_env.bat`，或按 emsdk 文档使用
   启动 HTTP 服务；默认还内嵌按需加载的 PDF.js，用于把本地 PDF 页面渲染为 Canvas。
   PDF.js 不进入 `lw-ppocr.js`、纯 C Runtime 或公共 C ABI。
 
+页面支持选择输出阅读顺序：横排从左到右、竖排从右到左（传统古籍）、
+竖排从左到右。该设置只调整结果顺序，不改变检测框坐标、置信度或模型推理。
+
 对限制 Blob module Worker 的手机 WebView，PDF.js 会自动切到主线程兼容模式；缺少
 `Blob.arrayBuffer()` 时改用 `FileReader`。页面会显示可复制的诊断报告，区分组件初始化、
 文件读取、PDF 解析和页面渲染失败。桌面浏览器的手机视口测试只验证响应式布局，具体手机

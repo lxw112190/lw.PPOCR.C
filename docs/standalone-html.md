@@ -19,11 +19,14 @@ Download the release HTML or build the **lw-ocr-html** CMake target, then open
 2. On a phone, choose **拍照识别** for a new image or **选择图片 / PDF** for
    an existing file.
 3. Enable CLS when orientation classification is needed.
-4. For PDF input, select the current page or all pages and choose 144, 180, or
+4. Choose a reading order: **Horizontal LTR** for normal horizontal pages,
+   **Vertical RTL** for traditional right-to-left columns, or **Vertical LTR**
+   for left-to-right vertical columns. The default is Horizontal LTR.
+5. For PDF input, select the current page or all pages and choose 144, 180, or
    220 DPI. Higher DPI can improve small text, but needs more time and memory.
-5. Select **开始识别**. All-page OCR runs sequentially and can be stopped; if
+6. Select **开始识别**. All-page OCR runs sequentially and can be stopped; if
    native OCR has started for a page, stopping takes effect after that page.
-6. Copy or share the text, or export UTF-8 TXT or structured JSON.
+7. Copy or share the text, or export UTF-8 TXT or structured JSON.
 
 The PDF preview can move between pages without retaining every rendered page.
 The Demo keeps only the current page bitmap plus structured results, and caps

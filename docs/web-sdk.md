@@ -103,7 +103,7 @@ const engine = await LwPpocr.create({
 |---|---:|---:|---|
 | **useCls** | Boolean | false | Run text-orientation classification before recognition |
 | **maxImageSide** | integer | 1600 | Scale larger images down before OCR; zero disables this limit |
-| **readingOrder** | string | \`"horizontal-ltr"\` | Output order: \`"horizontal-ltr"\`, \`"vertical-rtl"\`, or \`"vertical-ltr"\` |
+| **readingOrder** | string | `"horizontal-ltr"` | Output order: `"horizontal-ltr"`, `"vertical-rtl"`, or `"vertical-ltr"` |
 
 Options belong to the engine. To change **useCls**, destroy the old engine and
 create another one. This keeps buffer ownership and concurrent-call behavior
