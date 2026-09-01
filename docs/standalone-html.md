@@ -57,6 +57,7 @@ scripts at the end of the document can initialize OCR. A minimal nginx setup
 is:
 
 ~~~nginx
+# Put these directives inside the nginx http or server block.
 gzip on;
 gzip_min_length 1024;
 gzip_comp_level 6;
@@ -64,15 +65,29 @@ gzip_vary on;
 gzip_types application/javascript application/json application/wasm
            text/css text/plain image/svg+xml;
 
-location = /manual/ocr-demo.html {
-    add_header Cache-Control "no-cache";
+# Match the public URL used by your deployment. No filesystem path is needed
+# in this example.
+location = /ocr-demo.html {
+    add_header Cache-Control "no-cache" always;
 }
 ~~~
 
 nginx compresses `text/html` when gzip is enabled, so it does not need to be
 listed in `gzip_types`. Use HTTPS for production deployment. If releases keep
 the same URL, retain ETag/Last-Modified validation or use `no-cache` as above
-so phones do not keep an old standalone artifact.
+so phones do not keep an old standalone artifact. Validate and reload nginx,
+then verify the public response:
+
+~~~bash
+nginx -t
+nginx -s reload
+curl -I -H "Accept-Encoding: gzip" https://example.com/ocr-demo.html
+~~~
+
+The response should include `Content-Encoding: gzip`,
+`Vary: Accept-Encoding`, and `Cache-Control: no-cache`. Replace the example
+URL and location with the deployment's public URL; do not publish private
+filesystem paths in shared configuration examples.
 
 ## Mobile PDF troubleshooting
 
