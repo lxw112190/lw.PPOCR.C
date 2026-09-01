@@ -176,7 +176,7 @@ LW_WEB_API int lw_web_get_info(lw_web_info* info) {
 
 LW_WEB_API int lw_web_set_reading_order(uint32_t reading_order) {
     lw_status status;
-    if (!lw_reading_order_is_valid(reading_order))
+    if (reading_order > (uint32_t)LW_READING_ORDER_VERTICAL_LTR)
         return web_fail(LW_STATUS_INVALID_ARGUMENT, "invalid reading order");
     g_reading_order = reading_order;
     if (g_ocr == NULL)
