@@ -30,6 +30,8 @@ The project currently provides:
 The WinForms and standalone browser Demos can copy recognized text and export
 UTF-8 TXT or versioned JSON using the shared
 [OCR result export schema](docs/ocr-export-schema.md).
+The standalone browser Demo also opens local image-based PDFs, recognizes the
+current page or all pages sequentially, and exports page-aware schema v2 JSON.
 
 The deployment core accepts decoded BGR8 pixels. Image decoding remains an
 application concern, so the core itself stays dependency-free.
@@ -133,7 +135,8 @@ The build produces two self-contained browser artifacts:
   `LwPpocr.create()`, accepts File, Blob, ImageData, or Canvas input, runs in a
   Worker when available, and returns versioned structured results.
 - `build-wasm/ocr-demo.html` embeds that exact SDK plus the responsive example
-  UI. It can be opened directly without the native HTTP Demo.
+  UI and a lazy, offline PDF.js frontend. It can be opened directly without the
+  native HTTP Demo. PDF.js is not included in `lw-ppocr.js` or the C runtime.
 
 The SDK queries the Web ABI for actual output capacities and reuses buffers
 across repeated OCR runs. See the [Browser JavaScript SDK](docs/web-sdk.md),

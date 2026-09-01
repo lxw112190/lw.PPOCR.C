@@ -20,6 +20,7 @@ Python、OpenCV、ONNX Runtime、OpenVINO、TensorRT 或 protobuf，适合将文
   x86 与 WebAssembly 默认 1 个，可通过 `lw_ocr_options.worker_count` 调整；
 - 输入为调用方已经解码的 BGR8 图像，核心库不绑定具体图片解码库；
 - 提供 C 命令行示例、C# WinForms Demo、原生 HTTP/Web Demo 和单文件离线 WASM Demo；
+- 单文件 WASM Demo 可在本地打开图片或 PDF，按当前页或全部页面顺序 OCR，并导出分页 JSON；
 - WinForms 测试工具支持拖放图片、切换模型目录和 OCR 工作器数量，并记录平均/P95耗时；
 - 自定义 LWM v0.1 模型格式，加载时执行边界、结构和校验和检查；
 - 调用方拥有输入和输出缓冲区，内存容量不足时返回明确错误，不在 ABI 两侧交叉释放内存。
@@ -187,7 +188,8 @@ Windows 下可在 emsdk 目录运行 `emsdk_env.bat`，或按 emsdk 文档使用
   `LwPpocr.create()` 创建实例，支持 File、Blob、ImageData 和 Canvas 输入，浏览器允许时
   在 Worker 中执行，并返回带版本号的结构化结果；
 - `build-wasm/ocr-demo.html` 内嵌同一份 SDK 和响应式示例界面，可以直接双击打开，不需要
-  启动 HTTP 服务。
+  启动 HTTP 服务；默认还内嵌按需加载的 PDF.js，用于把本地 PDF 页面渲染为 Canvas。
+  PDF.js 不进入 `lw-ppocr.js`、纯 C Runtime 或公共 C ABI。
 
 SDK 会按照 Runtime 返回的真实容量分配并复用输入/输出缓冲区。接入方法见
 [`docs/web-sdk.md`](docs/web-sdk.md)，单 HTML 的直接使用与定制见

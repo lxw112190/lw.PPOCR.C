@@ -9,6 +9,15 @@
       "source": "https://github.com/lxw112190/lw.OpenCVDNN.PPOCR/blob/2408e3f9ab4dbfe2a2a2da6580af2255d20d915c/server/third_party/httplib.h",
       "purl": "pkg:github/yhirose/cpp-httplib@v0.48.0",
       "sha256": "1c8b44c8ab0498322c08840dbdfcd5006bc28c5a3b140b0c2cf30777b7232fc6"
+    },
+    {
+      "name": "pdfjs-dist",
+      "version": "6.3.289",
+      "license": "Apache-2.0",
+      "scope": "standalone-html-pdf-frontend",
+      "source": "https://registry.npmjs.org/pdfjs-dist/-/pdfjs-dist-6.3.289.tgz",
+      "purl": "pkg:npm/pdfjs-dist@6.3.289",
+      "sha256": "06f25e887adc6489f04c9fcb14198c77e4e5623a59a0bba5c4cea5838a4f1241"
     }
   ],
   "development_dependencies": [
@@ -40,7 +49,7 @@
       "name": "Pillow",
       "version": "10.4.0",
       "license": "HPND",
-      "scope": "image-fixture-reference-tests",
+      "scope": "image-fixture-reference-and-wasm-pdf-tests",
       "source": "https://github.com/python-pillow/Pillow",
       "purl": "pkg:pypi/pillow@10.4.0"
     },

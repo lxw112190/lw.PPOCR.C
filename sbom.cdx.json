@@ -86,6 +86,32 @@
     },
     {
       "type": "library",
+      "bom-ref": "pkg:npm/pdfjs-dist@6.3.289",
+      "name": "pdfjs-dist",
+      "version": "6.3.289",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "06f25e887adc6489f04c9fcb14198c77e4e5623a59a0bba5c4cea5838a4f1241"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "Apache-2.0"
+          }
+        }
+      ],
+      "purl": "pkg:npm/pdfjs-dist@6.3.289",
+      "properties": [
+        {
+          "name": "lw.package.scope",
+          "value": "standalone-html-pdf-frontend"
+        }
+      ]
+    },
+    {
+      "type": "library",
       "bom-ref": "pkg:generic/microsoft-vc-runtime@14.40.33807",
       "name": "Microsoft Visual C++ Runtime",
       "version": "14.40.33807",
@@ -115,7 +141,8 @@
       "dependsOn": [
         "lw-model:ppocrv6-tiny-rec:lwm-v0.1",
         "lw-file:ppocrv6-tiny-dictionary",
-        "pkg:github/yhirose/cpp-httplib@v0.48.0"
+        "pkg:github/yhirose/cpp-httplib@v0.48.0",
+        "pkg:npm/pdfjs-dist@6.3.289"
       ]
     }
   ]

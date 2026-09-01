@@ -44,6 +44,12 @@ and Chromium run only in CI to open that artifact, execute real OCR repeatedly,
 and check that WASM memory remains stable. They are not embedded in the HTML or
 linked into the native runtime.
 
+The default standalone HTML also embeds the legacy browser build of Mozilla
+PDF.js 6.3.289 under the Apache License 2.0. PDF.js converts PDF pages to Canvas
+pixels in the browser; it is not part of `lw-ppocr.js`, the native runtime, or
+the public C ABI. The vendored distribution and license are under
+`web/vendor/pdfjs/`. Configure with `LW_WEB_PDF=OFF` to omit it.
+
 ## Windows runtime files
 
 Windows binary archives include the Microsoft Visual C++ Runtime and Universal

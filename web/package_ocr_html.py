@@ -1,4 +1,4 @@
-"""Inline the browser SDK and UI glue into the standalone offline HTML demo."""
+"""Inline the browser SDK, optional PDF frontend, and UI into one HTML file."""
 from __future__ import annotations
 
 import argparse
@@ -18,11 +18,47 @@ def main() -> int:
     parser.add_argument("--sdk", type=Path, required=True)
     parser.add_argument("--ui", type=Path, required=True)
     parser.add_argument("--sponsor", type=Path, required=True)
+    parser.add_argument("--pdf-adapter", type=Path)
+    parser.add_argument("--pdfjs-core", type=Path)
+    parser.add_argument("--pdfjs-worker", type=Path)
+    parser.add_argument("--pdfjs-version")
+    parser.add_argument("--no-pdf", action="store_true")
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
 
+    pdf_inputs = [
+        args.pdf_adapter,
+        args.pdfjs_core,
+        args.pdfjs_worker,
+        args.pdfjs_version,
+    ]
+    if args.no_pdf and any(pdf_inputs):
+        raise SystemExit("--no-pdf cannot be combined with PDF asset arguments")
+    if not args.no_pdf and not all(pdf_inputs):
+        raise SystemExit(
+            "PDF packaging requires --pdf-adapter, --pdfjs-core, "
+            "--pdfjs-worker, and --pdfjs-version"
+        )
+
+    if args.no_pdf:
+        pdf_bootstrap = "/* PDF support excluded by LW_WEB_PDF=OFF. */"
+    else:
+        pdf_bootstrap = read_text(args.pdf_adapter)
+        pdf_bootstrap = pdf_bootstrap.replace(
+            "__LW_PDFJS_VERSION__", args.pdfjs_version
+        )
+        pdf_bootstrap = pdf_bootstrap.replace(
+            "__LW_PDFJS_CORE_BASE64__",
+            base64.b64encode(args.pdfjs_core.read_bytes()).decode("ascii"),
+        )
+        pdf_bootstrap = pdf_bootstrap.replace(
+            "__LW_PDFJS_WORKER_BASE64__",
+            base64.b64encode(args.pdfjs_worker.read_bytes()).decode("ascii"),
+        )
+
     html = read_text(args.template)
     replacements = {
+        "__LW_PDF_BOOTSTRAP_JS__": pdf_bootstrap,
         "__LW_SDK_JS__": read_text(args.sdk),
         "__LW_DEMO_UI_JS__": read_text(args.ui),
         "__LW_SPONSOR_IMAGE_BASE64__": base64.b64encode(
@@ -33,10 +69,9 @@ def main() -> int:
         html = html.replace(placeholder, value)
     if "__LW_" in html:
         raise SystemExit("unresolved HTML placeholder")
-    if "</script>" in replacements["__LW_SDK_JS__"].lower() or "</script>" in replacements[
-        "__LW_DEMO_UI_JS__"
-    ].lower():
-        raise SystemExit("script payload contains a closing script tag")
+    for name in ("__LW_PDF_BOOTSTRAP_JS__", "__LW_SDK_JS__", "__LW_DEMO_UI_JS__"):
+        if "</script>" in replacements[name].lower():
+            raise SystemExit(f"script payload {name} contains a closing script tag")
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(html, encoding="utf-8", newline="\n")

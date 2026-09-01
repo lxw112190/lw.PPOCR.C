@@ -1,9 +1,9 @@
 # Standalone HTML usage
 
 **ocr-demo.html** is the ready-made offline OCR application. It embeds the
-browser SDK, WebAssembly runtime, DET/CLS/REC models, dictionary, user
-interface, and support image in one file. Selected images remain local and are
-not uploaded.
+browser SDK, WebAssembly runtime, DET/CLS/REC models, dictionary, PDF.js,
+user interface, and support image in one file. Selected images and PDFs remain
+local and are not uploaded.
 
 For a custom browser application, use the separate **lw-ppocr.js** artifact and
 the public **LwPpocr.create()** API described in the
@@ -15,14 +15,20 @@ script.
 Download the release HTML or build the **lw-ocr-html** CMake target, then open
 **ocr-demo.html** directly in a modern browser.
 
-1. On desktop, select an image or drag it onto the page.
-2. On a phone, choose **拍照识别** or **从相册选择**.
+1. On desktop, select an image/PDF or drag it onto the page.
+2. On a phone, choose **拍照识别** for a new image or **选择图片 / PDF** for
+   an existing file.
 3. Enable CLS when orientation classification is needed.
-4. Select **开始识别**.
-5. Copy or share the text, or export UTF-8 TXT or structured JSON.
+4. For PDF input, select the current page or all pages and choose 144, 180, or
+   220 DPI. Higher DPI can improve small text, but needs more time and memory.
+5. Select **开始识别**. All-page OCR runs sequentially and can be stopped; if
+   native OCR has started for a page, stopping takes effect after that page.
+6. Copy or share the text, or export UTF-8 TXT or structured JSON.
 
-The page keeps one current image and one result. Selecting another image
-invalidates the old export snapshot until recognition succeeds again.
+The PDF preview can move between pages without retaining every rendered page.
+The Demo keeps only the current page bitmap plus structured results, and caps
+an OCR render at 5 megapixels. Selecting another file invalidates the old
+export snapshot until recognition succeeds again.
 
 Inference normally runs inside a Blob Worker so the controls remain
 responsive. If local browser policy rejects Blob Workers, the embedded SDK
@@ -31,20 +37,28 @@ WebAssembly SIMD128.
 
 ## Customize the Demo
 
-The source is deliberately split into three layers:
+The source is deliberately split into four layers:
 
 ~~~text
 web/lw_ppocr_sdk.template.js  reusable OCR SDK
+             |
+web/pdf/lw_pdf_adapter.js      PDF.js -> page Canvas (standalone only)
              |
 web/ocr-demo-ui.js            DOM, preview, export, mobile interaction
              |
 web/ocr-demo.template.html    markup and responsive styles
 ~~~
 
-The build first produces **lw-ppocr.js**, then injects that exact artifact and
-the UI script into **ocr-demo.html**. Integrations should keep image decoding,
-WASM pointers, buffer ownership, and native calls inside the SDK. Demo changes
-should operate on structured OCR results.
+The build first produces **lw-ppocr.js**, then injects that exact artifact,
+PDF.js, its Worker, and the UI script into **ocr-demo.html**. PDF.js and its
+Worker are decoded into Blob URLs only when the first PDF is opened. No model,
+PDF, page image, or optional PDF.js resource is fetched over the network.
+
+The boundary remains: PDF.js renders a page to Canvas, then `LwPpocr` recognizes
+that Canvas. Integrations should keep image decoding, WASM pointers, buffer
+ownership, and native calls inside the SDK. Demo changes should operate on
+structured OCR results. The reusable **lw-ppocr.js** remains image/Canvas-only
+and does not contain PDF.js.
 
 The page still exposes **window.lwPpocrDemo** version 1 as a compatibility
 adapter for existing customizations:
@@ -70,9 +84,15 @@ and DOM state are implementation details, not public API.
 
 ## Export format
 
-The Demo export contains original image dimensions, OCR options, elapsed time,
-reading-order lines, original-image quadrilaterals, and confidence scores. See
+Image exports keep `schema_version: 1`. PDF exports use `schema_version: 2` and
+contain document/page metadata, per-page timings, rendered-pixel boxes, and
+PDF-coordinate boxes. PDF TXT separates pages with visible headings. See
 [OCR result export schema](ocr-export-schema.md).
+
+Encrypted PDFs are reported as unsupported in this first version. Configure
+with `-DLW_WEB_PDF=OFF` to build a smaller image-only standalone HTML. This
+option changes only the application artifact; **lw-ppocr.js** and the C ABI are
+identical.
 
 The browser SDK and the Demo export are application-layer contracts. Neither
 changes the public C ABI.

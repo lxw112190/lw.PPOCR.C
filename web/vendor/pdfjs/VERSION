@@ -1,0 +1,6 @@
+version=6.3.289
+distribution=legacy-browser-build
+source=https://registry.npmjs.org/pdfjs-dist/-/pdfjs-dist-6.3.289.tgz
+source_sha256=06f25e887adc6489f04c9fcb14198c77e4e5623a59a0bba5c4cea5838a4f1241
+pdf_min_mjs_sha256=f401927e692efc7735e0cd528c490d0dd31b7f0972c122b7040df805be45cce4
+pdf_worker_min_mjs_sha256=a33cfe728c584fdba4fcc1fd54bcdc2f9f2f13889ddbb5b2bd1d0f8cbe49b84e

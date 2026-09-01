@@ -8,6 +8,8 @@ option(LW_BUILD_CSHARP_DEMOS
     "Build the .NET Framework 3.5 WinForms Demo on Windows" OFF)
 option(LW_WASM_SIMD128
     "Enable portable WebAssembly SIMD128 for the standalone OCR HTML" ON)
+option(LW_WEB_PDF
+    "Embed offline PDF.js support in the standalone OCR HTML" ON)
 set(LW_PRECONVERTED_ASSETS_DIR "" CACHE PATH
     "Directory containing preconverted LWM models and PPM fixtures")
 set(LW_BUILD_ENVIRONMENT_FILE "" CACHE FILEPATH
@@ -355,6 +357,21 @@ if(EMSCRIPTEN)
     # a separate target so CI and downstream users can download either file.
     set(LW_PPOCR_C_WEB_HTML
         "${CMAKE_CURRENT_BINARY_DIR}/ocr-demo.html")
+    set(LW_PPOCR_C_WEB_HTML_PDF_ARGS --no-pdf)
+    set(LW_PPOCR_C_WEB_HTML_PDF_DEPENDS)
+    if(LW_WEB_PDF)
+        set(LW_PPOCR_C_WEB_HTML_PDF_ARGS
+            --pdf-adapter "${CMAKE_CURRENT_SOURCE_DIR}/web/pdf/lw_pdf_adapter.js"
+            --pdfjs-core "${CMAKE_CURRENT_SOURCE_DIR}/web/vendor/pdfjs/pdf.min.mjs"
+            --pdfjs-worker "${CMAKE_CURRENT_SOURCE_DIR}/web/vendor/pdfjs/pdf.worker.min.mjs"
+            --pdfjs-version "6.3.289")
+        set(LW_PPOCR_C_WEB_HTML_PDF_DEPENDS
+            "${CMAKE_CURRENT_SOURCE_DIR}/web/pdf/lw_pdf_adapter.js"
+            "${CMAKE_CURRENT_SOURCE_DIR}/web/vendor/pdfjs/pdf.min.mjs"
+            "${CMAKE_CURRENT_SOURCE_DIR}/web/vendor/pdfjs/pdf.worker.min.mjs"
+            "${CMAKE_CURRENT_SOURCE_DIR}/web/vendor/pdfjs/LICENSE"
+            "${CMAKE_CURRENT_SOURCE_DIR}/web/vendor/pdfjs/VERSION")
+    endif()
     add_custom_command(
         OUTPUT "${LW_PPOCR_C_WEB_HTML}"
         COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/web/package_ocr_html.py"
@@ -362,6 +379,7 @@ if(EMSCRIPTEN)
             --sdk "${LW_PPOCR_C_WEB_SDK}"
             --ui "${CMAKE_CURRENT_SOURCE_DIR}/web/ocr-demo-ui.js"
             --sponsor "${CMAKE_CURRENT_SOURCE_DIR}/docs/assets/sponsor.jpg"
+            ${LW_PPOCR_C_WEB_HTML_PDF_ARGS}
             --output "${LW_PPOCR_C_WEB_HTML}"
         DEPENDS
             lw-ocr-js
@@ -369,6 +387,7 @@ if(EMSCRIPTEN)
             "${CMAKE_CURRENT_SOURCE_DIR}/web/ocr-demo-ui.js"
             "${CMAKE_CURRENT_SOURCE_DIR}/web/package_ocr_html.py"
             "${CMAKE_CURRENT_SOURCE_DIR}/docs/assets/sponsor.jpg"
+            ${LW_PPOCR_C_WEB_HTML_PDF_DEPENDS}
         COMMENT "Packaging the standalone offline OCR HTML demo"
         VERBATIM)
     add_custom_target(lw-ocr-html DEPENDS "${LW_PPOCR_C_WEB_HTML}")

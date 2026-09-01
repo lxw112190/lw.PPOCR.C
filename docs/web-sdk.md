@@ -9,6 +9,10 @@ The SDK is separate from **ocr-demo.html**: applications load the JavaScript
 SDK, while people who only need the ready-made interface can open the
 standalone HTML directly.
 
+The SDK itself accepts decoded image sources, not PDF documents. The standalone
+HTML has a separate, optional PDF.js frontend which renders one PDF page to a
+Canvas and passes that Canvas to this unchanged SDK.
+
 ## Quick start
 
 Place the release SDK beside the application page:
@@ -174,8 +178,8 @@ true, each line also includes:
 conversion. **inference_ms** measures the native DET/CLS/REC call.
 **total_ms** includes both and JavaScript result conversion.
 
-The standalone Demo adapts this object to the downloadable
-**schema_version: 1** format documented in
+The standalone Demo adapts image results to downloadable **schema_version: 1**
+and multi-page PDF results to **schema_version: 2**, documented in
 [OCR result export schema](ocr-export-schema.md). The C ABI is unchanged.
 
 ## State, status, and errors
@@ -231,7 +235,9 @@ Outputs:
 
 The SDK packager concatenates the generated Emscripten runtime directly with
 the wrapper. It does not use eval or new Function. The HTML packager then
-inlines the exact SDK artifact plus **web/ocr-demo-ui.js**.
+inlines the exact SDK artifact plus **web/ocr-demo-ui.js**. By default it also
+embeds the pinned PDF.js core and Worker for the standalone application only;
+`-DLW_WEB_PDF=OFF` omits that layer without changing the SDK.
 
 CI runs both browser suites:
 
@@ -241,6 +247,10 @@ python web/test_ocr_sdk.py \
   --sample models/ppocrv6-tiny/sample.jpg
 
 python web/test_ocr_html.py \
+  --html build-wasm/ocr-demo.html \
+  --sample models/ppocrv6-tiny/sample.jpg
+
+python web/test_pdf_html.py \
   --html build-wasm/ocr-demo.html \
   --sample models/ppocrv6-tiny/sample.jpg
 ~~~

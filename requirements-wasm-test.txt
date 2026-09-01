@@ -1,1 +1,2 @@
 playwright==1.62.0
+Pillow==10.4.0

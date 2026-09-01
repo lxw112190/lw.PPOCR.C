@@ -64,6 +64,10 @@ jobs:
           test -s build-wasm/ocr-demo.html
           ! grep -a -q '__LW_' build-wasm/lw-ppocr.js
           ! grep -a -q '__LW_' build-wasm/ocr-demo.html
+          ! grep -a -q 'LwPdf' build-wasm/lw-ppocr.js
+          grep -a -q '6.3.289' build-wasm/ocr-demo.html
+          echo 'f401927e692efc7735e0cd528c490d0dd31b7f0972c122b7040df805be45cce4  web/vendor/pdfjs/pdf.min.mjs' | sha256sum -c -
+          echo 'a33cfe728c584fdba4fcc1fd54bcdc2f9f2f13889ddbb5b2bd1d0f8cbe49b84e  web/vendor/pdfjs/pdf.worker.min.mjs' | sha256sum -c -
 
       - name: Run browser SDK contract and memory test
         run: >-
@@ -74,6 +78,12 @@ jobs:
       - name: Run standalone HTML UI test
         run: >-
           python web/test_ocr_html.py
+          --html build-wasm/ocr-demo.html
+          --sample models/ppocrv6-tiny/sample.jpg
+
+      - name: Run standalone PDF OCR test
+        run: >-
+          python web/test_pdf_html.py
           --html build-wasm/ocr-demo.html
           --sample models/ppocrv6-tiny/sample.jpg
 
