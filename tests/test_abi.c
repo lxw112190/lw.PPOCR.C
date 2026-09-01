@@ -25,6 +25,9 @@ _Static_assert(sizeof(lw_ocr_result) == 40u, "lw_ocr_result ABI changed");
 _Static_assert(LW_STATUS_OK == 0, "success status must remain zero");
 _Static_assert(LW_STATUS_UNSUPPORTED == 8, "status numbering changed");
 _Static_assert(LW_STATUS_MEMORY_LIMIT == 10, "status numbering changed");
+_Static_assert(LW_READING_ORDER_HORIZONTAL_LTR == 0, "reading order numbering changed");
+_Static_assert(LW_READING_ORDER_VERTICAL_RTL == 1, "reading order numbering changed");
+_Static_assert(LW_READING_ORDER_VERTICAL_LTR == 2, "reading order numbering changed");
 
 int main(void) {
     lw_model_options options;
@@ -44,6 +47,7 @@ int main(void) {
     lw_ocr_options ocr_options;
     lw_ocr_info ocr_info;
     lw_ocr_result ocr_result;
+    uint32_t reading_order = 99u;
     lw_model_options_init(&options);
     lw_error_init(&error);
     lw_tensor_desc_init(&tensor);
@@ -61,6 +65,14 @@ int main(void) {
     lw_ocr_options_init(&ocr_options);
     lw_ocr_info_init(&ocr_info);
     lw_ocr_result_init(&ocr_result);
+    if (lw_detector_set_reading_order(NULL, LW_READING_ORDER_VERTICAL_RTL, &error) !=
+            LW_STATUS_INVALID_ARGUMENT ||
+        lw_detector_get_reading_order(NULL, &reading_order, &error) !=
+            LW_STATUS_INVALID_ARGUMENT ||
+        lw_ocr_set_reading_order(NULL, LW_READING_ORDER_VERTICAL_RTL, &error) !=
+            LW_STATUS_INVALID_ARGUMENT ||
+        lw_ocr_get_reading_order(NULL, &reading_order, &error) != LW_STATUS_INVALID_ARGUMENT)
+        return 1;
     return options.struct_size == sizeof(options) && error.struct_size == sizeof(error) &&
                    tensor.struct_size == sizeof(tensor) &&
                    session_options.struct_size == sizeof(session_options) &&

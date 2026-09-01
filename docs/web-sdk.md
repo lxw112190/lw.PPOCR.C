@@ -30,7 +30,8 @@ Place the release SDK beside the application page:
     if (!ocr) {
       ocr = await LwPpocr.create({
         useCls: false,
-        maxImageSide: 1600
+        maxImageSide: 1600,
+        readingOrder: "horizontal-ltr"
       });
     }
     return ocr;
@@ -102,6 +103,7 @@ const engine = await LwPpocr.create({
 |---|---:|---:|---|
 | **useCls** | Boolean | false | Run text-orientation classification before recognition |
 | **maxImageSide** | integer | 1600 | Scale larger images down before OCR; zero disables this limit |
+| **readingOrder** | string | \`"horizontal-ltr"\` | Output order: \`"horizontal-ltr"\`, \`"vertical-rtl"\`, or \`"vertical-ltr"\` |
 
 Options belong to the engine. To change **useCls**, destroy the old engine and
 create another one. This keeps buffer ownership and concurrent-call behavior
@@ -124,6 +126,10 @@ The async **engine.recognize(source)** method accepts:
 
 ~~~javascript
 const result = await engine.recognize(file);
+// A one-call override is also supported and does not change the default:
+const vertical = await engine.recognize(file, {
+  readingOrder: "vertical-rtl"
+});
 ~~~
 
 Calls on the same engine must be serialized. Starting another recognition
@@ -144,7 +150,7 @@ The SDK returns a versioned object:
   "result_version": 1,
   "source": "article.png",
   "image": {"width": 1920, "height": 1080},
-  "options": {"use_cls": false},
+  "options": {"use_cls": false, "reading_order": "horizontal-ltr"},
   "timing": {
     "decode_ms": 4.125,
     "inference_ms": 86.75,

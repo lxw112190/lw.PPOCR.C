@@ -18,6 +18,7 @@
   const dropzone = document.getElementById("dropzone");
   const runButton = document.getElementById("run");
   const clsInput = document.getElementById("use-cls");
+  const readingOrderInput = document.getElementById("reading-order");
   const statusNode = document.getElementById("status");
   const statsNode = document.getElementById("stats");
   const canvas = document.getElementById("canvas");
@@ -555,6 +556,7 @@
   }
   async function createEngine() {
     clsInput.disabled = true;
+    readingOrderInput.disabled = true;
     statusNode.textContent = "正在加载 WASM 和模型…";
     if (window.__lwOcrBootStatus) {
       window.__lwOcrBootStatus.setPhase("正在初始化 WASM 和模型");
@@ -562,6 +564,7 @@
     try {
       const instance = await LwPpocr.create({
         useCls: clsInput.checked,
+        readingOrder: readingOrderInput.value,
         // The Demo owns image and PDF page sizing. The reusable SDK default
         // remains 1600 for third-party callers.
         maxImageSide: 0
@@ -578,6 +581,7 @@
       return instance;
     } finally {
       clsInput.disabled = false;
+      readingOrderInput.disabled = false;
     }
   }
   async function reconfigureCls() {
@@ -593,6 +597,7 @@
     fileInput.disabled = value;
     cameraInput.disabled = value;
     clsInput.disabled = value;
+    readingOrderInput.disabled = value;
     runButton.disabled = value && !canStop;
     runButton.classList.toggle("stop", value && canStop);
     runButton.textContent = value && canStop ? "停止" : "开始识别";
@@ -605,7 +610,9 @@
     clearLastResults();
     statusNode.textContent = "正在识别，页面仍可正常操作…";
     try {
-      const result = await engine.recognize(source.preparedCanvas);
+      const result = await engine.recognize(source.preparedCanvas, {
+        readingOrder: readingOrderInput.value
+      });
       const uiStarted = performance.now();
       drawResults(result.lines, result.image.width, result.image.height);
       lastResults = adaptImageResult(result);
@@ -658,7 +665,12 @@
       source_type: "pdf",
       source: pdfSource.file.name || "document.pdf",
       document: {page_count: pdfSource.pageCount, processed_pages: 0},
-      options: {use_cls: clsInput.checked, pdf_dpi: dpi, pdf_max_pixels: PDF_MAX_PIXELS},
+      options: {
+        use_cls: clsInput.checked,
+        reading_order: readingOrderInput.value,
+        pdf_dpi: dpi,
+        pdf_max_pixels: PDF_MAX_PIXELS
+      },
       timing: {
         pdf_load_ms: Number(pdfSource.pdfLoadMilliseconds.toFixed(3)),
         render_ms: 0,
@@ -696,7 +708,9 @@
           if (pdfSource.cancelled || source !== pdfSource) break;
           statusNode.textContent = "正在处理第 " + pageNumber + " / " +
             pdfSource.pageCount + " 页：OCR…";
-          const ocrResult = await engine.recognize(rendered.canvas);
+          const ocrResult = await engine.recognize(rendered.canvas, {
+            readingOrder: readingOrderInput.value
+          });
           inferenceTotal += ocrResult.timing.total_ms;
           if (source !== pdfSource) break;
           const uiStarted = performance.now();
@@ -879,6 +893,9 @@
       if (typeof options.useCls === "boolean" && options.useCls !== clsInput.checked) {
         clsInput.checked = options.useCls;
         await reconfigureCls();
+      }
+      if (typeof options.readingOrder === "string") {
+        readingOrderInput.value = options.readingOrder;
       }
       if (file) await selectFile(file);
       if (!source || source.kind !== "image" || !preparedSource) {

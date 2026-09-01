@@ -12,6 +12,21 @@
   // The runtime is concatenated directly before this wrapper. This copy is
   // only used to construct the optional offline Worker without eval/new Function.
   const WORKER_RUNTIME_SOURCE = __LW_RUNTIME_JS_JSON__;
+  const READING_ORDER_VALUES = Object.freeze({
+    "horizontal-ltr": 0,
+    "vertical-rtl": 1,
+    "vertical-ltr": 2
+  });
+
+  function normalizeReadingOrder(value, stage) {
+    if (value === undefined) return "horizontal-ltr";
+    if (typeof value === "string" &&
+        Object.prototype.hasOwnProperty.call(READING_ORDER_VALUES, value))
+      return value;
+    throw new LwPpocrError(
+      "readingOrder must be horizontal-ltr, vertical-rtl, or vertical-ltr",
+      "LW_OCR_OPTIONS", stage || "initialize");
+  }
 
   class LwPpocrError extends Error {
     constructor(message, code, stage) {
@@ -78,7 +93,7 @@
         resultSize
       };
     }
-    async function initialize(useCls) {
+    async function initialize(useCls, readingOrder) {
       if (!module) {
         module = await LwPpocrModule({});
         module.FS.mkdir("/models");
@@ -96,6 +111,8 @@
       }
       const status = module._lw_web_init(useCls ? 1 : 0);
       if (status !== 0) throw new Error("初始化失败：" + status);
+      if (module._lw_web_set_reading_order(readingOrder) !== 0)
+        throw new Error("reading order initialization failed");
       const infoSize = module._lw_web_info_size();
       if (infoSize !== 20) throw new Error("不支持的 Web ABI 信息大小：" + infoSize);
       const info = allocate(infoSize, "Web ABI 信息");
@@ -127,6 +144,8 @@
       }
       if (!inputId || inputId !== message.inputId) throw new Error("OCR 输入图像已经失效");
       const started = performance.now();
+      if (module._lw_web_set_reading_order(message.readingOrder) !== 0)
+        throw new Error("reading order configuration failed");
       const status = module._lw_web_run(
         pointers.source, message.byteLength, message.width, message.height,
         message.width * 3, pointers.lines, maxLines, pointers.text, maxText,
@@ -166,7 +185,8 @@
       const message = event.data;
       try {
         let response;
-        if (message.type === "initialize") response = await initialize(message.useCls);
+        if (message.type === "initialize")
+          response = await initialize(message.useCls, message.readingOrder);
         else if (message.type === "run") response = run(message);
         else throw new Error("未知的 Worker 请求：" + message.type);
         self.postMessage({requestId: message.requestId, ok: true, ...response});
@@ -184,7 +204,8 @@
     constructor(options) {
       this._options = {
         useCls: Boolean(options.useCls),
-        maxImageSide: options.maxImageSide === undefined ? 1600 : options.maxImageSide
+        maxImageSide: options.maxImageSide === undefined ? 1600 : options.maxImageSide,
+        readingOrder: normalizeReadingOrder(options.readingOrder)
       };
       this._state = "CREATING";
       this._backend = "loading";
@@ -243,7 +264,11 @@
         for (const request of this._pending.values()) request.reject(error);
         this._pending.clear();
       };
-      const ready = await this._workerRequest({type: "initialize", useCls: this._options.useCls});
+      const ready = await this._workerRequest({
+        type: "initialize",
+        useCls: this._options.useCls,
+        readingOrder: READING_ORDER_VALUES[this._options.readingOrder]
+      });
       this._applySnapshot(ready.snapshot);
       global.URL.revokeObjectURL(this._workerUrl);
       this._workerUrl = null;
@@ -269,6 +294,10 @@
       }
       const status = this._module._lw_web_init(this._options.useCls ? 1 : 0);
       if (status !== 0) throw new LwPpocrError("初始化失败：" + status, status, "initialize");
+      if (this._module._lw_web_set_reading_order(
+        READING_ORDER_VALUES[this._options.readingOrder]) !== 0) {
+        throw new LwPpocrError("reading order initialization failed", 1, "initialize");
+      }
       this._allocateDirectOutputs();
       this._lastHeapBytes = this._module.HEAPU8.buffer.byteLength;
     }
@@ -439,7 +468,17 @@
       return replacement;
     }
 
-    async recognize(source) {
+    async recognize(source, runOptions = {}) {
+      if (!runOptions || typeof runOptions !== "object") {
+        throw new LwPpocrError("recognize() options must be an object",
+          "LW_OCR_OPTIONS", "recognize");
+      }
+      const effectiveReadingOrder = normalizeReadingOrder(
+        runOptions.readingOrder === undefined
+          ? this._options.readingOrder
+          : runOptions.readingOrder,
+        "recognize"
+      );
       if (this._state === "DESTROYED") {
         throw new LwPpocrError("OCR 实例已经销毁", "LW_OCR_DESTROYED", "destroyed");
       }
@@ -455,6 +494,7 @@
           response = await this._workerRequest({
             type: "run",
             inputId: this._runCount + 1,
+            readingOrder: READING_ORDER_VALUES[effectiveReadingOrder],
             width: prepared.width,
             height: prepared.height,
             byteLength: prepared.byteLength,
@@ -464,6 +504,13 @@
         } else {
           const pointer = this._ensureDirectSource(prepared.byteLength);
           this._module.HEAPU8.set(prepared.pixels, pointer);
+          const readingOrderStatus = this._module._lw_web_set_reading_order(
+            READING_ORDER_VALUES[effectiveReadingOrder]
+          );
+          if (readingOrderStatus !== 0) {
+            throw new LwPpocrError("reading order configuration failed",
+              readingOrderStatus, "inference");
+          }
           const inferenceStarted = performance.now();
           const status = this._module._lw_web_run(
             pointer, prepared.byteLength, prepared.width, prepared.height,
@@ -508,7 +555,10 @@
           result_version: 1,
           source: prepared.source,
           image: {width: prepared.originalWidth, height: prepared.originalHeight},
-          options: {use_cls: this._options.useCls},
+          options: {
+            use_cls: this._options.useCls,
+            reading_order: effectiveReadingOrder
+          },
           timing: {
             decode_ms: Number(prepared.prepareMilliseconds.toFixed(3)),
             inference_ms: Number(response.inferenceMilliseconds.toFixed(3)),

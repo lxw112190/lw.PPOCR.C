@@ -52,6 +52,13 @@ typedef enum lw_dtype {
     LW_DTYPE_U8 = 4
 } lw_dtype;
 
+/* Output ordering policy. Horizontal LTR is the legacy default. */
+typedef enum lw_reading_order {
+    LW_READING_ORDER_HORIZONTAL_LTR = 0,
+    LW_READING_ORDER_VERTICAL_RTL = 1,
+    LW_READING_ORDER_VERTICAL_LTR = 2
+} lw_reading_order;
+
 /* Functions return a stable status code. The optional error object adds a
  * human-readable diagnostic and must be initialized before the first call. */
 typedef struct lw_error {
@@ -330,6 +337,10 @@ LW_API lw_status lw_detector_create(const char* model_path_utf8, const lw_detect
                                     lw_detector** out_detector, lw_error* error);
 LW_API void lw_detector_free(lw_detector* detector);
 LW_API lw_status lw_detector_get_info(const lw_detector* detector, lw_detector_info* info);
+LW_API lw_status lw_detector_set_reading_order(lw_detector* detector, uint32_t reading_order,
+                                               lw_error* error);
+LW_API lw_status lw_detector_get_reading_order(const lw_detector* detector,
+                                               uint32_t* reading_order, lw_error* error);
 LW_API lw_status lw_detector_detect_bgr_u8(lw_detector* detector, const uint8_t* source,
                                            uint64_t source_byte_count, uint32_t source_width,
                                            uint32_t source_height, uint32_t source_stride,
@@ -345,6 +356,9 @@ LW_API lw_status lw_ocr_create(const char* detector_model_path_utf8,
                                lw_ocr** out_ocr, lw_error* error);
 LW_API void lw_ocr_free(lw_ocr* ocr);
 LW_API lw_status lw_ocr_get_info(const lw_ocr* ocr, lw_ocr_info* info);
+LW_API lw_status lw_ocr_set_reading_order(lw_ocr* ocr, uint32_t reading_order, lw_error* error);
+LW_API lw_status lw_ocr_get_reading_order(const lw_ocr* ocr, uint32_t* reading_order,
+                                          lw_error* error);
 LW_API lw_status lw_ocr_run_bgr_u8(lw_ocr* ocr, const uint8_t* source, uint64_t source_byte_count,
                                    uint32_t source_width, uint32_t source_height,
                                    uint32_t source_stride, lw_ocr_line* lines,

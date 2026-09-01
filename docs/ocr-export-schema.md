@@ -13,7 +13,7 @@ the public C ABI.
   "schema_version": 1,
   "source": "article.png",
   "image": {"width": 1920, "height": 1080},
-  "options": {"use_cls": true},
+  "options": {"use_cls": true, "reading_order": "horizontal-ltr"},
   "elapsed_ms": 123.456,
   "lines": [
     {
@@ -68,6 +68,7 @@ image contract; a PDF result is not forced into the single-image shape.
   "document": {"page_count": 2, "processed_pages": 2},
   "options": {
     "use_cls": false,
+    "reading_order": "horizontal-ltr",
     "pdf_dpi": 180,
     "pdf_max_pixels": 5000000
   },

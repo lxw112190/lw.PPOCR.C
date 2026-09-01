@@ -246,25 +246,6 @@ static float clamp_float(float value, float maximum) {
     return value;
 }
 
-static void sort_reading_order(lw_detection_box* boxes, uint32_t count) {
-    uint32_t index;
-    for (index = 1u; index < count; ++index) {
-        lw_detection_box value = boxes[index];
-        uint32_t position = index;
-        while (position > 0u) {
-            lw_detection_box* previous = &boxes[position - 1u];
-            float delta_y = previous->y1 - value.y1;
-            int comes_after =
-                fabsf(delta_y) < 10.0f ? previous->x1 > value.x1 : previous->y1 > value.y1;
-            if (!comes_after)
-                break;
-            boxes[position] = *previous;
-            --position;
-        }
-        boxes[position] = value;
-    }
-}
-
 lw_status lw_db_postprocess_f32(const float* prediction, uint32_t map_width, uint32_t map_height,
                                 float bitmap_threshold, float box_threshold, float unclip_ratio,
                                 uint32_t use_dilation, uint32_t max_candidates,
@@ -458,9 +439,6 @@ lw_status lw_db_postprocess_f32(const float* prediction, uint32_t map_width, uin
         results[result_count].score = score;
         ++result_count;
     }
-    /* Stable top-to-bottom/left-to-right order makes downstream output
-     * deterministic and easier for applications to consume. */
-    sort_reading_order(results, result_count);
     *box_count = result_count;
     if (boxes != NULL) {
         if (box_capacity < result_count) {

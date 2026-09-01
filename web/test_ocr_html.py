@@ -133,7 +133,10 @@ def main() -> int:
 
         assert result["schema_version"] == 1
         assert result["source"] == sample.name
-        assert result["options"] == {"use_cls": True}
+        assert result["options"] == {
+            "use_cls": True,
+            "reading_order": "horizontal-ltr",
+        }
         assert result["image"]["width"] > 0 and result["image"]["height"] > 0
         assert result["elapsed_ms"] > 0
         assert len(result["lines"]) == 16

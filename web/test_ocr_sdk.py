@@ -128,7 +128,10 @@ def main() -> int:
             assert result["result_version"] == 1
             assert result["source"] == sample.name
             assert result["image"]["width"] > 0 and result["image"]["height"] > 0
-            assert result["options"] == {"use_cls": True}
+            assert result["options"] == {
+                "use_cls": True,
+                "reading_order": "horizontal-ltr",
+            }
             assert result["timing"]["decode_ms"] >= 0
             assert result["timing"]["inference_ms"] > 0
             assert result["timing"]["total_ms"] >= result["timing"]["inference_ms"]
@@ -143,6 +146,28 @@ def main() -> int:
                 assert 0 <= line["cls_score"] <= 1
                 assert line["cls_label"] in (0, 1)
                 assert line["rotation_degrees"] in (0, 180)
+
+            order_results = page.evaluate(
+                """async () => {
+                  const file = document.querySelector("#sample").files[0];
+                  const vertical = await window.__sdkEngine.recognize(file, {
+                    readingOrder: "vertical-rtl"
+                  });
+                  const restored = await window.__sdkEngine.recognize(file);
+                  let invalidCode = "";
+                  try {
+                    await window.__sdkEngine.recognize(file, {
+                      readingOrder: "unknown"
+                    });
+                  } catch (error) {
+                    invalidCode = error.code;
+                  }
+                  return {vertical, restored, invalidCode};
+                }"""
+            )
+            assert order_results["vertical"]["options"]["reading_order"] == "vertical-rtl"
+            assert order_results["restored"]["options"]["reading_order"] == "horizontal-ltr"
+            assert order_results["invalidCode"] == "LW_OCR_OPTIONS"
 
             # All documented source types are accepted. Canvas and ImageData
             # intentionally report "image" because neither has a filename.
@@ -235,7 +260,10 @@ def main() -> int:
             assert lifecycle["destroyedCode"] == "LW_OCR_DESTROYED"
             assert lifecycle["destroyedStatus"]["state"] == "DESTROYED"
             without_cls = lifecycle["result"]
-            assert without_cls["options"] == {"use_cls": False}
+            assert without_cls["options"] == {
+                "use_cls": False,
+                "reading_order": "horizontal-ltr",
+            }
             # Disabling CLS intentionally changes orientation handling, so its
             # text is not required to match the CLS-enabled checksum.
             assert len(without_cls["lines"]) == 16

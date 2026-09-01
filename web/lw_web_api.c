@@ -77,6 +77,7 @@ static lw_ocr* g_ocr;
 static lw_ocr_info g_ocr_info;
 static lw_ocr_line* g_native_lines;
 static lw_error g_error;
+static uint32_t g_reading_order = LW_READING_ORDER_HORIZONTAL_LTR;
 
 static int allocation_fits(uint64_t count, size_t element_size) {
     return element_size != 0u && count <= (uint64_t)(SIZE_MAX / element_size);
@@ -104,6 +105,7 @@ static void release_ocr(void) {
     lw_ocr_free(g_ocr);
     g_ocr = NULL;
     memset(&g_ocr_info, 0, sizeof(g_ocr_info));
+    g_reading_order = LW_READING_ORDER_HORIZONTAL_LTR;
 }
 
 LW_WEB_API int lw_web_init(int use_classifier) {
@@ -119,6 +121,11 @@ LW_WEB_API int lw_web_init(int use_classifier) {
                            "/models/rec.lwm", "/models/ppocr_keys.txt", &options, &g_ocr,
                            &g_error);
     if (status != LW_STATUS_OK) {
+        return (int)status;
+    }
+    status = lw_ocr_set_reading_order(g_ocr, g_reading_order, &g_error);
+    if (status != LW_STATUS_OK) {
+        release_ocr();
         return (int)status;
     }
 
@@ -165,6 +172,17 @@ LW_WEB_API int lw_web_get_info(lw_web_info* info) {
     info->line_size = (uint32_t)sizeof(lw_web_line);
     info->result_size = (uint32_t)sizeof(lw_web_result);
     return (int)LW_STATUS_OK;
+}
+
+LW_WEB_API int lw_web_set_reading_order(uint32_t reading_order) {
+    lw_status status;
+    if (!lw_reading_order_is_valid(reading_order))
+        return web_fail(LW_STATUS_INVALID_ARGUMENT, "invalid reading order");
+    g_reading_order = reading_order;
+    if (g_ocr == NULL)
+        return (int)LW_STATUS_OK;
+    status = lw_ocr_set_reading_order(g_ocr, reading_order, &g_error);
+    return (int)status;
 }
 
 LW_WEB_API int lw_web_run(const uint8_t* source, uint32_t source_byte_count,

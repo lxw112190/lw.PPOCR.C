@@ -188,6 +188,7 @@ def main() -> int:
             assert result["document"] == {"page_count": 2, "processed_pages": 2}
             assert result["options"] == {
                 "use_cls": False,
+                "reading_order": "horizontal-ltr",
                 "pdf_dpi": 180,
                 "pdf_max_pixels": 5_000_000,
             }

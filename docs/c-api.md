@@ -236,6 +236,26 @@ clockwise points beginning near the top-left, a region score, and a reserved
 zero field. Coordinates are floating-point values clamped to the original
 image.
 
+Detection boxes use \`LW_READING_ORDER_HORIZONTAL_LTR\` by default, preserving
+the historical top-to-bottom/left-to-right ordering. Applications that process
+traditional vertical text can select \`LW_READING_ORDER_VERTICAL_RTL\` (right
+column to left column) or \`LW_READING_ORDER_VERTICAL_LTR\` before detection:
+
+~~~c
+lw_error error;
+lw_error_init(&error);
+if (lw_detector_set_reading_order(
+        detector, LW_READING_ORDER_VERTICAL_RTL, &error) != LW_STATUS_OK) {
+    /* inspect error.message */
+}
+~~~
+
+The setter changes only the order of returned boxes; it does not change
+geometry, scores, recognition, model execution, or the LWM format. Handles
+must not be used concurrently, so configure the policy before a call. The
+corresponding \`lw_detector_get_reading_order\` and
+\`lw_ocr_set/get_reading_order\` functions use the same stable \`uint32_t\` values.
+
 For an efficient single call, obtain `lw_detector_info.max_candidates` and
 allocate that many boxes. For exact allocation, pass null boxes with zero
 capacity, allocate `required_box_capacity`, then call again. An undersized

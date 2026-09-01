@@ -4,6 +4,7 @@
 /* Private boundary between DET preprocessing, inference and postprocessing. */
 
 #include "lw_infer.h"
+#include "reading_order.h"
 
 #include <stdint.h>
 

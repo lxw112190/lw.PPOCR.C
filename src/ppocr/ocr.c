@@ -374,6 +374,22 @@ lw_status lw_ocr_get_info(const lw_ocr* ocr, lw_ocr_info* info) {
     return LW_STATUS_OK;
 }
 
+lw_status lw_ocr_set_reading_order(lw_ocr* ocr, uint32_t reading_order, lw_error* error) {
+    if (ocr == NULL) {
+        lw_set_error(error, LW_STATUS_INVALID_ARGUMENT, "OCR handle is required");
+        return LW_STATUS_INVALID_ARGUMENT;
+    }
+    return lw_detector_set_reading_order(ocr->detector, reading_order, error);
+}
+
+lw_status lw_ocr_get_reading_order(const lw_ocr* ocr, uint32_t* reading_order, lw_error* error) {
+    if (ocr == NULL) {
+        lw_set_error(error, LW_STATUS_INVALID_ARGUMENT, "OCR handle is required");
+        return LW_STATUS_INVALID_ARGUMENT;
+    }
+    return lw_detector_get_reading_order(ocr->detector, reading_order, error);
+}
+
 static lw_status ensure_crop_capacity(lw_ocr* ocr, uint64_t byte_count, lw_error* error) {
     uint8_t* resized;
     if (byte_count <= ocr->crop_capacity)

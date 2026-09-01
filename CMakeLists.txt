@@ -188,6 +188,7 @@ set(LW_PPOCR_C_SOURCES
     src/ppocr/detector.c
     src/ppocr/ocr.c
     src/ppocr/profile.c
+    src/ppocr/reading_order.c
     src/ppocr/rec_preprocess.c
     src/ppocr/recognizer.c
     src/runtime/executor.c
@@ -337,7 +338,7 @@ if(EMSCRIPTEN)
         "-sMODULARIZE=1" "-sEXPORT_NAME=LwPpocrModule" "-sSINGLE_FILE=1"
         "-sFORCE_FILESYSTEM=1" "-sALLOW_MEMORY_GROWTH=1" "-sNO_EXIT_RUNTIME=1"
         "-sEXPORTED_RUNTIME_METHODS=['FS','HEAPU8','HEAPU32','HEAPF32']"
-        "-sEXPORTED_FUNCTIONS=['_lw_web_init','_lw_web_shutdown','_lw_web_info_size','_lw_web_get_info','_lw_web_run','_lw_web_last_error','_lw_web_malloc','_lw_web_free']"
+        "-sEXPORTED_FUNCTIONS=['_lw_web_init','_lw_web_shutdown','_lw_web_info_size','_lw_web_get_info','_lw_web_set_reading_order','_lw_web_run','_lw_web_last_error','_lw_web_malloc','_lw_web_free']"
         "--no-entry")
     set_target_properties(lw_ppocr_web PROPERTIES OUTPUT_NAME "lw_ppocr_web")
     add_dependencies(lw_ppocr_web convert_det_model convert_cls_model convert_rec_model)
@@ -426,7 +427,7 @@ if(EMSCRIPTEN)
         "-sENVIRONMENT=node" "-sFORCE_FILESYSTEM=1" "-sALLOW_MEMORY_GROWTH=1"
         "-sNO_EXIT_RUNTIME=1"
         "-sEXPORTED_RUNTIME_METHODS=['FS','HEAPU8','HEAPU32','HEAPF32']"
-        "-sEXPORTED_FUNCTIONS=['_lw_web_init','_lw_web_shutdown','_lw_web_info_size','_lw_web_get_info','_lw_web_run','_lw_web_last_error','_lw_web_malloc','_lw_web_free']"
+        "-sEXPORTED_FUNCTIONS=['_lw_web_init','_lw_web_shutdown','_lw_web_info_size','_lw_web_get_info','_lw_web_set_reading_order','_lw_web_run','_lw_web_last_error','_lw_web_malloc','_lw_web_free']"
         "--no-entry")
     set_target_properties(lw_ppocr_node PROPERTIES OUTPUT_NAME "lw_ppocr_node")
     add_dependencies(lw_ppocr_node convert_det_model convert_cls_model convert_rec_model)
@@ -1153,6 +1154,17 @@ if(BUILD_TESTING AND NOT EMSCRIPTEN)
     set_tests_properties(det_pipeline_reference PROPERTIES
         WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
         TIMEOUT 900)
+
+    add_executable(reading-order-driver tests/reading_order_driver.c)
+    target_link_libraries(reading-order-driver PRIVATE lw_ppocr_c)
+    target_include_directories(reading-order-driver PRIVATE src/ppocr)
+    target_compile_features(reading-order-driver PRIVATE c_std_11)
+    if(MSVC)
+        target_compile_options(reading-order-driver PRIVATE /W4 /WX /utf-8)
+    else()
+        target_compile_options(reading-order-driver PRIVATE -Wall -Wextra -Wpedantic -Werror)
+    endif()
+    add_test(NAME reading_order_sorting COMMAND reading-order-driver)
 
     add_executable(ocr-pipeline-driver tests/ocr_pipeline_driver.c)
     target_link_libraries(ocr-pipeline-driver PRIVATE lw_ppocr_c)

@@ -31,6 +31,7 @@ struct lw_detector {
     uint32_t resized_width;
     uint32_t resized_height;
     uint32_t intra_op_thread_count;
+    uint32_t reading_order;
     lw_session_options session_options;
     lw_detector_info info;
 };
@@ -212,6 +213,7 @@ lw_status lw_detector_create(const char* model_path_utf8, const lw_detector_opti
         return LW_STATUS_OUT_OF_MEMORY;
     }
     detector->intra_op_thread_count = 1u;
+    detector->reading_order = LW_READING_ORDER_HORIZONTAL_LTR;
     status = validate_options(options, &detector->info, &model_options, &detector->session_options,
                               error);
     if (status != LW_STATUS_OK)
@@ -258,6 +260,28 @@ lw_status lw_detector_get_info(const lw_detector* detector, lw_detector_info* in
     if (detector == NULL || info == NULL || info->struct_size != sizeof(*info))
         return LW_STATUS_INVALID_ARGUMENT;
     *info = detector->info;
+    return LW_STATUS_OK;
+}
+
+lw_status lw_detector_set_reading_order(lw_detector* detector, uint32_t reading_order,
+                                        lw_error* error) {
+    if (detector == NULL || !lw_reading_order_is_valid(reading_order)) {
+        lw_set_error(error, LW_STATUS_INVALID_ARGUMENT, "invalid reading order");
+        return LW_STATUS_INVALID_ARGUMENT;
+    }
+    detector->reading_order = reading_order;
+    lw_set_error(error, LW_STATUS_OK, "");
+    return LW_STATUS_OK;
+}
+
+lw_status lw_detector_get_reading_order(const lw_detector* detector, uint32_t* reading_order,
+                                        lw_error* error) {
+    if (detector == NULL || reading_order == NULL) {
+        lw_set_error(error, LW_STATUS_INVALID_ARGUMENT, "detector and output are required");
+        return LW_STATUS_INVALID_ARGUMENT;
+    }
+    *reading_order = detector->reading_order;
+    lw_set_error(error, LW_STATUS_OK, "");
     return LW_STATUS_OK;
 }
 
@@ -341,6 +365,13 @@ static lw_status detector_detect_bgr_u8_impl(
                      status == LW_STATUS_OUT_OF_BOUNDS ? "box buffer capacity is insufficient"
                                                        : "detector postprocessing failed");
         return status;
+    }
+    if (boxes != NULL) {
+        status = lw_sort_detection_boxes(boxes, box_count, detector->reading_order);
+        if (status != LW_STATUS_OK) {
+            lw_set_error(error, status, "unable to sort detection boxes");
+            return status;
+        }
     }
     lw_set_error(error, LW_STATUS_OK, "");
     return LW_STATUS_OK;
