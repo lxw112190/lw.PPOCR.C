@@ -24,7 +24,8 @@ lw_status lw_db_postprocess_f32(const float* prediction, uint32_t map_width, uin
                                 float height_ratio, lw_detection_box* boxes, uint32_t box_capacity,
                                 uint32_t* box_count);
 
-/* Full OCR shares its worker budget with DET only while DET is running. */
+/* Full OCR gives DET an independent phase-local intra-op budget. */
 void lw_detector_set_intra_op_thread_count(lw_detector* detector, uint32_t thread_count);
+uint32_t lw_detector_get_intra_op_thread_count(const lw_detector* detector);
 
 #endif

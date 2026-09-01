@@ -60,12 +60,15 @@ tensor, workspace, and model-size limits.
 
 Native 64-bit builds default to the online logical-processor count capped at
 eight workers; x86 and WebAssembly default to one.
-`lw_ocr_options.worker_count` accepts `1..16`. The same budget is used by the
-detector's fixed thread pool for sufficiently large output-channel-parallel
-convolutions; DET completes before the independent CLS/REC line workers start,
-so these phases do not oversubscribe each other. More workers trade model,
-workspace, crop, and thread resources for lower latency, so applications should
-benchmark `1`, `2`, `4`, and `8` on their target CPU and memory budget.
+`lw_ocr_options.worker_count` accepts `1..16` and controls only independent
+CLS/REC line workers. The detector has a separate fixed thread pool. Native
+64-bit builds derive its capacity from the process's available physical-core
+budget, capped at eight; x86 and WebAssembly use one. Sufficiently large Conv
+nodes select an active subset from that persistent pool while smaller nodes
+stay serial. DET completes before CLS/REC line workers start, so the two
+parallel phases do not overlap. More line workers trade model, workspace, crop,
+and thread resources for lower latency, so applications should benchmark `1`,
+`2`, `4`, and `8` on their target CPU and memory budget.
 
 The detector's DB postprocessor may allocate bounded transient scratch. The
 full-OCR path therefore promises bounded resources and buffer reuse, not zero

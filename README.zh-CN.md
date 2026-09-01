@@ -16,8 +16,11 @@ Python、OpenCV、ONNX Runtime、OpenVINO、TensorRT 或 protobuf，适合将文
 - 纯 C11 核心，公共 ABI 不暴露 C++、STL 或第三方库类型；
 - 支持标量、x86 SSE2/AVX2、AArch64 NEON 和 LoongArch LSX 运行时自动分派，
   不支持对应 SIMD 时自动回退；
-- 完整 OCR 在 DET 后使用独立 CLS/REC worker 并行处理文字行；原生 64 位默认 4 个，
-  x86 与 WebAssembly 默认 1 个，可通过 `lw_ocr_options.worker_count` 调整；
+- 完整 OCR 在 DET 后使用独立 CLS/REC worker 并行处理文字行；原生 64 位默认使用进程
+  可用逻辑处理器数且最多 8 个，x86 与 WebAssembly 默认 1 个，可通过
+  `lw_ocr_options.worker_count` 调整；
+- 原生 64 位 DET 根据进程可用 CPU 和物理核心数单独选择 intra-op 线程（最多 8 个），
+  不再与 CLS/REC 的 `worker_count` 绑定；x86 与 WebAssembly 保持单线程；
 - 输入为调用方已经解码的 BGR8 图像，核心库不绑定具体图片解码库；
 - 提供 C 命令行示例、C# WinForms Demo、原生 HTTP/Web Demo 和单文件离线 WASM Demo；
 - 单文件 WASM Demo 可在本地打开图片或 PDF，按当前页或全部页面顺序 OCR，并导出分页 JSON；
@@ -52,8 +55,8 @@ PP-OCR ONNX 模型
 - 模型：PP-OCRv6 tiny；
 - 精度与设备：FP32、CPU；
 - 指令集：标量、x86 SSE2/AVX2、AArch64 NEON、LoongArch LSX；
-- 线程模型：单个 OCR 句柄仍由调用方串行使用，但句柄内部可并行处理不同文字行；
-  多个句柄也可以由应用自行并行调度；
+- 线程模型：单个 OCR 句柄仍由调用方串行使用；句柄内部先以独立 CPU 预算执行 DET，
+  再并行处理不同文字行。多个句柄也可以由应用自行并行调度；
 - 首要平台：Windows x64、Linux x64；
 - 手动客户构建工作流可生成原生 Linux ARM64 包，以及经 QEMU 验证的实验性 Linux
   LoongArch64 包；客户实体机验证仍是独立门槛；

@@ -8,8 +8,10 @@
  */
 
 #include "crop_internal.h"
+#include "cpu_topology.h"
 #include "det_internal.h"
 #include "error_internal.h"
+#include "ocr_internal.h"
 #include "profile_internal.h"
 #include "rec_internal.h"
 
@@ -30,8 +32,6 @@
 
 #define LW_OCR_DEFAULT_MAX_CROP_PIXELS UINT64_C(16000000)
 #define LW_OCR_MAX_WORKER_COUNT 16u
-#define LW_OCR_DEFAULT_NATIVE_WORKER_CAP 8u
-#define LW_OCR_DEFAULT_NATIVE_WORKER_FALLBACK 4u
 
 typedef struct lw_ocr_crop {
     uint64_t offset;
@@ -64,6 +64,8 @@ struct lw_ocr {
     lw_classifier** classifiers;
     lw_recognizer** recognizers;
     uint32_t worker_count;
+    uint32_t det_intra_op_thread_cap;
+    lw_cpu_topology cpu_topology;
     lw_detection_box* detected_boxes;
     lw_ocr_line* scratch_lines;
     char* scratch_text;
@@ -97,27 +99,9 @@ static int allocation_fits(uint64_t count, size_t element_size) {
 }
 
 static uint32_t default_worker_count(void) {
-#if INTPTR_MAX <= INT32_MAX || defined(__EMSCRIPTEN__)
-    return 1u;
-#else
-    uint32_t processor_count = 0u;
-#  if defined(_WIN32)
-    SYSTEM_INFO system_info;
-    GetSystemInfo(&system_info);
-    processor_count = (uint32_t)system_info.dwNumberOfProcessors;
-#  else
-    long online_processors = sysconf(_SC_NPROCESSORS_ONLN);
-    if (online_processors > 0) {
-        processor_count = online_processors > (long)UINT32_MAX ? UINT32_MAX
-                                                               : (uint32_t)online_processors;
-    }
-#  endif
-    if (processor_count == 0u)
-        processor_count = LW_OCR_DEFAULT_NATIVE_WORKER_FALLBACK;
-    if (processor_count > LW_OCR_DEFAULT_NATIVE_WORKER_CAP)
-        processor_count = LW_OCR_DEFAULT_NATIVE_WORKER_CAP;
-    return processor_count;
-#endif
+    lw_cpu_topology topology;
+    lw_cpu_topology_detect(&topology);
+    return lw_parallel_default_line_worker_count(&topology);
 }
 
 static void clear_result(lw_ocr_result* result) {
@@ -224,7 +208,9 @@ lw_status lw_ocr_create(const char* detector_model_path_utf8,
     status = lw_detector_create(detector_model_path_utf8, &values.detector, &ocr->detector, error);
     if (status != LW_STATUS_OK)
         goto fail;
-    lw_detector_set_intra_op_thread_count(ocr->detector, values.worker_count);
+    lw_cpu_topology_detect(&ocr->cpu_topology);
+    ocr->det_intra_op_thread_cap = lw_parallel_default_det_thread_count(&ocr->cpu_topology);
+    lw_detector_set_intra_op_thread_count(ocr->detector, ocr->det_intra_op_thread_cap);
     ocr->worker_count = values.worker_count;
     ocr->classifiers = (lw_classifier**)calloc(ocr->worker_count, sizeof(*ocr->classifiers));
     ocr->recognizers = (lw_recognizer**)calloc(ocr->worker_count, sizeof(*ocr->recognizers));
@@ -321,6 +307,39 @@ lw_status lw_ocr_create(const char* detector_model_path_utf8,
 fail:
     lw_ocr_free(ocr);
     return status;
+}
+
+void lw_ocr_set_det_intra_op_thread_count(lw_ocr* ocr, uint32_t thread_count) {
+    if (ocr == NULL) {
+        return;
+    }
+    if (thread_count == 0u) {
+        thread_count = lw_parallel_default_det_thread_count(&ocr->cpu_topology);
+    }
+    if (thread_count > LW_OCR_MAX_WORKER_COUNT) {
+        thread_count = LW_OCR_MAX_WORKER_COUNT;
+    }
+    ocr->det_intra_op_thread_cap = thread_count;
+    lw_detector_set_intra_op_thread_count(ocr->detector, thread_count);
+}
+
+uint32_t lw_ocr_get_det_intra_op_thread_count(const lw_ocr* ocr) {
+    return ocr == NULL ? 1u : lw_detector_get_intra_op_thread_count(ocr->detector);
+}
+
+uint32_t lw_ocr_get_det_intra_op_thread_cap(const lw_ocr* ocr) {
+    return ocr == NULL ? 1u : ocr->det_intra_op_thread_cap;
+}
+
+void lw_ocr_get_cpu_topology(const lw_ocr* ocr, lw_cpu_topology* topology) {
+    if (topology == NULL) {
+        return;
+    }
+    if (ocr == NULL) {
+        memset(topology, 0, sizeof(*topology));
+        return;
+    }
+    *topology = ocr->cpu_topology;
 }
 
 void lw_ocr_free(lw_ocr* ocr) {

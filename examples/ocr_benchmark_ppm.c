@@ -7,6 +7,9 @@
 /* Reusable-handle benchmark for DET and the complete DET/CLS/REC pipeline. */
 #include "cpu_features.h"
 #include "ppm_image.h"
+#if defined(LW_OCR_BENCHMARK_INTERNAL)
+#  include "ocr_internal.h"
+#endif
 
 #include <errno.h>
 #include <stdint.h>
@@ -180,6 +183,9 @@ static int benchmark_main(int argc, char** argv) {
     uint32_t iteration_count = 10u;
     uint32_t worker_count = 0u;
     uint32_t rec_target_width = 320u;
+#if defined(LW_OCR_BENCHMARK_INTERNAL)
+    uint32_t det_intra_op_threads = 0u;
+#endif
     uint32_t index;
     uint32_t reference_line_count = 0u;
     uint64_t reference_text_capacity = 0u;
@@ -192,15 +198,29 @@ static int benchmark_main(int argc, char** argv) {
     int exit_code = 1;
 
     memset(&image, 0, sizeof(image));
-    if (argc < 6 || argc > 10 || (argc >= 7 && !parse_positive_u32(argv[6], &warmup_count)) ||
+    if (argc < 6 ||
+#if defined(LW_OCR_BENCHMARK_INTERNAL)
+        argc > 11 ||
+#else
+        argc > 10 ||
+#endif
+        (argc >= 7 && !parse_positive_u32(argv[6], &warmup_count)) ||
         (argc >= 8 && !parse_positive_u32(argv[7], &iteration_count)) ||
         (argc >= 9 && !parse_positive_u32(argv[8], &worker_count)) ||
         (argc >= 10 && !parse_positive_u32(argv[9], &rec_target_width)) ||
+#if defined(LW_OCR_BENCHMARK_INTERNAL)
+        (argc >= 11 &&
+         (!parse_positive_u32(argv[10], &det_intra_op_threads) || det_intra_op_threads > 16u)) ||
+#endif
         warmup_count > LW_OCR_BENCHMARK_MAX_ITERATIONS ||
         iteration_count > LW_OCR_BENCHMARK_MAX_ITERATIONS) {
         fprintf(stderr, "usage: lw-ocr-benchmark <det.lwm> <cls.lwm> <rec.lwm> "
                         "<dictionary.txt> <image.ppm> [warmup=2] [iterations=10] "
-                        "[workers=platform-default] [rec-target-width=320]\n");
+                        "[workers=platform-default] [rec-target-width=320]"
+#if defined(LW_OCR_BENCHMARK_INTERNAL)
+                        " [det-intra-op=auto]"
+#endif
+                        "\n");
         return 2;
     }
     if (!lw_example_ppm_image_load_bgr(argv[5], &image) || image.width > UINT32_MAX / 3u) {
@@ -236,6 +256,11 @@ static int benchmark_main(int argc, char** argv) {
         fprintf(stderr, "OCR create failed: %s: %s\n", lw_status_string(status), error.message);
         goto cleanup;
     }
+#if defined(LW_OCR_BENCHMARK_INTERNAL)
+    if (det_intra_op_threads != 0u) {
+        lw_ocr_set_det_intra_op_thread_count(ocr, det_intra_op_threads);
+    }
+#endif
     lw_ocr_info_init(&ocr_info);
     if (lw_ocr_get_info(ocr, &ocr_info) != LW_STATUS_OK || ocr_info.max_line_capacity == 0u ||
         !allocation_fits(ocr_info.max_line_capacity, sizeof(*lines)) ||
@@ -305,6 +330,10 @@ static int benchmark_main(int argc, char** argv) {
            "\"rec_target_width\":%u,",
            image.width, image.height, reference_line_count, ocr_info.worker_count,
            rec_target_width);
+#if defined(LW_OCR_BENCHMARK_INTERNAL)
+    printf("\"det_intra_cap\":%u,\"det_intra_actual\":%u,", lw_ocr_get_det_intra_op_thread_cap(ocr),
+           lw_ocr_get_det_intra_op_thread_count(ocr));
+#endif
     printf("\"warmup\":%u,\"iterations\":%u,", warmup_count, iteration_count);
     printf("\"detector_ms\":{\"mean\":%.6f,\"p95\":%.6f},", detector_sum / iteration_count,
            percentile(sorted, iteration_count, 95u));

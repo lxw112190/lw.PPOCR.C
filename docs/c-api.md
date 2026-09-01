@@ -280,6 +280,13 @@ after DET; x86 and WebAssembly use one. Set `worker_count` in `1..16` to
 override that policy. Initialize the outer and nested structures with
 `lw_ocr_options_init`; remaining reserved fields must stay zero.
 
+`worker_count` does not control DET operator parallelism. On native 64-bit
+builds the runtime detects the process CPU budget once when the OCR handle is
+created and gives DET a separate persistent intra-op pool, capped at eight
+physical cores. Large eligible Conv nodes choose an active subset of that pool;
+x86 and WebAssembly remain serial. This policy is internal and does not change
+the public structure layout or ABI.
+
 Set `use_direction_classification` to zero to omit CLS. In that mode the CLS
 model path may be null, classification fields are zero, and no 180-degree
 correction is applied. Otherwise, an odd classifier label whose score is

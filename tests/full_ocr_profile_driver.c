@@ -6,6 +6,7 @@
 #include "det_internal.h"
 #include "lwm_read.h"
 #include "model_internal.h"
+#include "ocr_internal.h"
 #include "ppm_image.h"
 #include "profile_internal.h"
 #include "session_internal.h"
@@ -151,6 +152,7 @@ int main(int argc, char** argv) {
     uint32_t iterations;
     uint32_t workers;
     uint32_t rec_target_width = 320u;
+    uint32_t det_intra_op_threads = 0u;
     uint32_t iteration;
     uint32_t reference_line_count;
     uint32_t det_width;
@@ -161,9 +163,12 @@ int main(int argc, char** argv) {
     uint64_t graph_work_nanoseconds = 0u;
     uint64_t conv_nanoseconds = 0u;
     uint64_t conv_invocations = 0u;
+    uint64_t det_serial_conv_invocations = 0u;
+    uint64_t det_parallel_conv_invocations = 0u;
     double mean_rec_width;
     double mean_rec_padding_ratio;
     uint32_t index;
+    lw_cpu_topology cpu_topology;
     lw_error error;
     lw_status status;
     int exit_code = 1;
@@ -174,12 +179,14 @@ int main(int argc, char** argv) {
 #endif
 
     memset(&image, 0, sizeof(image));
-    if ((argc != 8 && argc != 9) || !parse_positive_u32(argv[6], &iterations) ||
-        iterations > 100u || !parse_positive_u32(argv[7], &workers) || workers > 16u ||
-        (argc == 9 && !parse_positive_u32(argv[8], &rec_target_width))) {
+    if ((argc < 8 || argc > 10) || !parse_positive_u32(argv[6], &iterations) || iterations > 100u ||
+        !parse_positive_u32(argv[7], &workers) || workers > 16u ||
+        (argc >= 9 && !parse_positive_u32(argv[8], &rec_target_width)) ||
+        (argc == 10 &&
+         (!parse_positive_u32(argv[9], &det_intra_op_threads) || det_intra_op_threads > 16u))) {
         fprintf(stderr, "usage: full-ocr-profile-driver <det.lwm> <cls.lwm> <rec.lwm> "
                         "<dictionary.txt> <image.ppm> <iterations> <workers> "
-                        "[rec-target-width]\n");
+                        "[rec-target-width] [det-intra-op-threads]\n");
         return 2;
     }
     if (!lw_example_ppm_image_load_bgr(argv[5], &image) || image.width > UINT32_MAX / 3u) {
@@ -223,6 +230,10 @@ int main(int argc, char** argv) {
         fprintf(stderr, "OCR create failed: %s: %s\n", lw_status_string(status), error.message);
         goto cleanup;
     }
+    if (det_intra_op_threads != 0u) {
+        lw_ocr_set_det_intra_op_thread_count(ocr, det_intra_op_threads);
+    }
+    lw_ocr_get_cpu_topology(ocr, &cpu_topology);
     lw_ocr_info_init(&info);
     if (lw_ocr_get_info(ocr, &info) != LW_STATUS_OK || info.max_line_capacity == 0u ||
         !allocation_fits(info.max_line_capacity, sizeof(*lines)) || info.max_text_capacity == 0u ||
@@ -291,22 +302,42 @@ int main(int argc, char** argv) {
         conv_nanoseconds = add_saturated(conv_nanoseconds, class_ns);
         conv_invocations = add_saturated(conv_invocations, class_calls);
     }
-    mean_rec_width = profile.rec_width_sample_count == 0u
-                         ? 0.0
-                         : (double)profile.rec_resized_width_sum /
-                               (double)profile.rec_width_sample_count;
-    mean_rec_padding_ratio = profile.rec_target_width_sum == 0u
-                                 ? 0.0
-                                 : 1.0 - (double)profile.rec_resized_width_sum /
-                                             (double)profile.rec_target_width_sum;
+    mean_rec_width =
+        profile.rec_width_sample_count == 0u
+            ? 0.0
+            : (double)profile.rec_resized_width_sum / (double)profile.rec_width_sample_count;
+    mean_rec_padding_ratio =
+        profile.rec_target_width_sum == 0u
+            ? 0.0
+            : 1.0 - (double)profile.rec_resized_width_sum / (double)profile.rec_target_width_sum;
 
+    det_serial_conv_invocations = profile.detector.execution.conv_thread_histogram[1];
+    for (index = 2u; index < LW_EXECUTION_PROFILE_THREAD_HISTOGRAM_CAPACITY; ++index) {
+        det_parallel_conv_invocations += profile.detector.execution.conv_thread_histogram[index];
+    }
     printf("{\"schema_version\":1,\"image_width\":%u,\"image_height\":%u,", image.width,
            image.height);
     printf("\"iterations\":%u,\"workers\":%u,\"rec_target_width\":%u,\"lines\":%u,"
            "\"output_checksum\":\"%016llx\",",
            iterations, workers, rec_target_width, reference_line_count,
-           (unsigned long long)hash_bytes((const uint8_t*)reference_text,
-                                          reference_text_capacity));
+           (unsigned long long)hash_bytes((const uint8_t*)reference_text, reference_text_capacity));
+    printf("\"parallel\":{\"logical_processors\":%u,\"physical_cores\":%u,"
+           "\"available_processors\":%u,\"smt_width\":%u,"
+           "\"det_intra_cap\":%u,\"det_intra_actual\":%u,"
+           "\"serial_conv_invocations\":%llu,\"parallel_conv_invocations\":%llu,"
+           "\"det_conv_thread_histogram\":[",
+           cpu_topology.logical_processors, cpu_topology.physical_cores,
+           cpu_topology.available_processors, cpu_topology.smt_width,
+           lw_ocr_get_det_intra_op_thread_cap(ocr), lw_ocr_get_det_intra_op_thread_count(ocr),
+           (unsigned long long)det_serial_conv_invocations,
+           (unsigned long long)det_parallel_conv_invocations);
+    for (index = 1u; index < LW_EXECUTION_PROFILE_THREAD_HISTOGRAM_CAPACITY; ++index) {
+        if (index != 1u) {
+            putchar(',');
+        }
+        printf("%llu", (unsigned long long)profile.detector.execution.conv_thread_histogram[index]);
+    }
+    printf("]},");
     printf("\"wall_nanoseconds\":{");
     printf("\"total\":%llu,\"det_preprocess\":%llu,\"det_graph\":%llu,",
            (unsigned long long)profile.total_nanoseconds,

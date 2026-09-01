@@ -32,7 +32,12 @@ EXPECTED_OPERATORS = {
 
 
 class FullOcrProfileTest(unittest.TestCase):
-    def run_profile(self, workers: int, target_width: int | None = None) -> dict:
+    def run_profile(
+        self,
+        workers: int,
+        target_width: int | None = None,
+        det_intra_op_threads: int | None = None,
+    ) -> dict:
         command = [
             ARGUMENTS.driver,
             ARGUMENTS.det_model,
@@ -43,8 +48,10 @@ class FullOcrProfileTest(unittest.TestCase):
             "1",
             str(workers),
         ]
-        if target_width is not None:
-            command.append(str(target_width))
+        if target_width is not None or det_intra_op_threads is not None:
+            command.append(str(target_width if target_width is not None else 320))
+        if det_intra_op_threads is not None:
+            command.append(str(det_intra_op_threads))
         completed = subprocess.run(
             command,
             check=False,
@@ -66,6 +73,27 @@ class FullOcrProfileTest(unittest.TestCase):
                 self.assertEqual(report["workers"], workers)
                 self.assertEqual(report["rec_target_width"], 320)
                 self.assertEqual(report["lines"], 16)
+
+                parallel = report["parallel"]
+                self.assertGreaterEqual(parallel["logical_processors"], 1)
+                self.assertGreaterEqual(parallel["physical_cores"], 1)
+                self.assertGreaterEqual(parallel["available_processors"], 1)
+                self.assertGreaterEqual(parallel["smt_width"], 1)
+                self.assertGreaterEqual(parallel["det_intra_cap"], 1)
+                self.assertLessEqual(parallel["det_intra_cap"], 8)
+                self.assertGreaterEqual(parallel["det_intra_actual"], 1)
+                self.assertLessEqual(
+                    parallel["det_intra_actual"], parallel["det_intra_cap"]
+                )
+                self.assertEqual(len(parallel["det_conv_thread_histogram"]), 16)
+                self.assertEqual(
+                    parallel["serial_conv_invocations"],
+                    parallel["det_conv_thread_histogram"][0],
+                )
+                self.assertEqual(
+                    parallel["parallel_conv_invocations"],
+                    sum(parallel["det_conv_thread_histogram"][1:]),
+                )
 
                 wall = report["wall_nanoseconds"]
                 for stage in (
@@ -185,6 +213,29 @@ class FullOcrProfileTest(unittest.TestCase):
         )
         self.assertEqual(reports[0]["output_checksum"], reports[1]["output_checksum"])
         self.assertEqual(reports[0]["rec_width"], reports[1]["rec_width"])
+
+    def test_det_intra_op_is_byte_identical(self) -> None:
+        reports = [
+            self.run_profile(1, 320, det_threads)
+            for det_threads in (1, 2, 4, 8)
+        ]
+        reference = reports[0]
+        for report, det_threads in zip(reports, (1, 2, 4, 8)):
+            with self.subTest(det_threads=det_threads):
+                parallel = report["parallel"]
+                self.assertEqual(parallel["det_intra_cap"], det_threads)
+                self.assertLessEqual(parallel["det_intra_actual"], det_threads)
+                self.assertEqual(report["output_checksum"], reference["output_checksum"])
+                self.assertEqual(report["lines"], reference["lines"])
+                self.assertEqual(report["rec_width"], reference["rec_width"])
+                self.assertEqual(
+                    [item["invocations"] for item in report["operators"]],
+                    [item["invocations"] for item in reference["operators"]],
+                )
+
+        serial_histogram = reports[0]["parallel"]["det_conv_thread_histogram"]
+        self.assertGreater(serial_histogram[0], 0)
+        self.assertEqual(sum(serial_histogram[1:]), 0)
 
     def test_profile_accepts_long_text_target_width(self) -> None:
         reports = [self.run_profile(1, 960), self.run_profile(4, 960)]

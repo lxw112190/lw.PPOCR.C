@@ -239,6 +239,11 @@ void lw_detector_set_intra_op_thread_count(lw_detector* detector, uint32_t threa
     lw_session_set_intra_op_thread_count(detector->session, detector->intra_op_thread_count);
 }
 
+uint32_t lw_detector_get_intra_op_thread_count(const lw_detector* detector) {
+    return detector == NULL || detector->session == NULL ? 1u
+                                                         : detector->session->intra_op_thread_count;
+}
+
 void lw_detector_free(lw_detector* detector) {
     if (detector == NULL)
         return;

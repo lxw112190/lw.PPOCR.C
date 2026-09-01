@@ -8,6 +8,7 @@
 #define LW_EXECUTION_PROFILE_OPERATOR_CAPACITY 22u
 #define LW_EXECUTION_PROFILE_NODE_CAPACITY 256u
 #define LW_EXECUTION_PROFILE_CONV_CLASS_CAPACITY 5u
+#define LW_EXECUTION_PROFILE_THREAD_HISTOGRAM_CAPACITY 17u
 
 typedef enum lw_execution_profile_conv_class {
     LW_EXECUTION_PROFILE_CONV_1X1 = 0,
@@ -30,6 +31,9 @@ typedef struct lw_execution_profile {
     uint64_t node_invocations[LW_EXECUTION_PROFILE_NODE_CAPACITY];
     uint64_t conv_class_nanoseconds[LW_EXECUTION_PROFILE_CONV_CLASS_CAPACITY];
     uint64_t conv_class_invocations[LW_EXECUTION_PROFILE_CONV_CLASS_CAPACITY];
+    /* Index is the actual thread count selected for one Conv invocation.
+     * Index zero remains unused so reports can print the policy directly. */
+    uint64_t conv_thread_histogram[LW_EXECUTION_PROFILE_THREAD_HISTOGRAM_CAPACITY];
 } lw_execution_profile;
 
 lw_status lw_execute_session_f32(lw_session* session, const float* input,

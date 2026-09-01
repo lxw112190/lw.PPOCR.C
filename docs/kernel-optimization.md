@@ -470,6 +470,13 @@ operator parallelism is not nested inside line parallelism. WebAssembly and x86
 default to one worker, while native 64-bit builds use the online logical-
 processor count capped at eight. The public OCR handle remains non-reentrant.
 
+DET no longer copies the public line-worker count. Native 64-bit OCR handles
+detect process affinity, container CPU quota where available, and physical-core
+topology once during creation. The DET pool uses that independent budget capped
+at eight; individual Conv nodes still keep the established work gate and select
+only as many active workers as their output-channel task count justifies. x86
+and the single-file WebAssembly build remain serial.
+
 The crop buffer holds only the active batch rather than every detected line,
 so peak crop memory scales with worker count instead of page line count. Thread
 creation failure falls back to synchronous processing of the affected range.

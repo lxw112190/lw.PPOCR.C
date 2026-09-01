@@ -468,7 +468,9 @@ remeasured on other models and architectures.
 
 ## Fixed-pool DET output-channel parallelism
 
-The full-OCR worker budget now also drives a session-owned DET thread pool.
+The first fixed-pool implementation used the full-OCR worker budget to size a
+session-owned DET thread pool. The current CPU-budget-aware policy described
+below supersedes that coupling and sizes DET independently.
 Eligible group-1 and depthwise convolutions split disjoint output-channel
 ranges only when their estimated multiply-add count reaches eight million.
 Packed 1x1 slices remain aligned to four output channels. Threads are created
@@ -788,3 +790,43 @@ kernel rather than accumulating unproven complexity.
 All 35 Windows x64 and all 35 Windows x86 Release tests passed with the final
 reduced-traffic implementation. WebAssembly remains covered by CI because the
 local host does not have the WASM toolchain.
+
+## CPU-budget-aware DET intra-op v1
+
+Full OCR no longer derives the detector's intra-op pool size from
+`lw_ocr_options.worker_count`. OCR-handle creation now detects process-visible
+logical processors, available processors, and physical cores. Native 64-bit
+builds give DET an independent physical-core budget capped at eight; x86 and
+the single-threaded WebAssembly build keep a budget of one. On Linux, affinity
+and cgroup CPU quota constrain the available budget. Failure to inspect any
+topology source falls back conservatively and never prevents OCR creation.
+
+The DET session still creates its fixed pool only once. Existing Conv work and
+output-channel gates choose the active subset for each invocation, so small
+nodes remain serial and SIMD fast paths remain active inside every slice. On
+the local 16-processor Windows x64 host, one profiled request selected eight
+threads for 31 Conv invocations, four for one, and one for 51. The profile JSON
+now records detected topology, configured and actual DET capacity, serial and
+parallel Conv counts, and a 1-through-16 thread histogram.
+
+The test-only `full-ocr-intra-benchmark` accepts a final DET intra-op override.
+This provides `1/2/4/8` A/B coverage without adding fields or exports to the
+public C ABI. With the bundled 500x500, 16-line fixture, maximum REC width 320,
+three warm-ups, and 20 measured calls, the same Release AVX2 binary produced:
+
+| CLS/REC workers | DET intra-op | Full OCR mean | Full OCR P95 | RSS |
+|---:|---:|---:|---:|---:|
+| 1 | 1 | 247.38 ms | 264.84 ms | 74.25 MiB |
+| 1 | 8 | 209.27 ms | 223.46 ms | 74.39 MiB |
+| 4 | 1 | 133.76 ms | 141.51 ms | 115.51 MiB |
+| 4 | 8 | 98.47 ms | 113.25 ms | 115.69 MiB |
+
+Independent DET budgeting reduced complete OCR mean latency by 15.40% with one
+line worker and 26.38% with four while steady RSS was effectively unchanged.
+All `1/2/4/8` profile runs retained identical text checksum, line count,
+operator invocation counts, and adaptive-width histogram. This first version
+does not add nested CLS/REC intra-op, MatMul parallelism, a shared task arena,
+thread affinity, or NUMA policy; each remains a separate measured experiment.
+All 38 Windows x64 and all 38 Windows x86 Release tests passed, including the
+ABI/export, full-OCR reference, Golden corpus, profile, and staged-package
+gates. Linux and WebAssembly remain final CI compile gates on this Windows host.

@@ -24,6 +24,8 @@ The project currently provides:
 - FP32 CPU inference with scalar fallback and runtime-dispatched x86
   SSE2/AVX2, AArch64 NEON, and LoongArch LSX kernels. Full OCR can use a fixed
   DET operator pool and then recognize independent detected lines in parallel.
+  Native builds derive the DET pool from the process CPU budget independently
+  of the public CLS/REC line-worker setting; x86 and WebAssembly stay serial.
 - Optional .NET Framework 3.5 WinForms, native `cpp-httplib` HTTP/web, and
   offline single-file WebAssembly demos.
 
@@ -57,15 +59,16 @@ performance claims; LoongArch performance still requires physical hardware.
 On the bundled 500×500 sample image, a Windows x64 release build measured the
 following native baseline with `REC target_width = 320`:
 
-| Full OCR mode | Median latency |
+| Full OCR mode | Mean latency |
 |---|---:|
-| 1 worker | 264.12 ms |
-| 4 workers | 105.77 ms |
+| 1 worker | 209.27 ms |
+| 4 workers | 98.47 ms |
 
-Four workers provide about **2.50×** throughput acceleration for this sample.
-Results vary with CPU, compiler, image content, and system load. The four-worker
-mode applies DET output-channel parallelism before independent CLS/REC line
-work.
+Four workers provide about **2.13×** throughput acceleration for this sample.
+Results vary with CPU, compiler, image content, and system load. DET now uses a
+separate CPU-topology-aware intra-op budget, capped at eight physical cores,
+before the independently configured CLS/REC line workers begin. This keeps
+`worker_count` focused on line-level memory and latency trade-offs.
 
 Long-text clients such as the offline HTML and C# Demo use
 `REC target_width = 960` as a maximum to preserve wide-line detail. Full OCR

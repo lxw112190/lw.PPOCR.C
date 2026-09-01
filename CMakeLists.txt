@@ -180,6 +180,7 @@ set(LW_PPOCR_C_SOURCES
     src/ppocr/rec_preprocess.c
     src/ppocr/recognizer.c
     src/runtime/executor.c
+    src/runtime/cpu_topology.c
     src/runtime/memory.c
     src/runtime/model.c
     src/runtime/parallel.c
@@ -761,6 +762,19 @@ if(BUILD_TESTING AND NOT EMSCRIPTEN)
     endif()
     add_test(NAME session_planner COMMAND test-session-planner "${LW_PPOCR_C_REC_LWM}")
 
+    add_executable(test-cpu-topology tests/test_cpu_topology.c)
+    target_link_libraries(test-cpu-topology PRIVATE lw_ppocr_c)
+    target_include_directories(test-cpu-topology PRIVATE
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/runtime")
+    target_compile_features(test-cpu-topology PRIVATE c_std_11)
+    if(MSVC)
+        target_compile_options(test-cpu-topology PRIVATE /W4 /WX /utf-8)
+    else()
+        target_compile_options(test-cpu-topology PRIVATE
+            -Wall -Wextra -Wpedantic -Werror)
+    endif()
+    add_test(NAME cpu_topology_policy COMMAND test-cpu-topology)
+
     add_executable(test-c-abi tests/test_abi.c)
     target_link_libraries(test-c-abi PRIVATE lw_ppocr_c)
     target_compile_features(test-c-abi PRIVATE c_std_11)
@@ -1165,6 +1179,30 @@ if(BUILD_TESTING AND NOT EMSCRIPTEN)
     set_tests_properties(full_ocr_operator_profile PROPERTIES
         WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
         TIMEOUT 360)
+
+    # Test-only benchmark variant: it links the static runtime so an internal
+    # DET intra-op override can be measured without expanding the public ABI.
+    add_executable(full-ocr-intra-benchmark examples/ocr_benchmark_ppm.c)
+    target_link_libraries(full-ocr-intra-benchmark PRIVATE lw_ppocr_c)
+    target_compile_definitions(full-ocr-intra-benchmark PRIVATE
+        LW_OCR_BENCHMARK_INTERNAL=1)
+    target_include_directories(full-ocr-intra-benchmark PRIVATE
+        "${CMAKE_CURRENT_SOURCE_DIR}/examples"
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/ppocr"
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/runtime"
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/simd")
+    target_compile_features(full-ocr-intra-benchmark PRIVATE c_std_11)
+    add_dependencies(full-ocr-intra-benchmark convert_det_model convert_cls_model
+        convert_rec_model det_demo_fixture)
+    if(WIN32)
+        target_link_libraries(full-ocr-intra-benchmark PRIVATE shell32 psapi)
+    endif()
+    if(MSVC)
+        target_compile_options(full-ocr-intra-benchmark PRIVATE /W4 /WX /utf-8)
+    else()
+        target_compile_options(full-ocr-intra-benchmark PRIVATE
+            -Wall -Wextra -Wpedantic -Werror)
+    endif()
 
     add_executable(rec-pipeline-driver tests/rec_pipeline_driver.c)
     target_link_libraries(rec-pipeline-driver PRIVATE lw_ppocr_c)
