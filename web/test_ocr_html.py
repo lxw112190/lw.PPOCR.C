@@ -164,6 +164,21 @@ def main() -> int:
             displayed_text
         )
         assert page.locator("#overlay polygon").count() == 16
+        assert page.locator("#overlay").is_visible()
+        overlay_snapshot = page.evaluate("window.__lwOcrTest.snapshot()")
+        page.locator("#toggle-overlay").click()
+        assert page.locator("#toggle-overlay").inner_text() == "显示标注"
+        assert page.locator("#toggle-overlay").get_attribute("aria-pressed") == "false"
+        assert page.locator("#overlay").is_hidden()
+        assert page.locator("#canvas").is_visible()
+        hidden_snapshot = page.evaluate("window.__lwOcrTest.snapshot()")
+        assert hidden_snapshot["overlayVisible"] is False
+        assert hidden_snapshot["runCount"] == overlay_snapshot["runCount"]
+        page.locator("#toggle-overlay").click()
+        assert page.locator("#toggle-overlay").inner_text() == "隐藏标注"
+        assert page.locator("#toggle-overlay").get_attribute("aria-pressed") == "true"
+        assert page.locator("#overlay").is_visible()
+        assert page.evaluate("window.__lwOcrTest.snapshot().overlayVisible") is True
         assert all(export_buttons.nth(index).is_enabled() for index in range(3))
 
         page.locator("#copy-text").click()

@@ -25,6 +25,7 @@
   const overlay = document.getElementById("overlay");
   const workspace = document.getElementById("workspace");
   const previewTitle = document.getElementById("preview-title");
+  const toggleOverlayButton = document.getElementById("toggle-overlay");
   const showImageButton = document.getElementById("show-image");
   const showResultsButton = document.getElementById("show-results");
   const resultsNode = document.getElementById("results");
@@ -66,6 +67,14 @@
   let lastResults = null;
   let lastTimingBreakdown = null;
   let pdfResultView = "page";
+  let overlayVisible = true;
+
+  function setOverlayVisible(visible) {
+    overlayVisible = Boolean(visible);
+    overlay.hidden = !overlayVisible;
+    toggleOverlayButton.textContent = overlayVisible ? "隐藏标注" : "显示标注";
+    toggleOverlayButton.setAttribute("aria-pressed", String(overlayVisible));
+  }
 
   if (!window.LwPdf) {
     fileInput.accept = "image/*";
@@ -333,7 +342,7 @@
   function updatePdfControls() {
     const pdf = source && source.kind === "pdf" ? source : null;
     pdfControls.hidden = !pdf;
-    previewTitle.textContent = pdf ? "PDF 页面预览与检测框" : "图像预览与检测框";
+    previewTitle.textContent = pdf ? "PDF 页面预览" : "图像预览";
     if (!pdf) return;
     pdfMeta.textContent = (pdf.file.name || "document.pdf") + " · " + pdf.pageCount + " 页";
     pdfPageLabel.textContent = pdf.currentPage + " / " + pdf.pageCount;
@@ -803,6 +812,7 @@
       pdfPageCount: pdf ? pdf.pageCount : 0,
       pdfCurrentPage: pdf ? pdf.currentPage : 0,
       pdfWorkerBackend: documentStatus ? documentStatus.worker_backend : null,
+      overlayVisible,
       pdfErrorCode: documentStatus && documentStatus.last_error ?
         documentStatus.last_error.code : null,
       processedPages: lastResults && lastResults.schema_version === 2 ?
@@ -846,6 +856,7 @@
   }));
   exportTxtButton.addEventListener("click", exportTxt);
   exportJsonButton.addEventListener("click", exportJson);
+  toggleOverlayButton.addEventListener("click", () => setOverlayVisible(!overlayVisible));
   copyPdfDiagnosticsButton.addEventListener("click", () =>
     copyTextValue(pdfDiagnosticsText.textContent).then(() => {
       statusNode.textContent = "PDF 诊断信息已复制。";

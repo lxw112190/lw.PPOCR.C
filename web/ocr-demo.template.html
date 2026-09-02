@@ -52,6 +52,10 @@
     .grid { display: grid; grid-template-columns: minmax(0, 1.65fr) minmax(300px, 1fr); gap: 18px; }
     .card { overflow: hidden; border: 1px solid #e0e7ef; border-radius: 12px; background: #fff; box-shadow: 0 4px 14px #1c35570d; }
     .card h2 { margin: 0; padding: 14px 18px; border-bottom: 1px solid #edf1f5; font-size: 15px; }
+    .preview-header { display: flex; min-height: 49px; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 10px 8px 18px; border-bottom: 1px solid #edf1f5; }
+    .preview-header h2 { flex: 1; padding: 0; border: 0; }
+    .preview-actions button { min-height: 36px; padding: 7px 10px; border: 1px solid #cbd8e6; background: #fff; color: #2867ad; font-size: 12px; }
+    .preview-actions button:hover:not(:disabled) { border-color: #2878d4; background: #edf5ff; }
     .result-header { display: flex; min-height: 49px; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 10px 8px 18px; border-bottom: 1px solid #edf1f5; }
     .result-header h2 { flex: 1; padding: 0; border: 0; }
     .result-actions { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
@@ -61,6 +65,7 @@
     .preview-stage { position: relative; max-width: 100%; line-height: 0; }
     canvas { display: block; max-width: 100%; height: auto; border-radius: 6px; background: #eef2f6; }
     #overlay { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+    #overlay[hidden] { display: none; }
     #overlay polygon { fill: transparent; stroke: #e53935; vector-effect: non-scaling-stroke; }
     #overlay text { fill: #e53935; stroke: #fff; stroke-width: 3px; paint-order: stroke; font: 14px sans-serif; }
     #overlay .active { fill: #2878d426; stroke: #2878d4; stroke-width: 3px; }
@@ -109,6 +114,8 @@
       .preview { min-height: 260px; padding: 10px; }
       #results { max-height: none; overflow: visible; }
       .result-header { align-items: flex-start; padding: 12px; }
+      .preview-header { align-items: flex-start; padding: 12px; }
+      .preview-actions button { min-height: 42px; padding: 9px 12px; font-size: 13px; }
       .result-actions button { min-height: 42px; padding: 9px 12px; font-size: 13px; }
       .support-content { align-items: flex-start; }
       .support img { width: 112px; height: auto; }
@@ -223,7 +230,12 @@
     </nav>
     <div id="workspace" class="grid" data-mobile-panel="image">
       <section class="card image-card">
-        <h2 id="preview-title">图像预览与检测框</h2>
+        <div class="preview-header">
+          <h2 id="preview-title">图像预览</h2>
+          <div class="preview-actions">
+            <button id="toggle-overlay" type="button" aria-controls="overlay" aria-pressed="true">隐藏标注</button>
+          </div>
+        </div>
         <div class="preview"><div class="preview-stage"><canvas id="canvas"></canvas><svg id="overlay" aria-hidden="true"></svg></div></div>
       </section>
       <section class="card result-card">
