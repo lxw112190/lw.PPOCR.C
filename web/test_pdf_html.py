@@ -113,7 +113,7 @@ def main() -> int:
             # the final HTML, so the marker checks below remain the portable
             # validation in that case.
             continue
-        prefix = base64.b64encode(asset.read_bytes()[:16]).decode("ascii")
+        prefix = base64.b64encode(asset.read_bytes()[:12]).decode("ascii")
         assert prefix in html_text, asset_name
     assert "useWasm: true" in html_text
     assert "useWorkerFetch: false" in html_text
