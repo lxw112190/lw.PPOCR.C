@@ -192,7 +192,8 @@ Windows 下可在 emsdk 目录运行 `emsdk_env.bat`，或按 emsdk 文档使用
   在 Worker 中执行，并返回带版本号的结构化结果；
 - `build-wasm/ocr-demo.html` 内嵌同一份 SDK 和响应式示例界面，可以直接双击打开，不需要
   启动 HTTP 服务；默认还内嵌按需加载的 PDF.js，用于把本地 PDF 页面渲染为 Canvas。
-  PDF.js 不进入 `lw-ppocr.js`、纯 C Runtime 或公共 C ABI。
+  同时内嵌 PDF.js 6.3.289 的 `jbig2.wasm`、`openjpeg.wasm` 和 `qcms_bg.wasm`，
+  支持离线渲染常见扫描 PDF 格式。PDF.js 不进入 `lw-ppocr.js`、纯 C Runtime 或公共 C ABI。
 
 页面支持选择输出阅读顺序：横排从左到右、竖排从右到左（传统古籍）、
 竖排从左到右。该设置只调整结果顺序，不改变检测框坐标、置信度或模型推理。

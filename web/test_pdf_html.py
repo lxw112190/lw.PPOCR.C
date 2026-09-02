@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import base64
 import json
 import struct
 import tempfile
@@ -15,8 +16,10 @@ from playwright.sync_api import ConsoleMessage, Request, sync_playwright
 EXPECTED_FIRST_LINE = "纯臻营养护发素"
 
 
-def create_image_pdf(jpeg_path: Path, output: Path, page_count: int = 2) -> None:
-    """Wrap one JPEG losslessly into repeated PDF pages without re-encoding it."""
+def create_image_pdf(
+    jpeg_path: Path, output: Path, page_count: int = 2, filter_name: str = "DCTDecode"
+) -> None:
+    """Wrap one encoded image losslessly into repeated PDF pages."""
     jpeg = jpeg_path.read_bytes()
     with Image.open(jpeg_path) as image:
         width, height = image.size
@@ -55,7 +58,7 @@ def create_image_pdf(jpeg_path: Path, output: Path, page_count: int = 2) -> None
         (
             "<< /Type /XObject /Subtype /Image "
             f"/Width {width} /Height {height} /ColorSpace /DeviceRGB "
-            f"/BitsPerComponent 8 /Filter /DCTDecode /Length {len(jpeg)} >>\nstream\n"
+            f"/BitsPerComponent 8 /Filter /{filter_name} /Length {len(jpeg)} >>\nstream\n"
         ).encode("ascii")
         + jpeg
         + b"\nendstream"
@@ -102,6 +105,20 @@ def main() -> int:
     sample = arguments.sample.resolve()
     if not html.is_file() or not sample.is_file():
         raise SystemExit("standalone HTML or sample image is missing")
+    html_text = html.read_text(encoding="utf-8")
+    for asset_name in ("jbig2.wasm", "openjpeg.wasm", "qcms_bg.wasm"):
+        asset = html.parent.parent / "web" / "vendor" / "pdfjs" / asset_name
+        if not asset.is_file():
+            # CI runs from the repository root; local callers may only have
+            # the final HTML, so the marker checks below remain the portable
+            # validation in that case.
+            continue
+        prefix = base64.b64encode(asset.read_bytes()[:16]).decode("ascii")
+        assert prefix in html_text, asset_name
+    assert "useWasm: true" in html_text
+    assert "useWorkerFetch: false" in html_text
+    assert "BinaryDataFactory" in html_text
+    assert "__LW_PDFJS_" not in html_text
     with Image.open(sample) as sample_image:
         sample_width, sample_height = sample_image.size
 
@@ -110,6 +127,11 @@ def main() -> int:
     with tempfile.TemporaryDirectory(prefix="lw-ppocr-pdf-") as temporary:
         fixture = Path(temporary) / "sample-two-pages.pdf"
         create_image_pdf(sample, fixture)
+        jpx_image = Path(temporary) / "sample.jp2"
+        with Image.open(sample) as sample_image:
+            sample_image.save(jpx_image, format="JPEG2000")
+        jpx_fixture = Path(temporary) / "sample-jpx.pdf"
+        create_image_pdf(jpx_image, jpx_fixture, page_count=1, filter_name="JPXDecode")
 
         with sync_playwright() as playwright:
             launch_options: dict[str, object] = {
@@ -141,8 +163,25 @@ def main() -> int:
             )
             assert page.evaluate("window.LwPdf && window.LwPdf.apiVersion") == 1
             assert page.evaluate("window.LwPdf.pdfjsVersion") == "6.3.289"
+            initial_pdf_status = page.evaluate("window.__lwOcrTest.pdfStatus()")
+            assert initial_pdf_status["wasm_requests"] == {}
             assert "application/pdf" in page.locator("#file").get_attribute("accept")
             assert "application/pdf" not in page.locator("#camera").get_attribute("accept")
+
+            # A real JPEG2000 stream must obtain its bytes from the embedded
+            # OpenJPEG helper, without any network request.
+            page.locator("#file").set_input_files(str(jpx_fixture))
+            page.wait_for_function(
+                "() => window.__lwOcrTest.snapshot().sourceKind === 'pdf' && "
+                "!document.querySelector('#run').disabled",
+                timeout=180_000,
+            )
+            jpx_status = page.evaluate("window.__lwOcrTest.pdfStatus()")
+            assert jpx_status["wasm_requests"].get("openjpeg.wasm", 0) >= 1, jpx_status
+            assert page.locator("#canvas").evaluate(
+                "canvas => { const c = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height).data; "
+                "return c.some((value, index) => index % 4 !== 3 && value < 245); }"
+            )
 
             page.locator("#file").set_input_files(str(fixture))
             page.wait_for_function(

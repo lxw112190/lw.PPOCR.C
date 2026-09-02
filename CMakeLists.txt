@@ -379,13 +379,25 @@ if(EMSCRIPTEN)
             --pdf-adapter "${CMAKE_CURRENT_SOURCE_DIR}/web/pdf/lw_pdf_adapter.js"
             --pdfjs-core "${CMAKE_CURRENT_SOURCE_DIR}/web/vendor/pdfjs/pdf.min.mjs"
             --pdfjs-worker "${CMAKE_CURRENT_SOURCE_DIR}/web/vendor/pdfjs/pdf.worker.min.mjs"
+            --pdfjs-jbig2 "${CMAKE_CURRENT_SOURCE_DIR}/web/vendor/pdfjs/jbig2.wasm"
+            --pdfjs-openjpeg "${CMAKE_CURRENT_SOURCE_DIR}/web/vendor/pdfjs/openjpeg.wasm"
+            --pdfjs-qcms "${CMAKE_CURRENT_SOURCE_DIR}/web/vendor/pdfjs/qcms_bg.wasm"
             --pdfjs-version "6.3.289")
         set(LW_PPOCR_C_WEB_HTML_PDF_DEPENDS
             "${CMAKE_CURRENT_SOURCE_DIR}/web/pdf/lw_pdf_adapter.js"
             "${CMAKE_CURRENT_SOURCE_DIR}/web/vendor/pdfjs/pdf.min.mjs"
             "${CMAKE_CURRENT_SOURCE_DIR}/web/vendor/pdfjs/pdf.worker.min.mjs"
             "${CMAKE_CURRENT_SOURCE_DIR}/web/vendor/pdfjs/LICENSE"
-            "${CMAKE_CURRENT_SOURCE_DIR}/web/vendor/pdfjs/VERSION")
+            "${CMAKE_CURRENT_SOURCE_DIR}/web/vendor/pdfjs/VERSION"
+            "${CMAKE_CURRENT_SOURCE_DIR}/web/vendor/pdfjs/jbig2.wasm"
+            "${CMAKE_CURRENT_SOURCE_DIR}/web/vendor/pdfjs/openjpeg.wasm"
+            "${CMAKE_CURRENT_SOURCE_DIR}/web/vendor/pdfjs/qcms_bg.wasm"
+            "${CMAKE_CURRENT_SOURCE_DIR}/web/vendor/pdfjs/LICENSE_JBIG2"
+            "${CMAKE_CURRENT_SOURCE_DIR}/web/vendor/pdfjs/LICENSE_OPENJPEG"
+            "${CMAKE_CURRENT_SOURCE_DIR}/web/vendor/pdfjs/LICENSE_PDFJS_JBIG2"
+            "${CMAKE_CURRENT_SOURCE_DIR}/web/vendor/pdfjs/LICENSE_PDFJS_OPENJPEG"
+            "${CMAKE_CURRENT_SOURCE_DIR}/web/vendor/pdfjs/LICENSE_PDFJS_QCMS"
+            "${CMAKE_CURRENT_SOURCE_DIR}/web/vendor/pdfjs/LICENSE_QCMS")
     endif()
     add_custom_command(
         OUTPUT "${LW_PPOCR_C_WEB_HTML}"

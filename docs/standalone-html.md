@@ -135,10 +135,14 @@ Worker are decoded into Blob URLs only when the first PDF is opened. No model,
 PDF, page image, or optional PDF.js resource is fetched over the network.
 
 The boundary remains: PDF.js renders a page to Canvas, then `LwPpocr` recognizes
-that Canvas. Integrations should keep image decoding, WASM pointers, buffer
-ownership, and native calls inside the SDK. Demo changes should operate on
-structured OCR results. The reusable **lw-ppocr.js** remains image/Canvas-only
-and does not contain PDF.js.
+that Canvas. The packaged page includes PDF.js 6.3.289's `jbig2.wasm`,
+`openjpeg.wasm`, and `qcms_bg.wasm` helpers through an embedded
+`BinaryDataFactory`, so supported CCITT/JBIG2, JPX/JPEG2000, and ICC paths do
+not need network resources. CMaps and standard-font files remain outside this
+image-only frontend's scope. Integrations should keep image decoding, WASM
+pointers, buffer ownership, and native calls inside the SDK. Demo changes should
+operate on structured OCR results. The reusable **lw-ppocr.js** remains
+image/Canvas-only and does not contain PDF.js.
 
 The page still exposes **window.lwPpocrDemo** version 1 as a compatibility
 adapter for existing customizations:

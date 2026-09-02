@@ -27,6 +27,11 @@ await documentHandle.close();
 `main-thread` backend, fallback reason, browser capability snapshot, and the
 last stable error. It is diagnostic information, not an OCR export field.
 
+When PDF support is enabled, the status also exposes `wasm_requests`, a map of
+embedded PDF.js helper filenames requested so far. An empty map is expected for
+ordinary DCT/JPEG pages; scanning formats may request `jbig2.wasm`,
+`openjpeg.wasm`, or `qcms_bg.wasm`.
+
 The adapter first starts the embedded worker Blob directly. This avoids the
 nested Blob module wrapper PDF.js otherwise creates for a null-origin
 `file://` page. If module Workers are unavailable it imports the same pinned

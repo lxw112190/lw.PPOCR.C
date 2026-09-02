@@ -21,6 +21,9 @@ def main() -> int:
     parser.add_argument("--pdf-adapter", type=Path)
     parser.add_argument("--pdfjs-core", type=Path)
     parser.add_argument("--pdfjs-worker", type=Path)
+    parser.add_argument("--pdfjs-jbig2", type=Path)
+    parser.add_argument("--pdfjs-openjpeg", type=Path)
+    parser.add_argument("--pdfjs-qcms", type=Path)
     parser.add_argument("--pdfjs-version")
     parser.add_argument("--no-pdf", action="store_true")
     parser.add_argument("--output", type=Path, required=True)
@@ -30,6 +33,9 @@ def main() -> int:
         args.pdf_adapter,
         args.pdfjs_core,
         args.pdfjs_worker,
+        args.pdfjs_jbig2,
+        args.pdfjs_openjpeg,
+        args.pdfjs_qcms,
         args.pdfjs_version,
     ]
     if args.no_pdf and any(pdf_inputs):
@@ -37,7 +43,8 @@ def main() -> int:
     if not args.no_pdf and not all(pdf_inputs):
         raise SystemExit(
             "PDF packaging requires --pdf-adapter, --pdfjs-core, "
-            "--pdfjs-worker, and --pdfjs-version"
+            "--pdfjs-worker, --pdfjs-jbig2, --pdfjs-openjpeg, "
+            "--pdfjs-qcms, and --pdfjs-version"
         )
 
     if args.no_pdf:
@@ -54,6 +61,18 @@ def main() -> int:
         pdf_bootstrap = pdf_bootstrap.replace(
             "__LW_PDFJS_WORKER_BASE64__",
             base64.b64encode(args.pdfjs_worker.read_bytes()).decode("ascii"),
+        )
+        pdf_bootstrap = pdf_bootstrap.replace(
+            "__LW_PDFJS_JBIG2_BASE64__",
+            base64.b64encode(args.pdfjs_jbig2.read_bytes()).decode("ascii"),
+        )
+        pdf_bootstrap = pdf_bootstrap.replace(
+            "__LW_PDFJS_OPENJPEG_BASE64__",
+            base64.b64encode(args.pdfjs_openjpeg.read_bytes()).decode("ascii"),
+        )
+        pdf_bootstrap = pdf_bootstrap.replace(
+            "__LW_PDFJS_QCMS_BASE64__",
+            base64.b64encode(args.pdfjs_qcms.read_bytes()).decode("ascii"),
         )
 
     html = read_text(args.template)

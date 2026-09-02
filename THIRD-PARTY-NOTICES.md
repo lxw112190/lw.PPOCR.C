@@ -50,6 +50,12 @@ pixels in the browser; it is not part of `lw-ppocr.js`, the native runtime, or
 the public C ABI. The vendored distribution and license are under
 `web/vendor/pdfjs/`. Configure with `LW_WEB_PDF=OFF` to omit it.
 
+The same HTML embeds PDF.js's optional `jbig2.wasm`, `openjpeg.wasm`, and
+`qcms_bg.wasm` helpers. Their upstream notices are preserved as
+`web/vendor/pdfjs/LICENSE_JBIG2`, `LICENSE_OPENJPEG`, `LICENSE_QCMS`, and the
+corresponding `LICENSE_PDFJS_*` files. These resources enable offline
+CCITT/JBIG2, JPX/JPEG2000, and ICC rendering paths.
+
 ## Windows runtime files
 
 Windows binary archives include the Microsoft Visual C++ Runtime and Universal

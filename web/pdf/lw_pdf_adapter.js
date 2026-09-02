@@ -10,6 +10,13 @@
   const PDFJS_VERSION = "__LW_PDFJS_VERSION__";
   const PDFJS_CORE_BASE64 = "__LW_PDFJS_CORE_BASE64__";
   const PDFJS_WORKER_BASE64 = "__LW_PDFJS_WORKER_BASE64__";
+  const PDFJS_WASM_BASE64 = Object.freeze({
+    "jbig2.wasm": "__LW_PDFJS_JBIG2_BASE64__",
+    "openjpeg.wasm": "__LW_PDFJS_OPENJPEG_BASE64__",
+    "qcms_bg.wasm": "__LW_PDFJS_QCMS_BASE64__"
+  });
+  const wasmBytesCache = new Map();
+  const wasmRequestCounts = Object.create(null);
   const WORKER_START_TIMEOUT_MS = 2500;
   const PROMISE_WITH_RESOLVERS_POLYFILL = `
 if (typeof Promise.withResolvers !== "function") {
@@ -85,6 +92,7 @@ if (typeof Promise.withResolvers !== "function") {
       state,
       worker_backend: workerBackend,
       worker_fallback_reason: workerFallbackReason,
+      wasm_requests: {...wasmRequestCounts},
       environment: environmentSnapshot(),
       last_error: lastError ? {...lastError} : null
     };
@@ -114,13 +122,46 @@ if (typeof Promise.withResolvers !== "function") {
     promiseWithResolversBackend = "polyfill";
   }
 
-  function base64BlobUrl(encoded, prefix = "") {
+  function base64Bytes(encoded) {
     const binary = atob(encoded);
     const bytes = new Uint8Array(binary.length);
     for (let offset = 0; offset < binary.length; offset += 1) {
       bytes[offset] = binary.charCodeAt(offset);
     }
+    return bytes;
+  }
+
+  function base64BlobUrl(encoded, prefix = "") {
+    const bytes = base64Bytes(encoded);
     return URL.createObjectURL(new Blob([prefix, bytes], {type: "text/javascript"}));
+  }
+
+  // PDF.js calls this factory from the worker when useWorkerFetch is disabled.
+  // Only the three vendored WASM files are exposed; CMaps and standard fonts
+  // remain deliberately unsupported in this image-only PDF frontend.
+  class EmbeddedBinaryDataFactory {
+    constructor({wasmUrl} = {}) {
+      this.wasmUrl = wasmUrl || "embedded-pdfjs-wasm/";
+    }
+
+    async fetch({kind, filename}) {
+      if (kind !== "wasmUrl") {
+        throw new Error(`Offline PDF resource kind is unsupported: ${kind}`);
+      }
+      const encoded = PDFJS_WASM_BASE64[filename];
+      if (!encoded || encoded[0] === "_") {
+        throw new Error(`Offline PDF WASM asset is unavailable: ${filename}`);
+      }
+      let bytes = wasmBytesCache.get(filename);
+      if (!bytes) {
+        bytes = base64Bytes(encoded);
+        wasmBytesCache.set(filename, bytes);
+      }
+      wasmRequestCounts[filename] = (wasmRequestCounts[filename] || 0) + 1;
+      // PDF.js may transfer the returned buffer to a worker. Keep the cache
+      // owned by this page and return a fresh copy for every request.
+      return bytes.slice();
+    }
   }
 
   function closeWorkerPort() {
@@ -324,7 +365,10 @@ if (typeof Promise.withResolvers !== "function") {
         data,
         password: options.password || undefined,
         isEvalSupported: false,
-        useWasm: false
+        useWasm: true,
+        useWorkerFetch: false,
+        wasmUrl: "embedded-pdfjs-wasm/",
+        BinaryDataFactory: EmbeddedBinaryDataFactory
       });
       const pdfDocument = await loadingTask.promise;
       let closed = false;

@@ -139,7 +139,9 @@ The build produces two self-contained browser artifacts:
   Worker when available, and returns versioned structured results.
 - `build-wasm/ocr-demo.html` embeds that exact SDK plus the responsive example
   UI and a lazy, offline PDF.js frontend. It can be opened directly without the
-  native HTTP Demo. PDF.js is not included in `lw-ppocr.js` or the C runtime.
+  native HTTP Demo. The HTML also embeds PDF.js 6.3.289's `jbig2.wasm`,
+  `openjpeg.wasm`, and `qcms_bg.wasm` helpers for supported scanned-PDF
+  formats; PDF.js is not included in `lw-ppocr.js` or the C runtime.
 
 The standalone page supports selectable reading order: horizontal
 left-to-right, vertical right-to-left for traditional books, and vertical
