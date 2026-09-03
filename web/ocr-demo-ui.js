@@ -71,7 +71,8 @@
 
   function setOverlayVisible(visible) {
     overlayVisible = Boolean(visible);
-    overlay.hidden = !overlayVisible;
+    if (overlayVisible) overlay.removeAttribute("hidden");
+    else overlay.setAttribute("hidden", "");
     toggleOverlayButton.textContent = overlayVisible ? "隐藏标注" : "显示标注";
     toggleOverlayButton.setAttribute("aria-pressed", String(overlayVisible));
   }
