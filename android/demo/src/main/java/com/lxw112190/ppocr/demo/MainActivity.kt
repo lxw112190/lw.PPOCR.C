@@ -203,7 +203,7 @@ class MainActivity : ComponentActivity() {
             setPadding(dp(4), dp(12), dp(4), dp(16))
             setLineSpacing(dp(4).toFloat(), 1f)
             typeface = Typeface.create("sans", Typeface.NORMAL)
-            textIsSelectable = true
+            setTextIsSelectable(true)
         }
         val resultScroll = ScrollView(this).apply {
             isFillViewport = true
