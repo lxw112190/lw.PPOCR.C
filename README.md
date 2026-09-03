@@ -180,6 +180,20 @@ applications provide their own JPEG/PNG decoder and create separate Worker
 instances for concurrency. The manifest records whether the build used
 `wasm128` or the scalar fallback. See [Node/WASM distribution](docs/NODE_WASM_DISTRIBUTION.md).
 
+## Android ARM64 Native Preview
+
+The repository includes an experimental Android Native SDK under `android/`.
+The first preview targets `arm64-v8a` with `minSdk 21`, bundles the offline
+PP-OCRv6 tiny LWM models, and exposes a Kotlin API over the existing pure-C
+runtime. The demo uses the system media picker and requests no network or
+storage permission.
+
+The local machine does not need Android Studio, the Android SDK, the NDK, or an
+emulator. GitHub Actions builds the AAR and demo APK and inspects the AArch64
+ELF, native dependency closure, model assets, and APK permissions. A green CI
+build is not a physical-device OCR, memory, thermal, or vendor-ROM validation.
+See `android/README.md`.
+
 ## Documentation
 
 - [Supported operators and model analysis](docs/SUPPORTED_OPS_V0.md)

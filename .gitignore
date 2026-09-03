@@ -1,5 +1,10 @@
 /build/
 /build-*/
+/android/.gradle/
+/android/build/
+/android/*/build/
+/android/generated-model-assets/
+/android/SHA256SUMS.txt
 /examples/csharp-*/bin/
 /examples/csharp-*/obj/
 /dist/

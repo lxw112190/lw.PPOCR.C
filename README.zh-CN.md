@@ -208,6 +208,16 @@ SDK 会按照 Runtime 返回的真实容量分配并复用输入/输出缓冲区
 [`docs/standalone-html.md`](docs/standalone-html.md)，导出字段见
 [`docs/ocr-export-schema.md`](docs/ocr-export-schema.md)。
 
+### Android ARM64 Native Preview
+
+仓库现在提供实验性的 Android Native SDK，位于 android/，仅支持 arm64-v8a 和
+minSdk 21。SDK 由 Kotlin API、JNI 桥接和现有纯 C Runtime 组成，模型完全离线，
+不申请网络或存储权限；示例 Demo 使用系统图片选择器。
+
+本机不需要安装 Android Studio、SDK、NDK 或模拟器。GitHub Actions 会生成 AAR、
+Demo APK，并检查 AArch64 ELF、native 依赖、模型 assets 和 APK 权限。CI 通过不代表
+已经完成具体手机的 OCR、内存、温度和厂商 ROM 验证。详见 android/README.md。
+
 ### Node.js WASM 发行包
 
 Emscripten 构建同时提供官方 Node.js 原始发行包，包含 `runtime.cjs`、

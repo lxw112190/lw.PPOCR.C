@@ -6,6 +6,8 @@ option(LW_BUILD_HTTP_DEMO
     "Build the cross-platform cpp-httplib HTTP OCR Demo" ON)
 option(LW_BUILD_CSHARP_DEMOS
     "Build the .NET Framework 3.5 WinForms Demo on Windows" OFF)
+option(LW_RUNTIME_ONLY
+    "Build only the dependency-free native runtime for an embedding target" OFF)
 option(LW_WASM_SIMD128
     "Enable portable WebAssembly SIMD128 for the standalone OCR HTML" ON)
 set(LW_WASM_HOST_ABI_VERSION "1" CACHE STRING
@@ -42,11 +44,14 @@ include(CTest)
 include(GNUInstallDirs)
 include(CMakePackageConfigHelpers)
 include(CheckCCompilerFlag)
-find_package(Python3 3.9 COMPONENTS Interpreter REQUIRED)
+if(NOT LW_RUNTIME_ONLY)
+    find_package(Python3 3.9 COMPONENTS Interpreter REQUIRED)
+endif()
 if(NOT EMSCRIPTEN)
     find_package(Threads REQUIRED)
 endif()
 
+if(NOT LW_RUNTIME_ONLY)
 set(LW_PPOCR_C_ANALYSIS_JSON
     "${CMAKE_CURRENT_SOURCE_DIR}/docs/ppocrv6-tiny-analysis.json")
 set(LW_PPOCR_C_ANALYSIS_MARKDOWN
@@ -168,6 +173,7 @@ add_custom_target(convert_cls_model ALL
     DEPENDS "${LW_PPOCR_C_CLS_LWM}" "${LW_PPOCR_C_CLS_LWM_METADATA}")
 add_custom_target(convert_det_model ALL
     DEPENDS "${LW_PPOCR_C_DET_LWM}" "${LW_PPOCR_C_DET_LWM_METADATA}")
+endif()
 
 set(LW_PPOCR_C_SOURCES
     src/kernels/packed_conv.c
@@ -304,10 +310,11 @@ endfunction()
 add_library(lw_ppocr_c STATIC ${LW_PPOCR_C_SOURCES})
 set_target_properties(lw_ppocr_c PROPERTIES
     EXPORT_NAME static
-    OUTPUT_NAME lw_ppocr_c_static)
+    OUTPUT_NAME lw_ppocr_c_static
+    POSITION_INDEPENDENT_CODE ON)
 lw_configure_runtime_target(lw_ppocr_c)
 
-if(NOT EMSCRIPTEN)
+if(NOT EMSCRIPTEN AND NOT LW_RUNTIME_ONLY)
 add_library(lw_ppocr_c_shared SHARED ${LW_PPOCR_C_SOURCES})
 set_target_properties(lw_ppocr_c_shared PROPERTIES
     EXPORT_NAME shared
@@ -319,6 +326,11 @@ target_compile_definitions(lw_ppocr_c_shared
     PRIVATE LW_PPOCR_C_BUILD LW_PPOCR_C_SHARED
     INTERFACE LW_PPOCR_C_SHARED)
 lw_configure_runtime_target(lw_ppocr_c_shared)
+endif()
+
+if(LW_RUNTIME_ONLY)
+    message(STATUS "LW_RUNTIME_ONLY enabled: skipping model conversion, demos, tests, install and packaging")
+    return()
 endif()
 
 if(EMSCRIPTEN)

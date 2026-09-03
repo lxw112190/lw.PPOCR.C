@@ -1,0 +1,105 @@
+name: Android ARM64 Preview
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "android/**"
+      - "src/**"
+      - "include/**"
+      - "models/**"
+      - "CMakeLists.txt"
+      - "requirements-converter.txt"
+      - "tools/prepare_android_models.py"
+      - ".github/workflows/android.yml"
+  pull_request:
+    paths:
+      - "android/**"
+      - "src/**"
+      - "include/**"
+      - "models/**"
+      - "CMakeLists.txt"
+      - "requirements-converter.txt"
+      - "tools/prepare_android_models.py"
+      - ".github/workflows/android.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Android toolchain
+        uses: android-actions/setup-android@v3
+
+      - name: Install pinned SDK components
+        run: |
+          sdkmanager "platforms;android-35" "build-tools;35.0.0" "cmake;3.22.1" "ndk;27.2.12479018"
+
+      - name: Prepare LWM assets
+        run: |
+          python -m pip install --disable-pip-version-check -r requirements-converter.txt
+          cmake -S . -B build-android-models -G Ninja -DLW_BUILD_HTTP_DEMO=OFF -DLW_BUILD_CSHARP_DEMOS=OFF -DBUILD_TESTING=OFF
+          cmake --build build-android-models --target convert_det_model convert_cls_model convert_rec_model -j 2
+          python tools/prepare_android_models.py --build-models build-android-models --dictionary models/ppocrv6-tiny/ppocr_keys.txt --output android/generated-model-assets/lw-ppocr/models
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.10.2"
+
+      - name: Build AAR and demo APK
+        working-directory: android
+        run: |
+          gradle --no-daemon --stacktrace :lw-ppocr-android:assembleRelease :demo:assembleDebug :demo:assembleRelease
+
+      - name: Inspect exact Android artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          aar=android/lw-ppocr-android/build/outputs/aar/lw-ppocr-android-release.aar
+          apk=android/demo/build/outputs/apk/debug/demo-debug.apk
+          test -s "$aar"
+          test -s "$apk"
+          unzip -l "$aar" | grep -q 'jni/arm64-v8a/liblw_ppocr_android.so'
+          unzip -l "$aar" | grep -q 'assets/lw-ppocr/models/det.lwm'
+          unzip -l "$aar" | grep -q 'assets/lw-ppocr/models/manifest.json'
+          unzip -p "$aar" jni/arm64-v8a/liblw_ppocr_android.so > build-android.so
+          file build-android.so | grep -Eiq 'aarch64|arm64'
+          readelf -h build-android.so | grep -q 'AArch64'
+          if readelf -d build-android.so | grep -Eiq 'libc\+\+|opencv|onnxruntime'; then
+            echo "unexpected native dependency"
+            exit 1
+          fi
+          aapt="$ANDROID_HOME/build-tools/35.0.0/aapt"
+          "$aapt" dump badging "$apk" | grep -q "native-code: 'arm64-v8a'"
+          if "$aapt" dump permissions "$apk" | grep -Eiq 'INTERNET|READ_EXTERNAL_STORAGE|WRITE_EXTERNAL_STORAGE'; then
+            echo "unexpected Android permission"
+            exit 1
+          fi
+          sha256sum "$aar" "$apk" > android/SHA256SUMS.txt
+
+      - name: Upload Android artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: lw-ppocr-android-arm64-preview
+          path: |
+            android/lw-ppocr-android/build/outputs/aar/lw-ppocr-android-release.aar
+            android/demo/build/outputs/apk/debug/demo-debug.apk
+            android/demo/build/outputs/apk/release/demo-release-unsigned.apk
+            android/SHA256SUMS.txt
