@@ -7,6 +7,12 @@ android {
     namespace = "com.lxw112190.ppocr.demo"
     compileSdk = 35
     ndkVersion = "27.2.12479018"
+
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
+
     defaultConfig {
         applicationId = "com.lxw112190.ppocr.demo"
         minSdk = 21
