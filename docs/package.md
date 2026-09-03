@@ -226,14 +226,15 @@ JavaScript SDK, offline HTML, and a SHA-256 file for every downloadable asset.
 Tags with a `0.x` version or a prerelease suffix are automatically marked as
 GitHub prereleases.
 
-The Android ARM64 Preview is currently built by the separate `Android ARM64
-Preview` workflow; the tagged `release.yml` workflow does not attach its files
-automatically. Download `lw-ppocr-android-release.aar`, `demo-preview.apk`, and
-`SHA256SUMS.txt` from that workflow and verify the checksums before use. If the
-Android files should appear on the GitHub Release, attach those exact verified
-files manually. `demo-preview.apk` is signed with a temporary CI key and is
-intended for preview testing only, not Play Store distribution; uninstall an
-older preview before installing an APK from a different CI run.
+The tagged `release.yml` workflow also runs the reusable `Android ARM64
+Preview` job. After all native, WASM, and Android gates succeed, the GitHub
+Release includes `lw.PPOCR.C-<version>-android-arm64.aar`,
+`lw.PPOCR.C-<version>-android-arm64-demo.apk`, and
+`lw.PPOCR.C-<version>-android-arm64.SHA256SUMS.txt`. The workflow verifies the
+original Android artifact hashes before renaming and publishing the files.
+The published demo APK is signed with a temporary CI key and is intended for
+preview testing only, not Play Store distribution; uninstall an older preview
+before installing an APK from a different CI run.
 
 The browser WASM workflow also publishes
 `lw.PPOCR.C-<version>-node-wasm.zip`. This is a raw Node.js/WASM distribution,

@@ -23,9 +23,15 @@ jobs:
     permissions:
       contents: read
 
+  android:
+    name: Build and test Android ARM64 Preview
+    uses: ./.github/workflows/android.yml
+    permissions:
+      contents: read
+
   publish:
     name: Publish tested assets
-    needs: [native, wasm]
+    needs: [native, wasm, android]
     runs-on: ubuntu-22.04
     permissions:
       contents: write
@@ -62,6 +68,12 @@ jobs:
           pattern: lw.PPOCR.C-*
           merge-multiple: true
 
+      - name: Download tested Android artifacts
+        uses: actions/download-artifact@v8
+        with:
+          name: lw-ppocr-android-arm64-preview
+          path: release-assets/android
+
       - name: Verify and prepare release assets
         shell: bash
         env:
@@ -73,6 +85,9 @@ jobs:
           wasm="lw.PPOCR.C-${VERSION}-ocr-demo.html"
           websdk="lw.PPOCR.C-${VERSION}-web-sdk.js"
           nodewasm="lw.PPOCR.C-${VERSION}-node-wasm.zip"
+          android_aar="lw.PPOCR.C-${VERSION}-android-arm64.aar"
+          android_apk="lw.PPOCR.C-${VERSION}-android-arm64-demo.apk"
+          android_checksums="lw.PPOCR.C-${VERSION}-android-arm64.SHA256SUMS.txt"
 
           test -s "release-assets/${windows}"
           test -s "release-assets/${windows}.sha256"
@@ -82,6 +97,23 @@ jobs:
           test -s "release-assets/lw-ppocr.js"
           test -s "release-assets/${nodewasm}"
           test -s "release-assets/${nodewasm}.sha256"
+
+          android_root="release-assets/android"
+          android_aar_source="$(find "$android_root" -type f -name 'lw-ppocr-android-release.aar' -print -quit)"
+          android_apk_source="$(find "$android_root" -type f -name 'demo-preview.apk' -print -quit)"
+          android_source_checksums="$(find "$android_root" -type f -name 'SHA256SUMS.txt' -print -quit)"
+          test -n "$android_aar_source"
+          test -n "$android_apk_source"
+          test -n "$android_source_checksums"
+
+          expected_android_aar="$(awk '$2 ~ /(^|\/)lw-ppocr-android-release\.aar$/ { print $1; exit }' "$android_source_checksums")"
+          expected_android_apk="$(awk '$2 ~ /(^|\/)demo-preview\.apk$/ { print $1; exit }' "$android_source_checksums")"
+          test -n "$expected_android_aar"
+          test -n "$expected_android_apk"
+          test "$(sha256sum "$android_aar_source" | awk '{print $1}')" = "$expected_android_aar"
+          test "$(sha256sum "$android_apk_source" | awk '{print $1}')" = "$expected_android_apk"
+          cp "$android_aar_source" "release-assets/$android_aar"
+          cp "$android_apk_source" "release-assets/$android_apk"
 
           (
             cd release-assets
@@ -96,6 +128,7 @@ jobs:
             sha256sum "${wasm}" > "${wasm}.sha256"
             sha256sum "${websdk}" > "${websdk}.sha256"
             sha256sum -c "${nodewasm}.sha256"
+            sha256sum "${android_aar}" "${android_apk}" > "${android_checksums}"
           )
 
           find release-assets -maxdepth 1 -type f -printf '%f\n' | sort
@@ -116,8 +149,8 @@ jobs:
           fi
 
           mapfile -t assets < <(find release-assets -maxdepth 1 -type f -print | sort)
-          if [[ "${#assets[@]}" -ne 10 ]]; then
-            echo "expected ten release assets, found ${#assets[@]}" >&2
+          if [[ "${#assets[@]}" -ne 13 ]]; then
+            echo "expected thirteen release assets, found ${#assets[@]}" >&2
             printf '%s\n' "${assets[@]}" >&2
             exit 1
           fi
