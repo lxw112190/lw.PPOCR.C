@@ -63,10 +63,10 @@ jobs:
         with:
           gradle-version: "8.10.2"
 
-      - name: Build AAR and demo APK
+      - name: Build AAR and debug demo APK
         working-directory: android
         run: |
-          gradle --no-daemon --stacktrace :lw-ppocr-android:assembleRelease :demo:assembleDebug :demo:assembleRelease
+          gradle --no-daemon --stacktrace :lw-ppocr-android:assembleRelease :demo:assembleDebug
 
       - name: Inspect exact Android artifacts
         shell: bash
@@ -101,5 +101,4 @@ jobs:
           path: |
             android/lw-ppocr-android/build/outputs/aar/lw-ppocr-android-release.aar
             android/demo/build/outputs/apk/debug/demo-debug.apk
-            android/demo/build/outputs/apk/release/demo-release-unsigned.apk
             android/SHA256SUMS.txt
