@@ -1,255 +1,330 @@
 package com.lxw112190.ppocr.demo
 
-import android.graphics.Bitmap
-import android.graphics.BitmapFactory
-import android.graphics.Color
-import android.graphics.Typeface
-import android.graphics.drawable.GradientDrawable
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
+import android.net.Uri
 import android.os.Bundle
-import android.view.Gravity
+import android.provider.OpenableColumns
 import android.view.View
-import android.view.ViewGroup
+import android.widget.ArrayAdapter
 import android.widget.Button
-import android.widget.CheckBox
-import android.widget.LinearLayout
-import android.widget.ScrollView
+import android.widget.PopupMenu
+import android.widget.Spinner
+import android.widget.Switch
 import android.widget.TextView
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.lifecycle.lifecycleScope
+import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.RecyclerView
 import com.lxw112190.ppocr.LwPpocrEngine
 import com.lxw112190.ppocr.OcrOptions
+import com.lxw112190.ppocr.OcrResult
+import com.lxw112190.ppocr.ReadingOrder
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import java.io.InputStream
+import kotlinx.coroutines.withContext
 
 class MainActivity : ComponentActivity() {
+    private enum class UiState {
+        ENGINE_LOADING,
+        READY,
+        IMAGE_LOADING,
+        IMAGE_READY,
+        APPLYING_SETTINGS,
+        RECOGNIZING,
+        RESULT_READY,
+        ENGINE_ERROR,
+        OPERATION_ERROR,
+    }
+
     private var engine: LwPpocrEngine? = null
+    private var engineUseCls = false
+    private var desiredUseCls = false
+    private var desiredReadingOrder = ReadingOrder.HORIZONTAL_LTR
+    private var currentBitmap: android.graphics.Bitmap? = null
+    private var currentResult: OcrResult? = null
+    private var currentSourceName = "image"
+    private var state = UiState.ENGINE_LOADING
+    private var pendingExportContent: String? = null
+
     private lateinit var status: TextView
     private lateinit var statusDetail: TextView
     private lateinit var statusIndicator: TextView
-    private lateinit var result: TextView
+    private lateinit var chooseButton: Button
+    private lateinit var runButton: Button
+    private lateinit var useCls: Switch
+    private lateinit var readingOrder: Spinner
+    private lateinit var preview: OcrPreviewView
+    private lateinit var toggleAnnotations: Button
     private lateinit var resultMeta: TextView
-    private lateinit var useCls: CheckBox
-    private lateinit var choose: Button
+    private lateinit var resultEmpty: TextView
+    private lateinit var copyButton: Button
+    private lateinit var shareButton: Button
+    private lateinit var moreButton: Button
+    private lateinit var resultList: RecyclerView
+    private lateinit var resultAdapter: OcrResultAdapter
 
-    private val navy = Color.rgb(16, 42, 67)
-    private val muted = Color.rgb(98, 125, 152)
-    private val blue = Color.rgb(21, 101, 192)
-    private val green = Color.rgb(0, 137, 123)
-    private val red = Color.rgb(198, 40, 40)
+    private val blue = android.graphics.Color.rgb(21, 101, 192)
+    private val green = android.graphics.Color.rgb(0, 137, 123)
+    private val red = android.graphics.Color.rgb(198, 40, 40)
 
     private val pickImage =
         registerForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
-            if (uri == null) return@registerForActivityResult
-            choose.isEnabled = false
-            useCls.isEnabled = false
-            setStatus("正在识别图片…", "正在运行离线 OCR 引擎", blue)
-            lifecycleScope.launch {
-                runCatching {
-                    val bitmap = contentResolver.openInputStream(uri).use(::decodeArgb8888)
-                    try {
-                        (engine ?: error("OCR 引擎尚未准备好")).recognize(bitmap)
-                    } finally {
-                        if (!bitmap.isRecycled) bitmap.recycle()
+            if (uri != null) prepareImage(uri)
+        }
+
+    private val createTextDocument =
+        registerForActivityResult(ActivityResultContracts.CreateDocument("text/plain")) { uri ->
+            finishDocumentSelection(uri)
+        }
+
+    private val createJsonDocument =
+        registerForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
+            finishDocumentSelection(uri)
+        }
+
+    private fun finishDocumentSelection(uri: Uri?) {
+        val content = pendingExportContent
+        pendingExportContent = null
+        if (uri != null && content != null) saveExport(uri, content)
+    }
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setContentView(R.layout.activity_main)
+
+        status = findViewById(R.id.status)
+        statusDetail = findViewById(R.id.status_detail)
+        statusIndicator = findViewById(R.id.status_indicator)
+        chooseButton = findViewById(R.id.choose_button)
+        runButton = findViewById(R.id.run_button)
+        useCls = findViewById(R.id.use_cls)
+        readingOrder = findViewById(R.id.reading_order)
+        preview = findViewById(R.id.preview)
+        toggleAnnotations = findViewById(R.id.toggle_annotations)
+        resultMeta = findViewById(R.id.result_meta)
+        resultEmpty = findViewById(R.id.result_empty)
+        copyButton = findViewById(R.id.copy_button)
+        shareButton = findViewById(R.id.share_button)
+        moreButton = findViewById(R.id.more_button)
+        resultList = findViewById(R.id.result_list)
+
+        resultAdapter = OcrResultAdapter { index ->
+            preview.setSelectedLine(index)
+        }
+        resultList.layoutManager = LinearLayoutManager(this)
+        resultList.adapter = resultAdapter
+        resultList.isNestedScrollingEnabled = false
+
+        readingOrder.adapter = ArrayAdapter(
+            this,
+            android.R.layout.simple_spinner_item,
+            listOf("标准横排", "古籍竖排（右→左）", "竖排（左→右）"),
+        ).apply {
+            setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+        }
+
+        chooseButton.setOnClickListener {
+            pickImage.launch(
+                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+            )
+        }
+        runButton.setOnClickListener { recognizeCurrentImage() }
+        toggleAnnotations.setOnClickListener {
+            val visible = !preview.annotationsVisible()
+            preview.setAnnotationsVisible(visible)
+            toggleAnnotations.text = if (visible) "隐藏标注" else "显示标注"
+        }
+        copyButton.setOnClickListener { copyCurrentText() }
+        shareButton.setOnClickListener { shareCurrentText() }
+        moreButton.setOnClickListener { showExportMenu() }
+
+        useCls.setOnCheckedChangeListener { _, checked ->
+            if (desiredUseCls == checked) return@setOnCheckedChangeListener
+            desiredUseCls = checked
+            clearCurrentResult()
+            if (state != UiState.ENGINE_LOADING) {
+                state = if (currentBitmap == null) UiState.READY else UiState.IMAGE_READY
+                renderUiState()
+            }
+        }
+        readingOrder.onItemSelectedListener = object : android.widget.AdapterView.OnItemSelectedListener {
+            override fun onNothingSelected(parent: android.widget.AdapterView<*>?) = Unit
+
+            override fun onItemSelected(
+                parent: android.widget.AdapterView<*>?,
+                view: View?,
+                position: Int,
+                id: Long,
+            ) {
+                val selected = when (position) {
+                    1 -> ReadingOrder.VERTICAL_RTL
+                    2 -> ReadingOrder.VERTICAL_LTR
+                    else -> ReadingOrder.HORIZONTAL_LTR
+                }
+                if (desiredReadingOrder != selected) {
+                    desiredReadingOrder = selected
+                    clearCurrentResult()
+                    if (state != UiState.ENGINE_LOADING) {
+                        state = if (currentBitmap == null) UiState.READY else UiState.IMAGE_READY
+                        renderUiState()
                     }
-                }.onSuccess { ocr ->
-                    setStatus("识别完成", "离线处理 · ${ocr.elapsedMs} ms", green)
-                    resultMeta.text = "${ocr.lines.size} 行识别结果"
-                    result.text = if (ocr.lines.isEmpty()) {
-                        "未检测到文字"
-                    } else {
-                        ocr.lines.joinToString("\n") { line ->
-                            "${line.index + 1}. ${line.text}"
-                        }
-                    }
-                    choose.isEnabled = engine != null
-                    useCls.isEnabled = engine != null
-                }.onFailure { error ->
-                    setStatus("识别失败", error.message ?: error.javaClass.simpleName, red)
-                    resultMeta.text = "请重新选择图片"
-                    choose.isEnabled = engine != null
-                    useCls.isEnabled = engine != null
                 }
             }
         }
 
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-
-        val root = ScrollView(this).apply {
-            setBackgroundColor(Color.rgb(246, 248, 252))
-            isFillViewport = true
-        }
-        val content = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(dp(20), dp(24), dp(20), dp(32))
-        }
-        root.addView(content, ViewGroup.LayoutParams(-1, -2))
-
-        val header = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(dp(4), 0, dp(4), dp(20))
-        }
-        header.addView(TextView(this).apply {
-            text = "lw.PPOCR"
-            textSize = 28f
-            setTextColor(navy)
-            typeface = Typeface.create("sans", Typeface.BOLD)
-        })
-        header.addView(TextView(this).apply {
-            text = "Android ARM64  ·  离线文字识别"
-            textSize = 14f
-            setTextColor(muted)
-            setPadding(0, dp(4), 0, 0)
-        })
-        content.addView(header)
-
-        val statusCard = card()
-        val statusRow = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-        }
-        statusIndicator = TextView(this).apply {
-            text = "●"
-            textSize = 18f
-            setTextColor(blue)
-            gravity = Gravity.CENTER
-        }
-        statusRow.addView(statusIndicator, LinearLayout.LayoutParams(dp(32), dp(32)))
-        val statusTextColumn = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(dp(10), 0, 0, 0)
-        }
-        status = TextView(this).apply {
-            textSize = 16f
-            setTextColor(navy)
-            typeface = Typeface.create("sans", Typeface.BOLD)
-        }
-        statusDetail = TextView(this).apply {
-            textSize = 13f
-            setTextColor(muted)
-            setPadding(0, dp(3), 0, 0)
-        }
-        statusTextColumn.addView(status)
-        statusTextColumn.addView(statusDetail)
-        statusRow.addView(statusTextColumn, LinearLayout.LayoutParams(0, -2, 1f))
-        statusCard.addView(statusRow)
-        content.addView(statusCard, marginParams(bottom = 16))
-
-        content.addView(sectionLabel("识别设置"), marginParams(bottom = 8))
-        val settingsCard = card()
-        useCls = CheckBox(this).apply {
-            text = "启用方向分类（CLS）"
-            textSize = 15f
-            setTextColor(navy)
-            buttonTintList = android.content.res.ColorStateList.valueOf(blue)
-        }
-        settingsCard.addView(useCls, LinearLayout.LayoutParams(-1, -2))
-        settingsCard.addView(TextView(this).apply {
-            text = "适合方向不固定的图片；开启后会重新初始化引擎。"
-            textSize = 13f
-            setTextColor(muted)
-            setPadding(dp(4), dp(2), dp(4), 0)
-        }, LinearLayout.LayoutParams(-1, -2))
-        content.addView(settingsCard, marginParams(bottom = 16))
-
-        choose = Button(this).apply {
-            text = "选择图片并识别"
-            textSize = 16f
-            isAllCaps = false
-            minHeight = dp(52)
-            setTextColor(Color.WHITE)
-            background = rounded(blue, 14)
-            elevation = dp(3).toFloat()
-            isEnabled = false
-            setOnClickListener {
-                pickImage.launch(
-                    PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
-                )
-            }
-        }
-        content.addView(choose, marginParams(bottom = 24))
-
-        val resultCard = card()
-        val resultHeader = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-        }
-        resultHeader.addView(TextView(this).apply {
-            text = "识别结果"
-            textSize = 18f
-            setTextColor(navy)
-            typeface = Typeface.create("sans", Typeface.BOLD)
-        }, LinearLayout.LayoutParams(0, -2, 1f))
-        resultMeta = TextView(this).apply {
-            text = "等待图片"
-            textSize = 13f
-            setTextColor(muted)
-            gravity = Gravity.END
-        }
-        resultHeader.addView(resultMeta, LinearLayout.LayoutParams(-2, -2))
-        resultCard.addView(resultHeader)
-        resultCard.addView(View(this).apply {
-            setBackgroundColor(Color.rgb(226, 232, 240))
-        }, LinearLayout.LayoutParams(-1, dp(1)).apply {
-            topMargin = dp(14)
-            bottomMargin = dp(4)
-        })
-        result = TextView(this).apply {
-            text = "选择一张图片，识别文字会显示在这里。"
-            textSize = 16f
-            setTextColor(Color.rgb(50, 67, 86))
-            setPadding(dp(4), dp(12), dp(4), dp(16))
-            setLineSpacing(dp(4).toFloat(), 1f)
-            typeface = Typeface.create("sans", Typeface.NORMAL)
-            setTextIsSelectable(true)
-        }
-        val resultScroll = ScrollView(this).apply {
-            isFillViewport = true
-            addView(result, ViewGroup.LayoutParams(-1, -2))
-        }
-        resultCard.addView(resultScroll, LinearLayout.LayoutParams(-1, dp(280)))
-        content.addView(resultCard)
-        content.addView(TextView(this).apply {
-            text = "模型和推理均在本机完成，不上传图片。"
-            textSize = 12f
-            setTextColor(muted)
-            gravity = Gravity.CENTER
-            setPadding(0, dp(18), 0, 0)
-        }, LinearLayout.LayoutParams(-1, -2))
-
-        setContentView(root)
-        useCls.setOnCheckedChangeListener { _, checked ->
-            if (engine != null) {
-                engine?.close()
-                engine = null
-                choose.isEnabled = false
-                useCls.isEnabled = false
-                setStatus("正在重新创建引擎…", "正在应用 CLS 设置", blue)
-                createEngine(checked)
-            }
-        }
-        createEngine(useCls.isChecked)
+        preview.setAnnotationsVisible(true)
+        state = UiState.ENGINE_LOADING
+        renderUiState()
+        createInitialEngine()
     }
 
-    private fun createEngine(enableCls: Boolean) {
-        choose.isEnabled = false
-        useCls.isEnabled = false
-        setStatus("正在准备引擎…", "首次启动会准备离线模型", blue)
+    private fun createInitialEngine() {
         lifecycleScope.launch {
             runCatching {
-                LwPpocrEngine.create(this@MainActivity, OcrOptions(useCls = enableCls))
+                LwPpocrEngine.create(
+                    this@MainActivity,
+                    OcrOptions(useCls = desiredUseCls, readingOrder = desiredReadingOrder),
+                )
             }.onSuccess {
                 engine = it
-                choose.isEnabled = true
-                useCls.isEnabled = true
-                setStatus("引擎已就绪", "可以选择图片开始识别", green)
+                engineUseCls = desiredUseCls
+                state = if (currentBitmap == null) UiState.READY else UiState.IMAGE_READY
+                renderUiState()
             }.onFailure {
-                choose.isEnabled = false
-                useCls.isEnabled = true
-                setStatus("初始化失败", it.message ?: it.javaClass.simpleName, red)
+                state = UiState.ENGINE_ERROR
+                renderUiState(it.message ?: it.javaClass.simpleName)
             }
+        }
+    }
+
+    private fun prepareImage(uri: Uri) {
+        state = UiState.IMAGE_LOADING
+        renderUiState()
+        lifecycleScope.launch {
+            runCatching { DemoImageLoader.load(this@MainActivity, uri) }
+                .onSuccess { bitmap ->
+                    replaceBitmap(bitmap)
+                    currentSourceName = displayName(uri)
+                    clearCurrentResult()
+                    state = if (engine == null) UiState.ENGINE_ERROR else UiState.IMAGE_READY
+                    renderUiState()
+                }
+                .onFailure {
+                    state = UiState.OPERATION_ERROR
+                    renderUiState(it.message ?: it.javaClass.simpleName)
+                }
+        }
+    }
+
+    private fun recognizeCurrentImage() {
+        val bitmap = currentBitmap ?: return
+        state = UiState.APPLYING_SETTINGS
+        renderUiState()
+        lifecycleScope.launch {
+            runCatching {
+                val active = ensureEngineForCls(desiredUseCls)
+                active.setReadingOrder(desiredReadingOrder)
+                state = UiState.RECOGNIZING
+                renderUiState()
+                active.recognize(bitmap)
+            }.onSuccess { result ->
+                currentResult = result
+                preview.setResult(result)
+                resultAdapter.submitList(result.lines)
+                state = UiState.RESULT_READY
+                renderUiState()
+            }.onFailure {
+                state = if (engine == null) UiState.ENGINE_ERROR else UiState.OPERATION_ERROR
+                renderUiState(it.message ?: it.javaClass.simpleName)
+            }
+        }
+    }
+
+    private suspend fun ensureEngineForCls(useCls: Boolean): LwPpocrEngine {
+        val existing = engine
+        if (existing != null && engineUseCls == useCls) return existing
+        existing?.close()
+        engine = null
+        val fresh = LwPpocrEngine.create(
+            this@MainActivity,
+            OcrOptions(useCls = useCls, readingOrder = desiredReadingOrder),
+        )
+        engine = fresh
+        engineUseCls = useCls
+        return fresh
+    }
+
+    private fun replaceBitmap(bitmap: android.graphics.Bitmap) {
+        val old = currentBitmap
+        preview.setBitmap(null)
+        currentBitmap = null
+        if (old != null && !old.isRecycled) old.recycle()
+        currentBitmap = bitmap
+        preview.setBitmap(bitmap)
+    }
+
+    private fun clearCurrentResult() {
+        currentResult = null
+        resultAdapter.submitList(emptyList())
+        resultAdapter.setSelectedIndex(null)
+        preview.clearResult()
+        resultEmpty.visibility = View.VISIBLE
+        resultMeta.text = if (currentBitmap == null) "等待图片" else "等待识别"
+        renderExportEnabled()
+    }
+
+    private fun renderUiState(errorMessage: String? = null) {
+        val busy = state == UiState.ENGINE_LOADING ||
+            state == UiState.IMAGE_LOADING ||
+            state == UiState.APPLYING_SETTINGS ||
+            state == UiState.RECOGNIZING
+        chooseButton.isEnabled = !busy && engine != null
+        if (state == UiState.ENGINE_ERROR || state == UiState.OPERATION_ERROR) {
+            chooseButton.isEnabled = !busy
+        }
+        runButton.isEnabled = !busy && currentBitmap != null
+        useCls.isEnabled = !busy && engine != null
+        readingOrder.isEnabled = !busy && engine != null
+        toggleAnnotations.isEnabled = currentBitmap != null
+        renderExportEnabled()
+
+        when (state) {
+            UiState.ENGINE_LOADING -> setStatus("正在准备引擎…", "首次启动会准备离线模型", blue)
+            UiState.READY -> setStatus("引擎已就绪", "ARM64 Native · 可以选择图片", green)
+            UiState.IMAGE_LOADING -> setStatus("正在准备图片…", "正在读取并规范化图片", blue)
+            UiState.IMAGE_READY -> setStatus(
+                "图片已准备好",
+                "${currentBitmap?.width ?: 0} × ${currentBitmap?.height ?: 0} · 点击开始识别",
+                green,
+            )
+            UiState.APPLYING_SETTINGS -> setStatus("正在应用识别设置…", "准备 CLS 和阅读顺序", blue)
+            UiState.RECOGNIZING -> setStatus("正在识别…", "图片不会离开本机", blue)
+            UiState.RESULT_READY -> {
+                val result = currentResult
+                setStatus(
+                    "识别完成",
+                    "${result?.lines?.size ?: 0} 行 · ${result?.elapsedMs ?: 0} ms",
+                    green,
+                )
+            }
+            UiState.ENGINE_ERROR -> setStatus("引擎初始化失败", errorMessage ?: "请重新打开应用重试", red)
+            UiState.OPERATION_ERROR -> setStatus("处理失败", errorMessage ?: "请重新选择图片", red)
+        }
+    }
+
+    private fun renderExportEnabled() {
+        val enabled = currentResult != null
+        copyButton.isEnabled = enabled
+        shareButton.isEnabled = enabled
+        moreButton.isEnabled = enabled
+        resultEmpty.visibility = if (enabled) View.GONE else View.VISIBLE
+        if (enabled) {
+            resultMeta.text = "${currentResult?.lines?.size ?: 0} 行"
         }
     }
 
@@ -259,45 +334,98 @@ class MainActivity : ComponentActivity() {
         statusIndicator.setTextColor(color)
     }
 
+    private fun copyCurrentText() {
+        val result = currentResult ?: return
+        val text = OcrResultExporter.toText(result)
+        val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+        clipboard.setPrimaryClip(ClipData.newPlainText("OCR 文本", text))
+        Toast.makeText(this, "已复制 ${result.lines.size} 行文本", Toast.LENGTH_SHORT).show()
+    }
+
+    private fun shareCurrentText() {
+        val result = currentResult ?: return
+        try {
+            OcrResultExporter.shareText(this, result)
+        } catch (error: Exception) {
+            Toast.makeText(this, error.message ?: "系统分享不可用", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun showExportMenu() {
+        val result = currentResult ?: return
+        PopupMenu(this, moreButton).apply {
+            menu.add("导出 TXT").setOnMenuItemClickListener {
+                launchExport(
+                    "text/plain",
+                    ".txt",
+                    OcrResultExporter.toText(result),
+                )
+                true
+            }
+            menu.add("导出 JSON").setOnMenuItemClickListener {
+                launchExport(
+                    "application/json",
+                    ".json",
+                    OcrResultExporter.toJson(
+                        currentSourceName,
+                        result,
+                        desiredUseCls,
+                        desiredReadingOrder,
+                    ),
+                )
+                true
+            }
+        }.show()
+    }
+
+    private fun launchExport(mime: String, extension: String, content: String) {
+        val base = currentSourceName.substringBeforeLast('.', currentSourceName)
+            .replace(Regex("[\\\\/:*?\"<>|]"), "_")
+            .ifBlank { "image" }
+        pendingExportContent = content
+        val fileName = "$base-ocr$extension"
+        if (mime == "application/json") createJsonDocument.launch(fileName)
+        else createTextDocument.launch(fileName)
+    }
+
+    private fun saveExport(uri: Uri, content: String) {
+        lifecycleScope.launch(Dispatchers.IO) {
+            runCatching { OcrResultExporter.writeText(this@MainActivity, uri, content) }
+                .onSuccess {
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(this@MainActivity, "已保存到所选位置", Toast.LENGTH_SHORT).show()
+                    }
+                }
+                .onFailure {
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(
+                            this@MainActivity,
+                            it.message ?: "保存失败",
+                            Toast.LENGTH_SHORT,
+                        ).show()
+                    }
+                }
+        }
+    }
+
+    private fun displayName(uri: Uri): String {
+        contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)
+            ?.use { cursor ->
+                if (cursor.moveToFirst()) {
+                    val index = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                    if (index >= 0) return cursor.getString(index)
+                }
+            }
+        return "image"
+    }
+
     override fun onDestroy() {
         engine?.close()
         engine = null
+        val old = currentBitmap
+        currentBitmap = null
+        preview.setBitmap(null)
+        if (old != null && !old.isRecycled) old.recycle()
         super.onDestroy()
     }
-
-    private fun decodeArgb8888(input: InputStream?): Bitmap {
-        requireNotNull(input) { "无法读取图片" }
-        val decoded = BitmapFactory.decodeStream(input) ?: error("图片格式不受支持")
-        return if (decoded.config == Bitmap.Config.ARGB_8888) decoded
-        else decoded.copy(Bitmap.Config.ARGB_8888, false).also { decoded.recycle() }
-    }
-
-    private fun card(): LinearLayout = LinearLayout(this).apply {
-        orientation = LinearLayout.VERTICAL
-        setPadding(dp(18), dp(16), dp(18), dp(16))
-        background = rounded(Color.WHITE, 18)
-        elevation = dp(2).toFloat()
-    }
-
-    private fun sectionLabel(text: String): TextView = TextView(this).apply {
-        this.text = text
-        textSize = 13f
-        setTextColor(muted)
-        typeface = Typeface.create("sans", Typeface.BOLD)
-        letterSpacing = 0.08f
-    }
-
-    private fun rounded(color: Int, radiusDp: Int): GradientDrawable =
-        GradientDrawable().apply {
-            setColor(color)
-            cornerRadius = dp(radiusDp).toFloat()
-        }
-
-    private fun marginParams(bottom: Int = 0): LinearLayout.LayoutParams =
-        LinearLayout.LayoutParams(-1, -2).apply {
-            this.bottomMargin = bottom
-        }
-
-    private fun dp(value: Int): Int =
-        (value * resources.displayMetrics.density + 0.5f).toInt()
 }

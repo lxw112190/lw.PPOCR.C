@@ -15,6 +15,12 @@ API 基本用法：
         engine.close()
     }
 
+Demo 使用流程：选择图片后会先显示本地预览，不会自动开始 OCR。确认方向分类
+CLS 和阅读顺序后点击“开始识别”；识别框可在预览区显示或隐藏，点击结果行
+会高亮对应检测框。结果区支持复制、系统分享，以及通过系统文件选择器保存
+UTF-8 TXT 或 schema_version=1 的 JSON。Demo 只使用系统 Photo Picker 和
+CreateDocument，不申请相机或存储权限。
+
 应用不需要网络或存储权限。模型首次使用时会根据随 AAR 提供的
 `manifest.json` 内容身份复制到 `noBackupFilesDir/lw-ppocr/models/` 下的
 `ppocrv6-tiny-<asset_set_id>` 目录，并在复制过程中校验每个文件的大小和

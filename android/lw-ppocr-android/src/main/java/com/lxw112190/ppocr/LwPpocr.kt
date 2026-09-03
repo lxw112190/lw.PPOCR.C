@@ -93,6 +93,16 @@ public class LwPpocrEngine private constructor(
         }
     }
 
+    /** Change result ordering without rebuilding the native OCR engine. */
+    public fun setReadingOrder(readingOrder: ReadingOrder) {
+        lifecycleLock.withLock {
+            check(!closed) { "OCR engine is closed" }
+            if (!NativeBridge.nativeSetReadingOrder(handle, readingOrderValue(readingOrder))) {
+                throw LwPpocrException(NativeBridge.nativeLastError())
+            }
+        }
+    }
+
     public companion object {
         private const val ASSET_ROOT = "lw-ppocr/models"
         private const val CACHE_ROOT = "lw-ppocr/models"
@@ -124,12 +134,7 @@ public class LwPpocrEngine private constructor(
                 if (handle == 0L) {
                     throw LwPpocrException(NativeBridge.nativeLastError())
                 }
-                val readingOrder = when (options.readingOrder) {
-                    ReadingOrder.HORIZONTAL_LTR -> 0
-                    ReadingOrder.VERTICAL_RTL -> 1
-                    ReadingOrder.VERTICAL_LTR -> 2
-                }
-                if (!NativeBridge.nativeSetReadingOrder(handle, readingOrder)) {
+                if (!NativeBridge.nativeSetReadingOrder(handle, readingOrderValue(options.readingOrder))) {
                     NativeBridge.nativeDestroy(handle)
                     throw LwPpocrException(NativeBridge.nativeLastError())
                 }
@@ -147,6 +152,12 @@ public class LwPpocrEngine private constructor(
                 if (error is LwPpocrException) throw error
                 throw LwPpocrException("Unable to read OCR model manifest", error)
             }
+        }
+
+        private fun readingOrderValue(readingOrder: ReadingOrder): Int = when (readingOrder) {
+            ReadingOrder.HORIZONTAL_LTR -> 0
+            ReadingOrder.VERTICAL_RTL -> 1
+            ReadingOrder.VERTICAL_LTR -> 2
         }
 
         private fun parseManifest(text: String, source: String): ModelManifest {

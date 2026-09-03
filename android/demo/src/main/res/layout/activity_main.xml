@@ -1,0 +1,292 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/root_scroll"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:fillViewport="true"
+    android:background="#F6F8FC">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:paddingStart="20dp"
+        android:paddingTop="24dp"
+        android:paddingEnd="20dp"
+        android:paddingBottom="32dp">
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="lw.PPOCR"
+            android:textColor="#102A43"
+            android:textSize="28sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:paddingTop="4dp"
+            android:paddingBottom="16dp"
+            android:text="Android ARM64  ·  离线文字识别"
+            android:textColor="#627D98"
+            android:textSize="14sp" />
+
+        <LinearLayout
+            android:id="@+id/status_card"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="14dp"
+            android:background="#FFFFFF"
+            android:elevation="2dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:padding="16dp">
+
+            <TextView
+                android:id="@+id/status_indicator"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:gravity="center"
+                android:text="●"
+                android:textColor="#1565C0"
+                android:textSize="18sp" />
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical"
+                android:paddingStart="10dp">
+
+                <TextView
+                    android:id="@+id/status"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:textColor="#102A43"
+                    android:textSize="16sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/status_detail"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:paddingTop="3dp"
+                    android:textColor="#627D98"
+                    android:textSize="13sp" />
+            </LinearLayout>
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="14dp"
+            android:orientation="horizontal">
+
+            <Button
+                android:id="@+id/choose_button"
+                android:layout_width="0dp"
+                android:layout_height="52dp"
+                android:layout_marginEnd="6dp"
+                android:layout_weight="1"
+                android:backgroundTint="#1565C0"
+                android:text="选择图片"
+                android:textAllCaps="false"
+                android:textColor="#FFFFFF"
+                android:textSize="15sp" />
+
+            <Button
+                android:id="@+id/run_button"
+                android:layout_width="0dp"
+                android:layout_height="52dp"
+                android:layout_marginStart="6dp"
+                android:layout_weight="1"
+                android:backgroundTint="#00897B"
+                android:text="开始识别"
+                android:textAllCaps="false"
+                android:textColor="#FFFFFF"
+                android:textSize="15sp" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/settings_card"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="18dp"
+            android:background="#FFFFFF"
+            android:elevation="1dp"
+            android:orientation="vertical"
+            android:paddingStart="16dp"
+            android:paddingTop="8dp"
+            android:paddingEnd="12dp"
+            android:paddingBottom="8dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="52dp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="方向分类 CLS"
+                    android:textColor="#102A43"
+                    android:textSize="15sp" />
+
+                <Switch
+                    android:id="@+id/use_cls"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:contentDescription="方向分类 CLS" />
+            </LinearLayout>
+
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:background="#E2E8F0" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="56dp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="阅读顺序"
+                    android:textColor="#102A43"
+                    android:textSize="15sp" />
+
+                <Spinner
+                    android:id="@+id/reading_order"
+                    android:layout_width="170dp"
+                    android:layout_height="wrap_content"
+                    android:contentDescription="阅读顺序" />
+            </LinearLayout>
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="图像预览"
+                android:textColor="#102A43"
+                android:textSize="18sp"
+                android:textStyle="bold" />
+
+            <Button
+                android:id="@+id/toggle_annotations"
+                android:layout_width="wrap_content"
+                android:layout_height="44dp"
+                android:backgroundTint="#E7EEF7"
+                android:text="隐藏标注"
+                android:textAllCaps="false"
+                android:textColor="#1565C0"
+                android:textSize="13sp" />
+        </LinearLayout>
+
+        <com.lxw112190.ppocr.demo.OcrPreviewView
+            android:id="@+id/preview"
+            android:layout_width="match_parent"
+            android:layout_height="280dp"
+            android:layout_marginTop="8dp"
+            android:layout_marginBottom="18dp" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="识别结果"
+                android:textColor="#102A43"
+                android:textSize="18sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/result_meta"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:paddingEnd="4dp"
+                android:text="等待图片"
+                android:textColor="#627D98"
+                android:textSize="13sp" />
+
+            <Button
+                android:id="@+id/copy_button"
+                android:layout_width="wrap_content"
+                android:layout_height="42dp"
+                android:backgroundTint="#E7EEF7"
+                android:text="复制"
+                android:textAllCaps="false"
+                android:textColor="#1565C0"
+                android:textSize="12sp" />
+
+            <Button
+                android:id="@+id/share_button"
+                android:layout_width="wrap_content"
+                android:layout_height="42dp"
+                android:backgroundTint="#E7EEF7"
+                android:text="分享"
+                android:textAllCaps="false"
+                android:textColor="#1565C0"
+                android:textSize="12sp" />
+
+            <Button
+                android:id="@+id/more_button"
+                android:layout_width="42dp"
+                android:layout_height="42dp"
+                android:backgroundTint="#E7EEF7"
+                android:text="⋮"
+                android:textColor="#1565C0"
+                android:textSize="18sp" />
+        </LinearLayout>
+
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:layout_marginTop="10dp"
+            android:background="#E2E8F0" />
+
+        <TextView
+            android:id="@+id/result_empty"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:paddingStart="4dp"
+            android:paddingTop="22dp"
+            android:paddingEnd="4dp"
+            android:paddingBottom="22dp"
+            android:text="选择一张图片，识别文字会显示在这里。"
+            android:textColor="#627D98"
+            android:textSize="15sp" />
+
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/result_list"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:nestedScrollingEnabled="false" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:paddingTop="18dp"
+            android:text="模型和推理均在本机完成，不上传图片。"
+            android:textColor="#627D98"
+            android:textSize="12sp" />
+    </LinearLayout>
+</ScrollView>
