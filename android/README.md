@@ -15,8 +15,12 @@ API 基本用法：
         engine.close()
     }
 
-应用不需要网络或存储权限。模型首次使用时复制到应用的 noBackupFilesDir，
-后续复用已安装的模型文件。
+应用不需要网络或存储权限。模型首次使用时会根据随 AAR 提供的
+`manifest.json` 内容身份复制到 `noBackupFilesDir/lw-ppocr/models/` 下的
+`ppocrv6-tiny-<asset_set_id>` 目录，并在复制过程中校验每个文件的大小和
+SHA-256。后续启动只检查缓存身份、manifest 和文件大小，不会重复计算整套
+模型的 SHA-256；当 AAR 中模型或字典变化时会自动安装到新的目录，成功创建
+引擎后再清理该缓存根目录内的旧目录。
 
 CI 验证 Gradle/NDK 编译、AAR/APK 内容、AArch64 ELF、依赖白名单、模型和权限。
 真机 OCR、厂商 ROM 图片选择器、长时间内存和温度表现需要在 ARM64 手机上单独验证。

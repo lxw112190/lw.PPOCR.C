@@ -11,6 +11,7 @@ on:
       - "CMakeLists.txt"
       - "requirements-converter.txt"
       - "tools/prepare_android_models.py"
+      - "tests/test_android_models.py"
       - ".github/workflows/android.yml"
   pull_request:
     paths:
@@ -21,6 +22,7 @@ on:
       - "CMakeLists.txt"
       - "requirements-converter.txt"
       - "tools/prepare_android_models.py"
+      - "tests/test_android_models.py"
       - ".github/workflows/android.yml"
 
 permissions:
@@ -57,6 +59,9 @@ jobs:
           cmake -S . -B build-android-models -G Ninja -DLW_BUILD_HTTP_DEMO=OFF -DLW_BUILD_CSHARP_DEMOS=OFF -DBUILD_TESTING=OFF
           cmake --build build-android-models --target convert_det_model convert_cls_model convert_rec_model -j 2
           python tools/prepare_android_models.py --build-models build-android-models --dictionary models/ppocrv6-tiny/ppocr_keys.txt --output android/generated-model-assets/lw-ppocr/models
+
+      - name: Test Android model manifest
+        run: python tests/test_android_models.py
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
