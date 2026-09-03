@@ -13,6 +13,7 @@ on:
       - "tools/prepare_android_models.py"
       - "tests/test_android_models.py"
       - ".github/workflows/android.yml"
+
   pull_request:
     paths:
       - "android/**"
@@ -32,8 +33,10 @@ jobs:
   build:
     runs-on: ubuntu-24.04
     timeout-minutes: 45
+
     steps:
-      - uses: actions/checkout@v4
+      - name: Check out repository
+        uses: actions/checkout@v4
 
       - name: Set up Java
         uses: actions/setup-java@v4
@@ -51,59 +54,275 @@ jobs:
 
       - name: Install pinned SDK components
         run: |
-          sdkmanager "platforms;android-35" "build-tools;35.0.0" "cmake;3.22.1" "ndk;27.2.12479018"
+          sdkmanager \
+            "platforms;android-35" \
+            "build-tools;35.0.0" \
+            "cmake;3.22.1" \
+            "ndk;27.2.12479018"
 
+      # ----------------------------------------------------------------------
+      # Prepare PP-OCR LWM model assets.
+      # ----------------------------------------------------------------------
       - name: Prepare LWM assets
         run: |
-          python -m pip install --disable-pip-version-check -r requirements-converter.txt
-          cmake -S . -B build-android-models -G Ninja -DLW_BUILD_HTTP_DEMO=OFF -DLW_BUILD_CSHARP_DEMOS=OFF -DBUILD_TESTING=OFF
-          cmake --build build-android-models --target convert_det_model convert_cls_model convert_rec_model -j 2
-          python tools/prepare_android_models.py --build-models build-android-models --dictionary models/ppocrv6-tiny/ppocr_keys.txt --output android/generated-model-assets/lw-ppocr/models
+          python -m pip install \
+            --disable-pip-version-check \
+            -r requirements-converter.txt
+
+          cmake \
+            -S . \
+            -B build-android-models \
+            -G Ninja \
+            -DLW_BUILD_HTTP_DEMO=OFF \
+            -DLW_BUILD_CSHARP_DEMOS=OFF \
+            -DBUILD_TESTING=OFF
+
+          cmake \
+            --build build-android-models \
+            --target \
+              convert_det_model \
+              convert_cls_model \
+              convert_rec_model \
+            -j 2
+
+          python tools/prepare_android_models.py \
+            --build-models build-android-models \
+            --dictionary models/ppocrv6-tiny/ppocr_keys.txt \
+            --output android/generated-model-assets/lw-ppocr/models
 
       - name: Test Android model manifest
-        run: python tests/test_android_models.py
+        run: |
+          python tests/test_android_models.py
 
+      # ----------------------------------------------------------------------
+      # Gradle.
+      # ----------------------------------------------------------------------
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: "8.10.2"
 
-      - name: Build AAR and debug demo APK
+      # Build:
+      #
+      #   1. Release AAR
+      #      Official SDK artifact.
+      #
+      #   2. Debug Demo APK
+      #      Build-only validation for developer/debug configuration.
+      #
+      #   3. Release Demo APK
+      #      Native Release optimization and R8/consumer-rule validation.
+      #
+      # The Debug APK is intentionally NOT published.
+      - name: Build Android AAR and Demo variants
         working-directory: android
         run: |
-          gradle --no-daemon --stacktrace :lw-ppocr-android:assembleRelease :demo:assembleDebug
+          gradle \
+            --no-daemon \
+            --stacktrace \
+            :lw-ppocr-android:assembleRelease \
+            :demo:assembleDebug \
+            :demo:assembleRelease
 
-      - name: Inspect exact Android artifacts
+      # ----------------------------------------------------------------------
+      # Sign the optimized Release Demo with a temporary CI key.
+      #
+      # This APK is a Preview artifact, not a production Play Store build.
+      # The signing key is generated for each CI run and is not persisted.
+      # ----------------------------------------------------------------------
+      - name: Sign optimized Preview APK
         shell: bash
         run: |
           set -euo pipefail
-          aar=android/lw-ppocr-android/build/outputs/aar/lw-ppocr-android-release.aar
-          apk=android/demo/build/outputs/apk/debug/demo-debug.apk
-          test -s "$aar"
-          test -s "$apk"
-          unzip -l "$aar" | grep -q 'jni/arm64-v8a/liblw_ppocr_android.so'
-          unzip -l "$aar" | grep -q 'assets/lw-ppocr/models/det.lwm'
-          unzip -l "$aar" | grep -q 'assets/lw-ppocr/models/manifest.json'
-          unzip -p "$aar" jni/arm64-v8a/liblw_ppocr_android.so > build-android.so
-          file build-android.so | grep -Eiq 'aarch64|arm64'
-          readelf -h build-android.so | grep -q 'AArch64'
-          if readelf -d build-android.so | grep -Eiq 'libc\+\+|opencv|onnxruntime'; then
-            echo "unexpected native dependency"
-            exit 1
-          fi
-          aapt="$ANDROID_HOME/build-tools/35.0.0/aapt"
-          "$aapt" dump badging "$apk" | grep -q "native-code: 'arm64-v8a'"
-          if "$aapt" dump permissions "$apk" | grep -Eiq 'INTERNET|READ_EXTERNAL_STORAGE|WRITE_EXTERNAL_STORAGE'; then
-            echo "unexpected Android permission"
-            exit 1
-          fi
-          sha256sum "$aar" "$apk" > android/SHA256SUMS.txt
 
-      - name: Upload Android artifacts
+          BUILD_TOOLS="$ANDROID_HOME/build-tools/35.0.0"
+          ZIPALIGN="$BUILD_TOOLS/zipalign"
+          APKSIGNER="$BUILD_TOOLS/apksigner"
+
+          RELEASE_DIR="android/demo/build/outputs/apk/release"
+
+          UNSIGNED_APK="$(find "$RELEASE_DIR" \
+            -maxdepth 1 \
+            -type f \
+            -name '*-release-unsigned.apk' \
+            -print \
+            -quit)"
+
+          if [ -z "$UNSIGNED_APK" ]; then
+            echo "Release unsigned APK was not produced."
+            find android/demo/build/outputs/apk -type f -print || true
+            exit 1
+          fi
+
+          echo "Unsigned APK: $UNSIGNED_APK"
+
+          ALIGNED_APK="$RELEASE_DIR/demo-preview-aligned.apk"
+          PREVIEW_APK="$RELEASE_DIR/demo-preview.apk"
+
+          KEYSTORE="$RUNNER_TEMP/lw-ppocr-preview.keystore"
+
+          keytool \
+            -genkeypair \
+            -noprompt \
+            -keystore "$KEYSTORE" \
+            -storepass android \
+            -keypass android \
+            -alias androiddebugkey \
+            -keyalg RSA \
+            -keysize 2048 \
+            -validity 10000 \
+            -dname "CN=lw.PPOCR.C Android Preview,O=lw.PPOCR.C,C=CN"
+
+          "$ZIPALIGN" \
+            -f \
+            -p \
+            4 \
+            "$UNSIGNED_APK" \
+            "$ALIGNED_APK"
+
+          "$APKSIGNER" sign \
+            --ks "$KEYSTORE" \
+            --ks-key-alias androiddebugkey \
+            --ks-pass pass:android \
+            --key-pass pass:android \
+            --out "$PREVIEW_APK" \
+            "$ALIGNED_APK"
+
+          "$APKSIGNER" verify \
+            --verbose \
+            --print-certs \
+            "$PREVIEW_APK"
+
+          test -s "$PREVIEW_APK"
+
+          echo "Preview APK:"
+          ls -lh "$PREVIEW_APK"
+
+      # ----------------------------------------------------------------------
+      # Validate exact artifacts.
+      # ----------------------------------------------------------------------
+      - name: Inspect Android artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          AAR="android/lw-ppocr-android/build/outputs/aar/lw-ppocr-android-release.aar"
+          DEBUG_APK="android/demo/build/outputs/apk/debug/demo-debug.apk"
+          PREVIEW_APK="android/demo/build/outputs/apk/release/demo-preview.apk"
+
+          test -s "$AAR"
+          test -s "$DEBUG_APK"
+          test -s "$PREVIEW_APK"
+
+          # ------------------------------------------------------------------
+          # Release AAR contents.
+          # ------------------------------------------------------------------
+          unzip -l "$AAR" \
+            | grep -q 'jni/arm64-v8a/liblw_ppocr_android.so'
+
+          unzip -l "$AAR" \
+            | grep -q 'assets/lw-ppocr/models/det.lwm'
+
+          unzip -l "$AAR" \
+            | grep -q 'assets/lw-ppocr/models/cls.lwm'
+
+          unzip -l "$AAR" \
+            | grep -q 'assets/lw-ppocr/models/rec.lwm'
+
+          unzip -l "$AAR" \
+            | grep -q 'assets/lw-ppocr/models/ppocr_keys.txt'
+
+          unzip -l "$AAR" \
+            | grep -q 'assets/lw-ppocr/models/manifest.json'
+
+          # ------------------------------------------------------------------
+          # Inspect the Release native library from the AAR.
+          # ------------------------------------------------------------------
+          unzip -p \
+            "$AAR" \
+            jni/arm64-v8a/liblw_ppocr_android.so \
+            > build-android-release.so
+
+          file build-android-release.so \
+            | grep -Eiq 'aarch64|arm64'
+
+          readelf -h build-android-release.so \
+            | grep -q 'AArch64'
+
+          # No unexpected heavyweight native dependencies.
+          if readelf -d build-android-release.so \
+            | grep -Eiq 'libc\+\+|opencv|onnxruntime|paddle'; then
+
+            echo "Unexpected native dependency in Release AAR."
+            readelf -d build-android-release.so
+            exit 1
+          fi
+
+          # ------------------------------------------------------------------
+          # Preview APK architecture.
+          # ------------------------------------------------------------------
+          unzip -l "$PREVIEW_APK" \
+            | grep -q 'lib/arm64-v8a/liblw_ppocr_android.so'
+
+          unzip -p \
+            "$PREVIEW_APK" \
+            lib/arm64-v8a/liblw_ppocr_android.so \
+            > build-android-preview.so
+
+          file build-android-preview.so \
+            | grep -Eiq 'aarch64|arm64'
+
+          readelf -h build-android-preview.so \
+            | grep -q 'AArch64'
+
+          # ------------------------------------------------------------------
+          # Android package metadata.
+          # ------------------------------------------------------------------
+          AAPT="$ANDROID_HOME/build-tools/35.0.0/aapt"
+
+          "$AAPT" dump badging "$PREVIEW_APK" \
+            | grep -q "native-code: 'arm64-v8a'"
+
+          # Demo must stay offline and permission-light.
+          if "$AAPT" dump permissions "$PREVIEW_APK" \
+            | grep -Eiq \
+              'INTERNET|READ_EXTERNAL_STORAGE|WRITE_EXTERNAL_STORAGE|CAMERA'; then
+
+            echo "Unexpected Android permission in Preview APK."
+            "$AAPT" dump permissions "$PREVIEW_APK"
+            exit 1
+          fi
+
+          # ------------------------------------------------------------------
+          # Final hashes.
+          # ------------------------------------------------------------------
+          sha256sum \
+            "$AAR" \
+            "$PREVIEW_APK" \
+            > android/SHA256SUMS.txt
+
+          echo
+          echo "Final artifacts:"
+          ls -lh \
+            "$AAR" \
+            "$PREVIEW_APK" \
+            android/SHA256SUMS.txt
+
+          echo
+          cat android/SHA256SUMS.txt
+
+      # ----------------------------------------------------------------------
+      # Only publish artifacts useful to SDK users / Preview testers.
+      #
+      # demo-debug.apk is intentionally not uploaded.
+      # ----------------------------------------------------------------------
+      - name: Upload Android Preview artifacts
         uses: actions/upload-artifact@v4
         with:
           name: lw-ppocr-android-arm64-preview
+          if-no-files-found: error
+          retention-days: 14
           path: |
             android/lw-ppocr-android/build/outputs/aar/lw-ppocr-android-release.aar
-            android/demo/build/outputs/apk/debug/demo-debug.apk
+            android/demo/build/outputs/apk/release/demo-preview.apk
             android/SHA256SUMS.txt
