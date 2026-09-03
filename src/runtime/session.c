@@ -27,7 +27,11 @@ static void* workspace_allocate(size_t size) {
 #if defined(_WIN32)
     return _aligned_malloc(size, LW_WORKSPACE_ALIGNMENT);
 #else
-    return aligned_alloc(LW_WORKSPACE_ALIGNMENT, size);
+    void* pointer = NULL;
+    if (posix_memalign(&pointer, LW_WORKSPACE_ALIGNMENT, size) != 0) {
+        return NULL;
+    }
+    return pointer;
 #endif
 }
 
