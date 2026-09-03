@@ -183,16 +183,21 @@ instances for concurrency. The manifest records whether the build used
 ## Android ARM64 Native Preview
 
 The repository includes an experimental Android Native SDK under `android/`.
-The first preview targets `arm64-v8a` with `minSdk 21`, bundles the offline
-PP-OCRv6 tiny LWM models, and exposes a Kotlin API over the existing pure-C
-runtime. The demo uses the system media picker and requests no network or
-storage permission.
+The preview targets `arm64-v8a` with `minSdk 21`, bundles the offline PP-OCRv6
+tiny LWM models, and exposes a Kotlin API over the existing pure-C runtime.
+The demo is an offline image OCR workbench: choose an image, preview it, select
+CLS and reading order, run OCR, inspect/highlight detection boxes, and copy,
+share, or save TXT/JSON results. It uses the system media picker and requests
+no camera, network, or storage permission. Camera/CameraX, PDF, video, and
+batch processing are intentionally outside this preview.
 
 The local machine does not need Android Studio, the Android SDK, the NDK, or an
-emulator. GitHub Actions builds the AAR and demo APK and inspects the AArch64
-ELF, native dependency closure, model assets, and APK permissions. A green CI
-build is not a physical-device OCR, memory, thermal, or vendor-ROM validation.
-See `android/README.md`.
+emulator. GitHub Actions builds the Release AAR and a signed `demo-preview.apk`
+and inspects the AArch64 ELF, native dependency closure, model assets, APK
+permissions, and model manifest. A green CI build is not a physical-device OCR,
+memory, thermal, or vendor-ROM validation; this preview has been separately
+validated on an ARM64 device. See `android/README.md` for the SDK API, demo
+workflow, artifact names, and upgrade limitations.
 
 ## Documentation
 
