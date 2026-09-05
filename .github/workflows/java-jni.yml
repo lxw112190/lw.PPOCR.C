@@ -172,7 +172,7 @@ jobs:
           test -s "$bundle/SHA256SUMS.txt"
           (cd "$bundle" && sha256sum -c SHA256SUMS.txt)
           file "$bundle/native"/*.so* | grep -Eiq 'ELF 64-bit.*x86-64'
-          readelf -d "$bundle/native/liblw_ppocr_java.so" | grep -Fq '\$ORIGIN'
+          readelf -d "$bundle/native/liblw_ppocr_java.so" | grep -Fq '$ORIGIN'
           if find "$bundle/native" -maxdepth 1 -type f | grep -Eiq 'opencv|onnxruntime|paddle|python'; then
             echo "forbidden dependency in Linux bundle" >&2
             exit 1
