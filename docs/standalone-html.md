@@ -15,7 +15,8 @@ script.
 Download the release HTML or build the **lw-ocr-html** CMake target, then open
 **ocr-demo.html** directly in a modern browser.
 
-1. On desktop, select an image/PDF or drag it onto the page.
+1. On desktop, select an image/PDF or drag it onto the page. You can also
+   press `Ctrl+V`/`⌘V` to paste an image or screenshot from the clipboard.
 2. On a phone, choose **拍照识别** for a new image or **选择图片 / PDF** for
    an existing file.
 3. Enable CLS when orientation classification is needed.
@@ -32,6 +33,11 @@ The PDF preview can move between pages without retaining every rendered page.
 The Demo keeps only the current page bitmap plus structured results, and caps
 an OCR render at 5 megapixels. Selecting another file invalidates the old
 export snapshot until recognition succeeds again.
+Pasting an image follows the same lifecycle as selecting a file: it replaces
+the previous source, clears old results immediately, shows a preview, and waits
+for the user to start OCR. Plain-text paste is not intercepted. Only the first
+image item is used when the clipboard contains multiple images; PDFs are not
+accepted through paste.
 
 Inference normally runs inside a Blob Worker so the controls remain
 responsive. If local browser policy rejects Blob Workers, the embedded SDK

@@ -32,7 +32,8 @@ The project currently provides:
 The WinForms and standalone browser Demos can copy recognized text and export
 UTF-8 TXT or versioned JSON using the shared
 [OCR result export schema](docs/ocr-export-schema.md).
-The standalone browser Demo also opens local image-based PDFs, recognizes the
+The standalone browser Demo can select, drag-and-drop, or paste clipboard
+images directly for OCR. It also opens local image-based PDFs, recognizes the
 current page or all pages sequentially, and exports page-aware schema v2 JSON.
 
 The deployment core accepts decoded BGR8 pixels. Image decoding remains an
@@ -142,6 +143,10 @@ The build produces two self-contained browser artifacts:
   native HTTP Demo. The HTML also embeds PDF.js 6.3.289's `jbig2.wasm`,
   `openjpeg.wasm`, and `qcms_bg.wasm` helpers for supported scanned-PDF
   formats; PDF.js is not included in `lw-ppocr.js` or the C runtime.
+
+The HTML Demo accepts screenshots through the normal file picker, drag-and-drop,
+or `Ctrl+V`/`⌘V` image paste. Pasting only prepares a local image preview; it
+does not start OCR automatically, and clipboard images are never uploaded.
 
 The standalone page supports selectable reading order: horizontal
 left-to-right, vertical right-to-left for traditional books, and vertical

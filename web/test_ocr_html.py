@@ -27,9 +27,9 @@ def main() -> int:
     sample = arguments.sample.resolve()
     if not html.is_file() or not sample.is_file():
         raise SystemExit("standalone HTML or sample image is missing")
-    assert '<input id="use-cls" type="checkbox" disabled>' in html.read_text(
-        encoding="utf-8"
-    )
+    html_text = html.read_text(encoding="utf-8")
+    assert '<input id="use-cls" type="checkbox" disabled>' in html_text
+    assert "Ctrl+V" in html_text
 
     browser_messages: list[str] = []
     with sync_playwright() as playwright:
@@ -220,6 +220,87 @@ def main() -> int:
         reset_snapshot = page.evaluate("window.__lwOcrTest.snapshot()")
         assert not reset_snapshot["hasResults"], reset_snapshot
         assert not reset_snapshot["exportEnabled"], reset_snapshot
+
+        # A plain-text paste must pass through untouched. An image paste must
+        # be handled by the real document paste listener, load only the first
+        # image, and leave OCR for the explicit Run button/API call.
+        text_paste = page.evaluate(
+            """() => {
+              const data = new DataTransfer();
+              data.setData("text/plain", "clipboard text");
+              const event = new ClipboardEvent("paste", {
+                clipboardData: data,
+                bubbles: true,
+                cancelable: true,
+              });
+              document.dispatchEvent(event);
+              return {defaultPrevented: event.defaultPrevented};
+            }"""
+        )
+        assert text_paste["defaultPrevented"] is False
+        text_snapshot = page.evaluate("window.__lwOcrTest.snapshot()")
+        assert text_snapshot["prepareCount"] == reset_snapshot["prepareCount"]
+        assert text_snapshot["runCount"] == reset_snapshot["runCount"]
+
+        clipboard_bytes = list(sample.read_bytes())
+        paste_snapshot = page.evaluate(
+            """bytes => {
+              const data = Uint8Array.from(bytes);
+              const first = new File([data], "first.png", {type: "image/png"});
+              const second = new File([data], "second.png", {type: "image/png"});
+              const transfer = new DataTransfer();
+              transfer.items.add(first);
+              transfer.items.add(second);
+              const event = new ClipboardEvent("paste", {
+                clipboardData: transfer,
+                bubbles: true,
+                cancelable: true,
+              });
+              document.dispatchEvent(event);
+              return {defaultPrevented: event.defaultPrevented};
+            }""",
+            clipboard_bytes,
+        )
+        assert paste_snapshot["defaultPrevented"] is True
+        page.wait_for_function(
+            "() => document.querySelector('#status').textContent.includes('剪贴板')",
+            timeout=180_000,
+        )
+        pasted = page.evaluate("window.__lwOcrTest.snapshot()")
+        assert pasted["prepared"] and pasted["sourceKind"] == "image", pasted
+        assert not pasted["hasResults"] and not pasted["exportEnabled"], pasted
+        assert pasted["prepareCount"] == reset_snapshot["prepareCount"] + 1, pasted
+        assert pasted["runCount"] == reset_snapshot["runCount"], pasted
+
+        pasted_result = page.evaluate("window.lwPpocrDemo.recognize()")
+        assert pasted_result["source"].startswith("clipboard-")
+        assert len(pasted_result["lines"]) == 16
+        pasted_after_ocr = page.evaluate("window.__lwOcrTest.snapshot()")
+        assert pasted_after_ocr["runCount"] == reset_snapshot["runCount"] + 1
+
+        # Pasting a new image clears the previous OCR result immediately.
+        page.evaluate(
+            """bytes => {
+              const file = new File([Uint8Array.from(bytes)], "again.png", {
+                type: "image/png",
+              });
+              const transfer = new DataTransfer();
+              transfer.items.add(file);
+              document.dispatchEvent(new ClipboardEvent("paste", {
+                clipboardData: transfer,
+                bubbles: true,
+                cancelable: true,
+              }));
+            }""",
+            clipboard_bytes,
+        )
+        page.wait_for_function(
+            "() => document.querySelector('#status').textContent.includes('剪贴板')",
+            timeout=180_000,
+        )
+        second_paste = page.evaluate("window.__lwOcrTest.snapshot()")
+        assert not second_paste["hasResults"] and not second_paste["exportEnabled"]
+        assert second_paste["runCount"] == pasted_after_ocr["runCount"]
 
         # The same file remains a desktop two-panel tool and a phone-friendly
         # camera/gallery experience. The sponsor QR is intentionally visible.

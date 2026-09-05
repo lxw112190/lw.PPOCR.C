@@ -69,6 +69,50 @@
   let pdfResultView = "page";
   let overlayVisible = true;
 
+  function clipboardExtension(type) {
+    switch (String(type || "").toLowerCase()) {
+      case "image/jpeg": return ".jpg";
+      case "image/webp": return ".webp";
+      case "image/bmp": return ".bmp";
+      default: return ".png";
+    }
+  }
+
+  function clipboardFileName(type) {
+    const now = new Date();
+    const pad = value => String(value).padStart(2, "0");
+    return "clipboard-" + now.getFullYear() +
+      pad(now.getMonth() + 1) + pad(now.getDate()) + "-" +
+      pad(now.getHours()) + pad(now.getMinutes()) + pad(now.getSeconds()) +
+      clipboardExtension(type);
+  }
+
+  function clipboardImageFile(event) {
+    const clipboard = event && event.clipboardData;
+    if (!clipboard) return null;
+    const items = clipboard.items || [];
+    for (let index = 0; index < items.length; index += 1) {
+      const item = items[index];
+      if (item.kind === "file" && String(item.type || "").startsWith("image/")) {
+        const file = item.getAsFile();
+        if (file) return file;
+      }
+    }
+    const files = clipboard.files || [];
+    for (let index = 0; index < files.length; index += 1) {
+      const file = files[index];
+      if (String(file.type || "").startsWith("image/")) return file;
+    }
+    return null;
+  }
+
+  function normalizeClipboardImage(file) {
+    return new File([file], clipboardFileName(file.type), {
+      type: file.type || "image/png",
+      lastModified: Date.now()
+    });
+  }
+
   function setOverlayVisible(visible) {
     overlayVisible = Boolean(visible);
     if (overlayVisible) overlay.removeAttribute("hidden");
@@ -82,8 +126,9 @@
     const dropTitle = dropzone.querySelector("strong");
     const dropHint = dropzone.querySelector("span");
     const galleryLabel = document.querySelector('.source-button[for="file"]');
-    if (dropTitle) dropTitle.textContent = "选择或拖入图片";
-    if (dropHint) dropHint.textContent = "支持 JPG、PNG、BMP、WebP，所有文件仅在本机处理";
+    if (dropTitle) dropTitle.textContent = "选择、拖入或粘贴图片";
+    if (dropHint) dropHint.textContent =
+      "支持 JPG、PNG、BMP、WebP，也可直接 Ctrl+V / ⌘V 粘贴截图，所有文件仅在本机处理";
     if (galleryLabel) galleryLabel.textContent = "从相册选择";
     const headerHint = document.querySelector("header p");
     if (headerHint) {
@@ -495,6 +540,30 @@
     }
   }
 
+  async function selectClipboardImage(file) {
+    if (running) {
+      statusNode.textContent = "正在识别，请稍后再粘贴图片。";
+      return null;
+    }
+    const normalized = normalizeClipboardImage(file);
+    const result = await selectFile(normalized);
+    if (result && source && source.kind === "image") {
+      statusNode.textContent = "已从剪贴板加载图片 · " +
+        source.originalWidth + "×" + source.originalHeight +
+        "，点击“开始识别”。";
+    }
+    return result;
+  }
+
+  function handlePaste(event) {
+    const file = clipboardImageFile(event);
+    if (!file) return;
+    event.preventDefault();
+    selectClipboardImage(file).catch(error => {
+      statusNode.textContent = "剪贴板图片预览失败：" + error;
+    });
+  }
+
   function adaptImageResult(result) {
     const imageSource = source;
     const xScale = imageSource.originalWidth / result.image.width;
@@ -843,6 +912,7 @@
       selectFile(event.dataTransfer.files[0]).catch(() => {});
     }
   });
+  document.addEventListener("paste", handlePaste);
   runButton.addEventListener("click", () => {
     if (running) cancelPdfOcr();
     else runOcr().catch(() => {});
@@ -927,6 +997,8 @@
       JSON.parse(JSON.stringify(lastTimingBreakdown)) : null,
     pdfStatus: () => pdfStatus(),
     selectFile,
+    selectClipboardImage,
+    handlePaste,
     runOcr,
     cancelPdfOcr
   };

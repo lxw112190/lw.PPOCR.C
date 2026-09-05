@@ -24,7 +24,7 @@ Python、OpenCV、ONNX Runtime、OpenVINO、TensorRT 或 protobuf，适合将文
 - 输入为调用方已经解码的 BGR8 图像，核心库不绑定具体图片解码库；
 - 提供 C 命令行示例、C# WinForms Demo、桌面 Java/JVM JNI 示例、原生 HTTP/Web Demo
   和单文件离线 WASM Demo；
-- 单文件 WASM Demo 可在本地打开图片或 PDF，按当前页或全部页面顺序 OCR，并导出分页 JSON；
+- 单文件 WASM Demo 支持选择、拖拽或直接粘贴截图进行图片 OCR，也可在本地打开 PDF，按当前页或全部页面顺序 OCR，并导出分页 JSON；
 - WinForms 测试工具支持拖放图片、切换模型目录和 OCR 工作器数量，并记录平均/P95耗时；
 - 自定义 LWM v0.1 模型格式，加载时执行边界、结构和校验和检查；
 - 调用方拥有输入和输出缓冲区，内存容量不足时返回明确错误，不在 ABI 两侧交叉释放内存。
@@ -195,6 +195,9 @@ Windows 下可在 emsdk 目录运行 `emsdk_env.bat`，或按 emsdk 文档使用
   启动 HTTP 服务；默认还内嵌按需加载的 PDF.js，用于把本地 PDF 页面渲染为 Canvas。
   同时内嵌 PDF.js 6.3.289 的 `jbig2.wasm`、`openjpeg.wasm` 和 `qcms_bg.wasm`，
   支持离线渲染常见扫描 PDF 格式。PDF.js 不进入 `lw-ppocr.js`、纯 C Runtime 或公共 C ABI。
+
+单文件页面的图片入口包括文件选择、拖拽和 `Ctrl+V`/`⌘V` 粘贴截图。粘贴只会
+准备本地预览，不会自动开始 OCR；剪贴板图片同样不会上传到网络。
 
 页面支持选择输出阅读顺序：横排从左到右、竖排从右到左（传统古籍）、
 竖排从左到右。该设置只调整结果顺序，不改变检测框坐标、置信度或模型推理。
