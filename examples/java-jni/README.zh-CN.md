@@ -49,8 +49,9 @@ Linux 会设置 `$ORIGIN` RPATH。
 本示例的代码变更时运行。它会生成两个临时 Actions artifact：
 `lw-ppocr-java-jni-windows-x64` 和 `lw-ppocr-java-jni-linux-x64`。其中包含
 native 依赖闭包、Java 源码、模型、许可证、构建信息以及
-`SHA256SUMS.txt`。这些是 CI 下载包，不是 tagged Release 资产，也不代表
-稳定 ABI 承诺。
+`SHA256SUMS.txt`。Actions 中的 bundle 保留 14 天；tagged release 会将同一份
+已验证内容重新打包为带版本号的 ZIP/TAR.GZ。它仍是 Preview 集成包，不代表
+稳定 Java ABI 承诺。
 
 解压后在 bundle 根目录编译并运行示例：
 

@@ -53,8 +53,9 @@ or runs for changes affecting this example. It publishes two temporary Actions
 artifacts: `lw-ppocr-java-jni-windows-x64` and
 `lw-ppocr-java-jni-linux-x64`. They contain the native dependency closure,
 Java sources, models, licenses, build provenance, and `SHA256SUMS.txt`.
-These artifacts are CI downloads, not tagged Release assets or a stable ABI
-promise.
+These are CI downloads retained for 14 days. The tagged release workflow
+repackages the same verified contents as versioned ZIP/TAR.GZ assets; this is
+still a preview integration bundle, not a stable Java ABI promise.
 
 After extracting a bundle, compile and run the included example from its root:
 

@@ -231,8 +231,8 @@ Java `demo-java` 的 Debug/Release 变体但不上传。CI 通过不代表
 只返回按阅读顺序排列的文字行。该示例不包含 UI、Android、Maven 构件、native
 自动加载或模型下载。详见
 [`examples/java-jni/README.zh-CN.md`](examples/java-jni/README.zh-CN.md)。
-同一个 workflow 还会发布带 SHA-256 校验的 Windows/Linux Java JNI 临时 bundle，
-用于 CI 验证后的集成测试；它们是 Actions artifact，不是 tagged Release 资产。
+同一个 workflow 还会发布带 SHA-256 校验的 Windows/Linux Java JNI bundle，
+用于 CI 验证后的集成测试；正式 tagged release 会把同一份已验证内容重新打包为带版本号的 ZIP/TAR.GZ 资产。
 
 ### Node.js WASM 发行包
 

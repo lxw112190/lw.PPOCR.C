@@ -29,9 +29,15 @@ jobs:
     permissions:
       contents: read
 
+  java:
+    name: Build and test Desktop Java JNI bundles
+    uses: ./.github/workflows/java-jni.yml
+    permissions:
+      contents: read
+
   publish:
     name: Publish tested assets
-    needs: [native, wasm, android]
+    needs: [native, wasm, android, java]
     runs-on: ubuntu-22.04
     permissions:
       contents: write
@@ -74,6 +80,18 @@ jobs:
           name: lw-ppocr-android-arm64-preview
           path: release-assets/android
 
+      - name: Download tested Windows Java JNI bundle
+        uses: actions/download-artifact@v8
+        with:
+          name: lw-ppocr-java-jni-windows-x64
+          path: release-assets/java/windows-bundle
+
+      - name: Download tested Linux Java JNI bundle
+        uses: actions/download-artifact@v8
+        with:
+          name: lw-ppocr-java-jni-linux-x64
+          path: release-assets/java/linux-bundle
+
       - name: Verify and prepare release assets
         shell: bash
         env:
@@ -88,6 +106,8 @@ jobs:
           android_aar="lw.PPOCR.C-${VERSION}-android-arm64.aar"
           android_apk="lw.PPOCR.C-${VERSION}-android-arm64-demo.apk"
           android_checksums="lw.PPOCR.C-${VERSION}-android-arm64.SHA256SUMS.txt"
+          java_windows="lw.PPOCR.C-${VERSION}-java-jni-windows-x64.zip"
+          java_linux="lw.PPOCR.C-${VERSION}-java-jni-linux-x64.tar.gz"
 
           test -s "release-assets/${windows}"
           test -s "release-assets/${windows}.sha256"
@@ -105,6 +125,17 @@ jobs:
           test -n "$android_aar_source"
           test -n "$android_apk_source"
           test -n "$android_source_checksums"
+
+          java_windows_root="release-assets/java/windows-bundle"
+          java_linux_root="release-assets/java/linux-bundle"
+          test -s "$java_windows_root/native/lw_ppocr_java.dll"
+          test -s "$java_windows_root/native/lw_ppocr_c.dll"
+          test -s "$java_windows_root/models/det.lwm"
+          test -s "$java_windows_root/SHA256SUMS.txt"
+          test -s "$java_linux_root/native/liblw_ppocr_java.so"
+          test -n "$(find "$java_linux_root/native" -maxdepth 1 -type f -name 'liblw_ppocr_c.so*' -print -quit)"
+          test -s "$java_linux_root/models/det.lwm"
+          test -s "$java_linux_root/SHA256SUMS.txt"
 
           expected_android_aar="$(awk '$2 ~ /(^|\/)lw-ppocr-android-release\.aar$/ { print $1; exit }' "$android_source_checksums")"
           expected_android_apk="$(awk '$2 ~ /(^|\/)demo-preview\.apk$/ { print $1; exit }' "$android_source_checksums")"
@@ -129,6 +160,18 @@ jobs:
             sha256sum "${websdk}" > "${websdk}.sha256"
             sha256sum -c "${nodewasm}.sha256"
             sha256sum "${android_aar}" "${android_apk}" > "${android_checksums}"
+            (
+              cd java/windows-bundle
+              sha256sum -c SHA256SUMS.txt
+              zip -qr "${GITHUB_WORKSPACE}/release-assets/${java_windows}" .
+            )
+            (
+              cd java/linux-bundle
+              sha256sum -c SHA256SUMS.txt
+              tar -czf "${GITHUB_WORKSPACE}/release-assets/${java_linux}" .
+            )
+            sha256sum "${java_windows}" > "${java_windows}.sha256"
+            sha256sum "${java_linux}" > "${java_linux}.sha256"
           )
 
           find release-assets -maxdepth 1 -type f -printf '%f\n' | sort
@@ -149,8 +192,8 @@ jobs:
           fi
 
           mapfile -t assets < <(find release-assets -maxdepth 1 -type f -print | sort)
-          if [[ "${#assets[@]}" -ne 13 ]]; then
-            echo "expected thirteen release assets, found ${#assets[@]}" >&2
+          if [[ "${#assets[@]}" -ne 17 ]]; then
+            echo "expected seventeen release assets, found ${#assets[@]}" >&2
             printf '%s\n' "${assets[@]}" >&2
             exit 1
           fi

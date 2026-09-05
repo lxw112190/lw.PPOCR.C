@@ -216,9 +216,9 @@ It returns ordered text lines only; there is no UI, Android support, Maven
 artifact, automatic native loader, or model download. See the bilingual
 [`examples/java-jni/README.md`](examples/java-jni/README.md) and
 [`examples/java-jni/README.zh-CN.md`](examples/java-jni/README.zh-CN.md).
-The same workflow also publishes temporary, SHA-256-checked Windows/Linux
-Java JNI bundles for CI-verified integration testing; they are Actions
-artifacts rather than tagged Release assets.
+The same workflow publishes SHA-256-checked Windows/Linux Java JNI bundles for
+CI-verified integration testing. Tagged releases repackage those exact tested
+bundles as versioned ZIP/TAR.GZ assets when the release workflow runs.
 
 ## Documentation
 

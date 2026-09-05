@@ -187,10 +187,15 @@ final bundle, not from the build directory. Windows additionally puts
 `native/` on `PATH` because the Windows loader resolves dependent DLLs there;
 Linux uses the `$ORIGIN` RPATH.
 
-These are CI downloads retained for 14 days, not tagged Release assets and not
-a stable Java ABI promise. The tagged `release.yml` workflow is intentionally
-unchanged; Java/JVM publishing can be promoted to a release only after the
-bundle layout and compatibility policy have been reviewed.
+These are CI downloads retained for 14 days and are not themselves tagged
+Release assets. The tagged `release.yml` workflow now waits for the same Java
+workflow, verifies both bundle manifests again, and publishes:
+
+- `lw.PPOCR.C-<version>-java-jni-windows-x64.zip` plus `.sha256`;
+- `lw.PPOCR.C-<version>-java-jni-linux-x64.tar.gz` plus `.sha256`.
+
+The published archives are still Preview integration bundles, not a stable
+Java ABI promise.
 
 ## Build customer Linux architecture packages
 
@@ -249,10 +254,11 @@ git tag -a v0.1.0-preview.1 -m "lw.PPOCR.C v0.1.0 preview 1"
 git push origin v0.1.0-preview.1
 ```
 
-The workflow rebuilds and tests the Windows x64, Linux x64, and browser WASM
-packages from the tagged commit. A GitHub Release is created only after all
-three jobs succeed. The Release contains the native archives, reusable
-JavaScript SDK, offline HTML, and a SHA-256 file for every downloadable asset.
+The workflow rebuilds and tests the Windows x64, Linux x64, browser WASM, and
+Desktop Java/JVM JNI packages from the tagged commit. A GitHub Release is
+created only after all four jobs succeed. The Release contains the native
+archives, reusable JavaScript SDK, offline HTML, Java/JVM JNI Windows/Linux
+archives, and a SHA-256 file for every downloadable asset.
 Tags with a `0.x` version or a prerelease suffix are automatically marked as
 GitHub prereleases.
 
