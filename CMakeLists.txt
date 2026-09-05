@@ -1430,6 +1430,7 @@ install(DIRECTORY
     examples/csharp-common
     examples/csharp-winforms
     examples/http-server
+    examples/java-jni
     DESTINATION examples
     PATTERN "bin" EXCLUDE
     PATTERN "obj" EXCLUDE)

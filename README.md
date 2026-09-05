@@ -26,8 +26,8 @@ The project currently provides:
   DET operator pool and then recognize independent detected lines in parallel.
   Native builds derive the DET pool from the process CPU budget independently
   of the public CLS/REC line-worker setting; x86 and WebAssembly stay serial.
-- Optional .NET Framework 3.5 WinForms, native `cpp-httplib` HTTP/web, and
-  offline single-file WebAssembly demos.
+- Optional .NET Framework 3.5 WinForms, desktop Java/JVM JNI, native
+  `cpp-httplib` HTTP/web, and offline single-file WebAssembly demos.
 
 The WinForms and standalone browser Demos can copy recognized text and export
 UTF-8 TXT or versioned JSON using the shared
@@ -201,6 +201,17 @@ memory, thermal, or vendor-ROM validation; this preview has been separately
 validated on an ARM64 device. See `android/README.md` for the SDK API, demo
 workflow, artifact names, and upgrade limitations.
 
+## Desktop Java/JVM JNI example
+
+The development package also includes a deliberately small Java 8+ console
+consumer under `examples/java-jni/`. It supports Windows x64 and Linux x64,
+uses standard `ImageIO` for JPEG/PNG/BMP input, and calls the existing C ABI
+through `lw_ppocr_java` without adding Java dependencies to the core build.
+It returns ordered text lines only; there is no UI, Android support, Maven
+artifact, automatic native loader, or model download. See the bilingual
+[`examples/java-jni/README.md`](examples/java-jni/README.md) and
+[`examples/java-jni/README.zh-CN.md`](examples/java-jni/README.zh-CN.md).
+
 ## Documentation
 
 - [Supported operators and model analysis](docs/SUPPORTED_OPS_V0.md)
@@ -221,6 +232,7 @@ workflow, artifact names, and upgrade limitations.
 - [Node.js/WASM distribution](docs/NODE_WASM_DISTRIBUTION.md)
 - [Development package and managed demos](docs/package.md) and
   [C#/HTTP/web integration](docs/managed-demos.md)
+- [Desktop Java/JVM JNI example](examples/java-jni/README.md)
 
 ## Runtime dependency boundary
 

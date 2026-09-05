@@ -10,7 +10,7 @@ bin/                         native Demos/runtime/HTTP server; optional WinForms
 include/lw_infer.h           public C header
 lib/                         static library and shared-library import library
 lib/cmake/lw.PPOCR.C/        CMake package configuration
-examples/                    native HTTP/C consumers and C# WinForms source
+examples/                    native HTTP/C, C# WinForms, and Java/JVM JNI source
 models/rec.lwm               converted PP-OCRv6 tiny REC model
 models/cls.lwm               converted PP-OCRv6 tiny CLS model
 models/det.lwm               converted DET model for the public detector
@@ -96,6 +96,13 @@ validates health, HTML, binary P6 PPM OCR, JSON/Base64 PPM OCR, and stable
 400/415 error responses. On Windows, `-DLW_BUILD_CSHARP_DEMOS=ON` additionally
 packages `lw.PPOCR.C.WinForms.exe` and the native DLL beside it.
 See `managed-demos.md` for commands and security boundaries.
+
+The package also contains `examples/java-jni/`, a Java 8+ desktop consumer.
+It builds a thin `lw_ppocr_java` JNI library against the installed CMake
+package, uses Java `ImageIO` for JPEG/PNG/BMP input, and returns ordered text
+lines. It is CI-verified on Windows x64 and Linux x64; it is not an Android or
+Maven distribution. See the example's bilingual README for the complete
+compile/run commands and the Windows `PATH` requirement for dependent DLLs.
 
 Start the native HTTP Demo from the extracted package root:
 

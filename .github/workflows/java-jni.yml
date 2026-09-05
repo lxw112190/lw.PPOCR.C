@@ -1,0 +1,154 @@
+name: Desktop Java JNI OCR
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "CMakeLists.txt"
+      - "include/**"
+      - "src/**"
+      - "converter/**"
+      - "models/**"
+      - "requirements-converter.txt"
+      - "examples/java-jni/**"
+      - ".github/workflows/java-jni.yml"
+  pull_request:
+    paths:
+      - "CMakeLists.txt"
+      - "include/**"
+      - "src/**"
+      - "converter/**"
+      - "models/**"
+      - "requirements-converter.txt"
+      - "examples/java-jni/**"
+      - ".github/workflows/java-jni.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    name: ${{ matrix.os }} Java 8 JNI smoke
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-2022, ubuntu-22.04]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java 8
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "8"
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install converter dependencies
+        run: python -m pip install --disable-pip-version-check -r requirements-converter.txt
+
+      - name: Configure core on Windows
+        if: runner.os == 'Windows'
+        run: >-
+          cmake -S . -B build-java-core
+          -G "Visual Studio 17 2022" -A x64
+          -DLW_BUILD_HTTP_DEMO=OFF
+          -DLW_BUILD_CSHARP_DEMOS=OFF
+          -DBUILD_TESTING=OFF
+
+      - name: Configure core on Linux
+        if: runner.os == 'Linux'
+        run: >-
+          cmake -S . -B build-java-core -G Ninja
+          -DCMAKE_BUILD_TYPE=Release
+          -DLW_BUILD_HTTP_DEMO=OFF
+          -DLW_BUILD_CSHARP_DEMOS=OFF
+          -DBUILD_TESTING=OFF
+
+      - name: Build and install core package
+        shell: bash
+        run: |
+          set -euo pipefail
+          cmake --build build-java-core --config Release
+          cmake --install build-java-core --config Release \
+            --prefix "$GITHUB_WORKSPACE/stage-java"
+
+      - name: Configure JNI consumer on Windows
+        if: runner.os == 'Windows'
+        run: >-
+          cmake -S stage-java/examples/java-jni -B build-java-jni
+          -G "Visual Studio 17 2022" -A x64
+          -DCMAKE_PREFIX_PATH="$env:GITHUB_WORKSPACE/stage-java"
+
+      - name: Configure JNI consumer on Linux
+        if: runner.os == 'Linux'
+        run: >-
+          cmake -S stage-java/examples/java-jni -B build-java-jni -G Ninja
+          -DCMAKE_BUILD_TYPE=Release
+          -DCMAKE_PREFIX_PATH="$GITHUB_WORKSPACE/stage-java"
+
+      - name: Build JNI consumer
+        run: cmake --build build-java-jni --config Release
+
+      - name: Compile Java example
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p build-java-classes
+          javac -encoding UTF-8 -d build-java-classes \
+            stage-java/examples/java-jni/java/NativeOcr.java \
+            stage-java/examples/java-jni/java/OcrDemo.java
+
+      - name: Run Java OCR smoke on Windows
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $env:JAVA_TOOL_OPTIONS = "-Dfile.encoding=UTF-8"
+          $native = Join-Path $env:GITHUB_WORKSPACE "build-java-jni\Release"
+          $classes = Join-Path $env:GITHUB_WORKSPACE "build-java-classes"
+          $models = Join-Path $env:GITHUB_WORKSPACE "stage-java\models"
+          $sample = Join-Path $models "sample.jpg"
+          # Java uses java.library.path for the JNI entry point, while the
+          # Windows loader resolves its dependent core/runtime DLLs through
+          # PATH. Keep both directories explicit in the smoke environment.
+          $env:PATH = "$native;$env:PATH"
+          java "-Djava.library.path=$native" -cp $classes OcrDemo $models $sample 1 false |
+            Tee-Object -FilePath java-ocr.txt
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if (-not (Select-String -Path java-ocr.txt -Pattern "lines: 16")) {
+            throw "Java OCR smoke did not return 16 lines"
+          }
+          if (-not (Select-String -Path java-ocr.txt -Pattern "纯臻营养护发素")) {
+            throw "Java OCR smoke did not return the expected Chinese text"
+          }
+
+      - name: Run Java OCR smoke on Linux
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          native="$GITHUB_WORKSPACE/build-java-jni"
+          classes="$GITHUB_WORKSPACE/build-java-classes"
+          models="$GITHUB_WORKSPACE/stage-java/models"
+          LC_ALL=C.UTF-8 java -Dfile.encoding=UTF-8 \
+            -Djava.library.path="$native" \
+            -cp "$classes" OcrDemo "$models" "$models/sample.jpg" 1 false \
+            | tee java-ocr.txt
+          grep -Fq 'lines: 16' java-ocr.txt
+          grep -Fq '纯臻营养护发素' java-ocr.txt
+
+      - name: Upload Java smoke output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: java-jni-smoke-${{ matrix.os }}
+          if-no-files-found: ignore
+          path: java-ocr.txt

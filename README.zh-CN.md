@@ -22,7 +22,8 @@ Python、OpenCV、ONNX Runtime、OpenVINO、TensorRT 或 protobuf，适合将文
 - 原生 64 位 DET 根据进程可用 CPU 和物理核心数单独选择 intra-op 线程（最多 8 个），
   不再与 CLS/REC 的 `worker_count` 绑定；x86 与 WebAssembly 保持单线程；
 - 输入为调用方已经解码的 BGR8 图像，核心库不绑定具体图片解码库；
-- 提供 C 命令行示例、C# WinForms Demo、原生 HTTP/Web Demo 和单文件离线 WASM Demo；
+- 提供 C 命令行示例、C# WinForms Demo、桌面 Java/JVM JNI 示例、原生 HTTP/Web Demo
+  和单文件离线 WASM Demo；
 - 单文件 WASM Demo 可在本地打开图片或 PDF，按当前页或全部页面顺序 OCR，并导出分页 JSON；
 - WinForms 测试工具支持拖放图片、切换模型目录和 OCR 工作器数量，并记录平均/P95耗时；
 - 自定义 LWM v0.1 模型格式，加载时执行边界、结构和校验和检查；
@@ -218,6 +219,15 @@ minSdk 21。SDK 由 Kotlin/Java API、JNI 桥接和现有纯 C Runtime 组成，
 Demo APK，并检查 AArch64 ELF、native 依赖、模型 assets 和 APK 权限；同时编译纯
 Java `demo-java` 的 Debug/Release 变体但不上传。CI 通过不代表
 已经完成具体手机的 OCR、内存、温度和厂商 ROM 验证。详见 android/README.md。
+
+### 桌面 Java/JVM JNI 示例
+
+开发包现在还包含一个克制的 Java 8+ 控制台消费者示例，位于
+`examples/java-jni/`，目前在 Windows x64 和 Linux x64 上由 CI 验证。它使用
+标准库 `ImageIO` 读取 JPEG/PNG/BMP，通过 `lw_ppocr_java` 调用现有 C ABI，
+只返回按阅读顺序排列的文字行。该示例不包含 UI、Android、Maven 构件、native
+自动加载或模型下载。详见
+[`examples/java-jni/README.zh-CN.md`](examples/java-jni/README.zh-CN.md)。
 
 ### Node.js WASM 发行包
 
