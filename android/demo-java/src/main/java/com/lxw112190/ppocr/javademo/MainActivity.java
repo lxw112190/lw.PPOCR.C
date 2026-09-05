@@ -102,9 +102,7 @@ public final class MainActivity extends ComponentActivity {
         readingOrder.setAdapter(orderAdapter);
 
         chooseButton.setOnClickListener(view ->
-                pickImage.launch(new PickVisualMediaRequest(
-                        ActivityResultContracts.PickVisualMedia.ImageOnly.INSTANCE
-                )));
+                pickImage.launch(new PickVisualMediaRequest()));
         runButton.setOnClickListener(view -> recognizeCurrentImage());
 
         useCls.setOnCheckedChangeListener((button, checked) -> {
