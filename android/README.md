@@ -3,8 +3,8 @@
 这是一个实验性 Android Native SDK，当前只支持 arm64-v8a 和 minSdk 21。
 本机不要求安装 Android Studio、Android SDK、NDK 或模拟器；GitHub Actions 会负责构建。
 
-SDK 模块为 lw-ppocr-android，Demo 模块为 demo。generated-model-assets 是 CI 生成的模型
-assets，不提交到 Git。
+SDK 模块为 lw-ppocr-android，Kotlin Demo 模块为 demo，纯 Java Demo 模块为
+demo-java。generated-model-assets 是 CI 生成的模型 assets，不提交到 Git。
 
 API 基本用法：
 
@@ -15,6 +15,40 @@ API 基本用法：
     } finally {
         engine.close()
     }
+
+## Java 集成
+
+SDK 同时提供面向 Java 调用方的阻塞式入口。`createBlocking` 和
+`recognizeBlocking` 都是同步方法，必须放在后台线程执行；不要在 Android 主线程
+调用它们。Java 调用方不需要重新实现 JNI，也不需要引入 Kotlin Demo：
+
+    ExecutorService executor = Executors.newSingleThreadExecutor();
+    executor.execute(() -> {
+        try (LwPpocrEngine engine = LwPpocrEngine.createBlocking(
+                getApplicationContext(),
+                new OcrOptions(false, 2, 20_000_000L, ReadingOrder.HORIZONTAL_LTR))) {
+            OcrResult result = engine.recognizeBlocking(argb8888Bitmap);
+            // 把 result.getLines() 回传主线程更新 UI。
+        } catch (LwPpocrException error) {
+            // 记录或展示 error.getMessage()。
+        }
+    });
+
+`OcrOptions`、`ReadingOrder`、`OcrResult` 和 `OcrLine` 均可直接从 Java 使用；
+Engine 实现 `AutoCloseable`，建议使用 try-with-resources。图片仍须是
+`ARGB_8888`，并由应用负责 Bitmap 的生命周期。仓库内的 `demo-java` 是一个
+完整的纯 Java 参考实现，包含后台图片解码、EXIF 方向处理和串行释放。
+
+如果直接使用 Release AAR，而不是通过 Gradle 多模块依赖，还需要在应用的
+`dependencies` 中显式声明 AAR 的 Kotlin 运行时依赖（AAR 文件本身不携带
+Maven 依赖元数据）：
+
+    implementation(files("libs/lw-ppocr-android-release.aar"))
+    implementation("org.jetbrains.kotlin:kotlin-stdlib:2.0.21")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
+
+Java Demo 的构建只用于 CI 编译验证，不作为 Release 下载产物；正式发布仍提供
+AAR 和签名的 Kotlin Preview APK。
 
 Demo 使用流程：选择图片后会先显示本地预览，不会自动开始 OCR。确认方向分类
 CLS 和阅读顺序后点击“开始识别”；识别框可在预览区显示或隐藏，点击结果行

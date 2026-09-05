@@ -19,3 +19,4 @@ dependencyResolutionManagement {
 rootProject.name = "lw-ppocr-android"
 include(":lw-ppocr-android")
 include(":demo")
+include(":demo-java")

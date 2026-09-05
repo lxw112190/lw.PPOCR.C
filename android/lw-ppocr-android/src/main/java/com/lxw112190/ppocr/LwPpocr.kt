@@ -3,6 +3,7 @@ package com.lxw112190.ppocr
 import android.content.Context
 import android.graphics.Bitmap
 import androidx.annotation.Keep
+import androidx.annotation.WorkerThread
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
@@ -12,7 +13,7 @@ import java.security.MessageDigest
 import java.util.concurrent.locks.ReentrantLock
 import kotlin.concurrent.withLock
 
-public data class OcrOptions(
+public data class OcrOptions @JvmOverloads constructor(
     val useCls: Boolean = false,
     val workerCount: Int = 2,
     val maxImagePixels: Long = 20_000_000L,
@@ -63,7 +64,15 @@ public class LwPpocrEngine private constructor(
     private val lifecycleLock = ReentrantLock()
     private var closed = false
 
+    @WorkerThread
+    @Throws(LwPpocrException::class)
+    public fun recognizeBlocking(bitmap: Bitmap): OcrResult = recognizeInternal(bitmap)
+
     public suspend fun recognize(bitmap: Bitmap): OcrResult = withContext(Dispatchers.Default) {
+        recognizeInternal(bitmap)
+    }
+
+    private fun recognizeInternal(bitmap: Bitmap): OcrResult {
         lifecycleLock.withLock {
             check(!closed) { "OCR engine is closed" }
             require(bitmap.config == Bitmap.Config.ARGB_8888) {
@@ -94,6 +103,7 @@ public class LwPpocrEngine private constructor(
     }
 
     /** Change result ordering without rebuilding the native OCR engine. */
+    @Throws(LwPpocrException::class)
     public fun setReadingOrder(readingOrder: ReadingOrder) {
         lifecycleLock.withLock {
             check(!closed) { "OCR engine is closed" }
@@ -114,33 +124,49 @@ public class LwPpocrEngine private constructor(
         private val MODEL_FILES = listOf("det.lwm", "cls.lwm", "rec.lwm", "ppocr_keys.txt")
         private val ASSET_ID_PATTERN = Regex("[0-9a-f]{64}")
 
-        public suspend fun create(context: Context, options: OcrOptions = OcrOptions()): LwPpocrEngine =
-            withContext(Dispatchers.IO) {
-                require(options.workerCount in 1..16) { "workerCount must be between 1 and 16" }
-                require(options.maxImagePixels in 1..100_000_000) {
-                    "maxImagePixels must be between 1 and 100000000"
-                }
-                val manifest = readAssetManifest(context)
-                val directory = installModels(context, manifest)
-                val handle = NativeBridge.nativeCreate(
-                    File(directory, "det.lwm").absolutePath,
-                    File(directory, "cls.lwm").absolutePath,
-                    File(directory, "rec.lwm").absolutePath,
-                    File(directory, "ppocr_keys.txt").absolutePath,
-                    options.useCls,
-                    options.workerCount,
-                    options.maxImagePixels,
-                )
-                if (handle == 0L) {
-                    throw LwPpocrException(NativeBridge.nativeLastError())
-                }
-                if (!NativeBridge.nativeSetReadingOrder(handle, readingOrderValue(options.readingOrder))) {
-                    NativeBridge.nativeDestroy(handle)
-                    throw LwPpocrException(NativeBridge.nativeLastError())
-                }
-                pruneOldCaches(directory)
-                LwPpocrEngine(handle, options)
+        @JvmStatic
+        @JvmOverloads
+        @WorkerThread
+        @Throws(LwPpocrException::class)
+        public fun createBlocking(
+            context: Context,
+            options: OcrOptions = OcrOptions(),
+        ): LwPpocrEngine = createInternal(context.applicationContext ?: context, options)
+
+        public suspend fun create(
+            context: Context,
+            options: OcrOptions = OcrOptions(),
+        ): LwPpocrEngine = withContext(Dispatchers.IO) {
+            createInternal(context.applicationContext ?: context, options)
+        }
+
+        private fun createInternal(context: Context, options: OcrOptions): LwPpocrEngine {
+            require(options.workerCount in 1..16) { "workerCount must be between 1 and 16" }
+            require(options.maxImagePixels in 1..100_000_000) {
+                "maxImagePixels must be between 1 and 100000000"
             }
+            val manifest = readAssetManifest(context)
+            val directory = installModels(context, manifest)
+            val handle = NativeBridge.nativeCreate(
+                File(directory, "det.lwm").absolutePath,
+                File(directory, "cls.lwm").absolutePath,
+                File(directory, "rec.lwm").absolutePath,
+                File(directory, "ppocr_keys.txt").absolutePath,
+                options.useCls,
+                options.workerCount,
+                options.maxImagePixels,
+            )
+            if (handle == 0L) {
+                throw LwPpocrException(NativeBridge.nativeLastError())
+            }
+            if (!NativeBridge.nativeSetReadingOrder(handle, readingOrderValue(options.readingOrder))) {
+                val error = NativeBridge.nativeLastError()
+                NativeBridge.nativeDestroy(handle)
+                throw LwPpocrException(error)
+            }
+            pruneOldCaches(directory)
+            return LwPpocrEngine(handle, options)
+        }
 
         private fun readAssetManifest(context: Context): ModelManifest {
             return try {

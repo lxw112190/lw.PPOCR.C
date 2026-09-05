@@ -108,13 +108,17 @@ jobs:
       #   1. Release AAR
       #      Official SDK artifact.
       #
-      #   2. Debug Demo APK
+      #   2. Kotlin Debug Demo APK
       #      Build-only validation for developer/debug configuration.
       #
-      #   3. Release Demo APK
+      #   3. Kotlin Release Demo APK
       #      Native Release optimization and R8/consumer-rule validation.
       #
-      # The Debug APK is intentionally NOT published.
+      #   4. Java Debug/Release Demo APKs
+      #      Compile-only validation for the Java integration sample. These
+      #      APKs are intentionally not published.
+      #
+      # The Kotlin Debug APK and both Java APKs are intentionally NOT published.
       - name: Build Android AAR and Demo variants
         working-directory: android
         run: |
@@ -123,7 +127,14 @@ jobs:
             --stacktrace \
             :lw-ppocr-android:assembleRelease \
             :demo:assembleDebug \
-            :demo:assembleRelease
+            :demo:assembleRelease \
+            :demo-java:assembleDebug \
+            :demo-java:assembleRelease
+
+          if find demo-java/src -type f -name '*.kt' -print -quit | grep -q .; then
+            echo "demo-java must remain a pure Java module."
+            exit 1
+          fi
 
       # ----------------------------------------------------------------------
       # Sign the optimized Release Demo with a temporary CI key.
@@ -210,10 +221,21 @@ jobs:
           AAR="android/lw-ppocr-android/build/outputs/aar/lw-ppocr-android-release.aar"
           DEBUG_APK="android/demo/build/outputs/apk/debug/demo-debug.apk"
           PREVIEW_APK="android/demo/build/outputs/apk/release/demo-preview.apk"
+          JAVA_DEBUG_APK="android/demo-java/build/outputs/apk/debug/demo-java-debug.apk"
+          JAVA_RELEASE_DIR="android/demo-java/build/outputs/apk/release"
+          JAVA_RELEASE_APK="$(find "$JAVA_RELEASE_DIR" \
+            -maxdepth 1 \
+            -type f \
+            -name '*-release-unsigned.apk' \
+            -print \
+            -quit)"
 
           test -s "$AAR"
           test -s "$DEBUG_APK"
           test -s "$PREVIEW_APK"
+          test -s "$JAVA_DEBUG_APK"
+          test -n "$JAVA_RELEASE_APK"
+          test -s "$JAVA_RELEASE_APK"
 
           # ------------------------------------------------------------------
           # Release AAR contents.
@@ -293,6 +315,24 @@ jobs:
             "$AAPT" dump permissions "$PREVIEW_APK"
             exit 1
           fi
+
+          # Java Demo must have the same offline, arm64-only contract.
+          for JAVA_APK in "$JAVA_DEBUG_APK" "$JAVA_RELEASE_APK"; do
+            unzip -l "$JAVA_APK" \
+              | grep -q 'lib/arm64-v8a/liblw_ppocr_android.so'
+
+            "$AAPT" dump badging "$JAVA_APK" \
+              | grep -q "native-code: 'arm64-v8a'"
+
+            if "$AAPT" dump permissions "$JAVA_APK" \
+              | grep -Eiq \
+                'INTERNET|READ_EXTERNAL_STORAGE|WRITE_EXTERNAL_STORAGE|CAMERA'; then
+
+              echo "Unexpected Android permission in Java Demo APK: $JAVA_APK"
+              "$AAPT" dump permissions "$JAVA_APK"
+              exit 1
+            fi
+          done
 
           # ------------------------------------------------------------------
           # Final hashes.
