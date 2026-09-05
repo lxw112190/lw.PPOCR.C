@@ -1,6 +1,7 @@
 name: Desktop Java JNI OCR
 
 on:
+  workflow_dispatch:
   push:
     branches: [main]
     paths:
@@ -11,6 +12,7 @@ on:
       - "models/**"
       - "requirements-converter.txt"
       - "examples/java-jni/**"
+      - "tools/package_java_jni.py"
       - ".github/workflows/java-jni.yml"
   pull_request:
     paths:
@@ -21,6 +23,7 @@ on:
       - "models/**"
       - "requirements-converter.txt"
       - "examples/java-jni/**"
+      - "tools/package_java_jni.py"
       - ".github/workflows/java-jni.yml"
 
 permissions:
@@ -97,14 +100,103 @@ jobs:
       - name: Build JNI consumer
         run: cmake --build build-java-jni --config Release
 
-      - name: Compile Java example
+      - name: Package Windows Java JNI bundle
+        if: runner.os == 'Windows'
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p build-java-classes
-          javac -encoding UTF-8 -d build-java-classes \
-            stage-java/examples/java-jni/java/NativeOcr.java \
-            stage-java/examples/java-jni/java/OcrDemo.java
+          python tools/package_java_jni.py \
+            --platform windows-x64 \
+            --native-dir "$GITHUB_WORKSPACE/build-java-jni/Release" \
+            --stage-dir "$GITHUB_WORKSPACE/stage-java" \
+            --output-dir "$GITHUB_WORKSPACE/dist/lw-ppocr-java-jni-windows-x64" \
+            --commit "$GITHUB_SHA"
+
+      - name: Package Linux Java JNI bundle
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python tools/package_java_jni.py \
+            --platform linux-x64 \
+            --native-dir "$GITHUB_WORKSPACE/build-java-jni" \
+            --stage-dir "$GITHUB_WORKSPACE/stage-java" \
+            --output-dir "$GITHUB_WORKSPACE/dist/lw-ppocr-java-jni-linux-x64" \
+            --commit "$GITHUB_SHA"
+
+      - name: Validate Windows Java JNI bundle
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $bundle = Join-Path $env:GITHUB_WORKSPACE "dist\lw-ppocr-java-jni-windows-x64"
+          foreach ($path in @(
+            "native\lw_ppocr_java.dll",
+            "native\lw_ppocr_c.dll",
+            "java\NativeOcr.java",
+            "java\OcrDemo.java",
+            "models\det.lwm",
+            "models\cls.lwm",
+            "models\rec.lwm",
+            "models\ppocr_keys.txt",
+            "models\sample.jpg",
+            "README.md",
+            "README.zh-CN.md",
+            "BUILD-INFO.txt",
+            "SHA256SUMS.txt",
+            "LICENSE",
+            "THIRD-PARTY-NOTICES.md",
+            "licenses\PaddleOCR-models-APACHE-2.0.txt"
+          )) {
+            if (-not (Test-Path (Join-Path $bundle $path))) { throw "missing bundle file: $path" }
+          }
+          $forbidden = Get-ChildItem (Join-Path $bundle "native") -File |
+            Where-Object { $_.Name -match "opencv|onnxruntime|paddle|python" }
+          if ($forbidden) { throw "forbidden dependency in Windows bundle: $($forbidden.Name -join ', ')" }
+          foreach ($line in Get-Content (Join-Path $bundle "SHA256SUMS.txt")) {
+            if ($line -notmatch '^([0-9a-fA-F]{64})  (.+)$') { throw "invalid checksum line: $line" }
+            $expected = $Matches[1].ToLowerInvariant()
+            $relative = $Matches[2].Replace('/', '\')
+            $actual = (Get-FileHash (Join-Path $bundle $relative) -Algorithm SHA256).Hash.ToLowerInvariant()
+            if ($actual -ne $expected) { throw "checksum mismatch: $relative" }
+          }
+
+      - name: Validate Linux Java JNI bundle
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          bundle="$GITHUB_WORKSPACE/dist/lw-ppocr-java-jni-linux-x64"
+          test -s "$bundle/native/liblw_ppocr_java.so"
+          compgen -G "$bundle/native/liblw_ppocr_c.so*" >/dev/null
+          test -s "$bundle/SHA256SUMS.txt"
+          (cd "$bundle" && sha256sum -c SHA256SUMS.txt)
+          file "$bundle/native"/*.so* | grep -Eiq 'ELF 64-bit.*x86-64'
+          readelf -d "$bundle/native/liblw_ppocr_java.so" | grep -Fq '\$ORIGIN'
+          if find "$bundle/native" -maxdepth 1 -type f | grep -Eiq 'opencv|onnxruntime|paddle|python'; then
+            echo "forbidden dependency in Linux bundle" >&2
+            exit 1
+          fi
+          for library in "$bundle"/native/*.so*; do
+            if LD_LIBRARY_PATH="$bundle/native" ldd "$library" | grep -Eiq 'opencv|onnxruntime|paddle|python'; then
+              echo "forbidden linked dependency in $library" >&2
+              exit 1
+            fi
+          done
+
+      - name: Compile Java example from final bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf build-java-bundle-classes
+          mkdir -p build-java-bundle-classes
+          if [[ "$RUNNER_OS" == "Windows" ]]; then
+            java_dir="$GITHUB_WORKSPACE/dist/lw-ppocr-java-jni-windows-x64/java"
+          else
+            java_dir="$GITHUB_WORKSPACE/dist/lw-ppocr-java-jni-linux-x64/java"
+          fi
+          javac -encoding UTF-8 -d build-java-bundle-classes \
+            "$java_dir/NativeOcr.java" "$java_dir/OcrDemo.java"
 
       - name: Run Java OCR smoke on Windows
         if: runner.os == 'Windows'
@@ -112,9 +204,10 @@ jobs:
         run: |
           $ErrorActionPreference = "Stop"
           $env:JAVA_TOOL_OPTIONS = "-Dfile.encoding=UTF-8"
-          $native = Join-Path $env:GITHUB_WORKSPACE "build-java-jni\Release"
-          $classes = Join-Path $env:GITHUB_WORKSPACE "build-java-classes"
-          $models = Join-Path $env:GITHUB_WORKSPACE "stage-java\models"
+          $bundle = Join-Path $env:GITHUB_WORKSPACE "dist\lw-ppocr-java-jni-windows-x64"
+          $native = Join-Path $bundle "native"
+          $classes = Join-Path $env:GITHUB_WORKSPACE "build-java-bundle-classes"
+          $models = Join-Path $bundle "models"
           $sample = Join-Path $models "sample.jpg"
           # Java uses java.library.path for the JNI entry point, while the
           # Windows loader resolves its dependent core/runtime DLLs through
@@ -135,9 +228,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          native="$GITHUB_WORKSPACE/build-java-jni"
-          classes="$GITHUB_WORKSPACE/build-java-classes"
-          models="$GITHUB_WORKSPACE/stage-java/models"
+          bundle="$GITHUB_WORKSPACE/dist/lw-ppocr-java-jni-linux-x64"
+          native="$bundle/native"
+          classes="$GITHUB_WORKSPACE/build-java-bundle-classes"
+          models="$bundle/models"
           LC_ALL=C.UTF-8 java -Dfile.encoding=UTF-8 \
             -Djava.library.path="$native" \
             -cp "$classes" OcrDemo "$models" "$models/sample.jpg" 1 false \
@@ -145,10 +239,20 @@ jobs:
           grep -Fq 'lines: 16' java-ocr.txt
           grep -Fq '纯臻营养护发素' java-ocr.txt
 
-      - name: Upload Java smoke output
-        if: always()
+      - name: Upload Windows Java JNI bundle
+        if: runner.os == 'Windows'
         uses: actions/upload-artifact@v4
         with:
-          name: java-jni-smoke-${{ matrix.os }}
-          if-no-files-found: ignore
-          path: java-ocr.txt
+          name: lw-ppocr-java-jni-windows-x64
+          path: dist/lw-ppocr-java-jni-windows-x64
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload Linux Java JNI bundle
+        if: runner.os == 'Linux'
+        uses: actions/upload-artifact@v4
+        with:
+          name: lw-ppocr-java-jni-linux-x64
+          path: dist/lw-ppocr-java-jni-linux-x64
+          if-no-files-found: error
+          retention-days: 14

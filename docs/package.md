@@ -169,6 +169,29 @@ The package test installs to a clean staging directory, builds consumers using
 the installed CMake package, and runs the installed Demos against installed
 models, dictionary, and fixtures before packaging.
 
+## Java/JVM JNI CI bundles
+
+The manually dispatchable `Desktop Java JNI OCR` workflow extends its Java 8
+Windows/Linux smoke test by uploading these temporary Actions artifacts:
+
+- `lw-ppocr-java-jni-windows-x64`;
+- `lw-ppocr-java-jni-linux-x64`.
+
+Each extracted bundle contains `native/` (the JNI library and its native
+dependency closure), `java/`, the five checked-in OCR model assets under
+`models/`, the two example READMEs, `BUILD-INFO.txt`, licenses, and
+`SHA256SUMS.txt`. Linux shared-library symlinks are materialized as ordinary
+files so the bundle also works after extraction on filesystems without symlink
+support. The workflow verifies the checksum manifest and runs OCR from the
+final bundle, not from the build directory. Windows additionally puts
+`native/` on `PATH` because the Windows loader resolves dependent DLLs there;
+Linux uses the `$ORIGIN` RPATH.
+
+These are CI downloads retained for 14 days, not tagged Release assets and not
+a stable Java ABI promise. The tagged `release.yml` workflow is intentionally
+unchanged; Java/JVM publishing can be promoted to a release only after the
+bundle layout and compatibility policy have been reviewed.
+
 ## Build customer Linux architecture packages
 
 Run the manually dispatched `customer-linux-architectures` workflow from the

@@ -46,6 +46,33 @@ java "-Djava.library.path=$native" -cp .\build-java-classes OcrDemo `
 
 Linux embeds an `$ORIGIN` RPATH.
 
+## Download a CI-tested bundle
+
+The `Desktop Java JNI OCR` GitHub Actions workflow can be dispatched manually
+or runs for changes affecting this example. It publishes two temporary Actions
+artifacts: `lw-ppocr-java-jni-windows-x64` and
+`lw-ppocr-java-jni-linux-x64`. They contain the native dependency closure,
+Java sources, models, licenses, build provenance, and `SHA256SUMS.txt`.
+These artifacts are CI downloads, not tagged Release assets or a stable ABI
+promise.
+
+After extracting a bundle, compile and run the included example from its root:
+
+```powershell
+javac -encoding UTF-8 -d classes java\NativeOcr.java java\OcrDemo.java
+$env:Path = "$(Resolve-Path .\native);$env:Path"
+java "-Djava.library.path=$(Resolve-Path .\native)" -cp classes OcrDemo `
+  "$(Resolve-Path .\models)" "$(Resolve-Path .\models\sample.jpg)"
+```
+
+On Linux:
+
+```bash
+javac -encoding UTF-8 -d classes java/NativeOcr.java java/OcrDemo.java
+java -Djava.library.path="$PWD/native" -cp classes OcrDemo \
+  "$PWD/models" "$PWD/models/sample.jpg"
+```
+
 ## API
 
 ```java
