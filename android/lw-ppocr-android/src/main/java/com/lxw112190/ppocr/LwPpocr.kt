@@ -73,7 +73,7 @@ public class LwPpocrEngine private constructor(
     }
 
     private fun recognizeInternal(bitmap: Bitmap): OcrResult {
-        lifecycleLock.withLock {
+        return lifecycleLock.withLock {
             check(!closed) { "OCR engine is closed" }
             require(bitmap.config == Bitmap.Config.ARGB_8888) {
                 "Bitmap must use ARGB_8888; copy it before calling recognize"
