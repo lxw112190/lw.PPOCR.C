@@ -164,6 +164,16 @@ static int run_ocr(lw_ocr* ocr, const lw_example_ppm_image* image, lw_ocr_line* 
     return 1;
 }
 
+static uint64_t output_checksum(const char* text, uint64_t byte_count) {
+    uint64_t checksum = UINT64_C(14695981039346656037);
+    uint64_t index;
+    for (index = 0u; index < byte_count; ++index) {
+        checksum ^= (uint8_t)text[index];
+        checksum *= UINT64_C(1099511628211);
+    }
+    return checksum;
+}
+
 static int benchmark_main(int argc, char** argv) {
     lw_example_ppm_image image;
     lw_detector* detector = NULL;
@@ -350,9 +360,11 @@ static int benchmark_main(int argc, char** argv) {
            percentile(sorted, iteration_count, 95u));
     printf("\"after_detector_ms\":%.6f,\"after_detector_ms_deprecated\":true,"
            "\"ocr_minus_standalone_detector_ms\":%.6f,"
-           "\"throughput_per_second\":%.6f,",
+           "\"throughput_per_second\":%.6f,"
+           "\"output_checksum\":\"%016llx\",",
            (ocr_sum - detector_sum) / iteration_count,
-           (ocr_sum - detector_sum) / iteration_count, 1000.0 / (ocr_sum / iteration_count));
+           (ocr_sum - detector_sum) / iteration_count, 1000.0 / (ocr_sum / iteration_count),
+           (unsigned long long)output_checksum(reference_text, reference_text_capacity));
     printf("\"rss_after_warmup_bytes\":%llu,\"rss_final_bytes\":%llu,"
            "\"peak_rss_bytes\":%llu}\n",
            (unsigned long long)memory_after_warmup.current_rss_bytes,

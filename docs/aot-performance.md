@@ -86,3 +86,30 @@ and switched between them without session construction. Both variants returned
 not portable performance claims; the resident mode is still experimental and
 requires the uninstrumented benchmark, full OCR profile, Golden corpus, and
 100-image comparison before it can become a user-facing option.
+
+## Reproducible compact/resident comparison
+
+The repository includes `tools/compare_rec_runtime_profiles.py` for paired
+benchmark runs. It invokes the compact and resident executables with identical
+models, input image, REC width, worker count, and detector thread count, then
+reports OCR mean/P95, peak RSS, speedup, and the output contract (line count and
+FNV-1a text checksum). Example:
+
+```powershell
+python tools/compare_rec_runtime_profiles.py `
+  --compact-driver build/Release/full-ocr-intra-benchmark.exe `
+  --performance-driver build-performance-vs/Release/full-ocr-intra-benchmark.exe `
+  --det build/models/det.lwm --cls build/models/cls.lwm `
+  --rec build/models/rec.lwm --dictionary models/ppocrv6-tiny/ppocr_keys.txt `
+  --image build/models/sample.ppm --warmup 1 --iterations 5 `
+  --workers 4 --target-width 960 --det-threads 4 `
+  --json-output build/compact-vs-performance.json `
+  --markdown-output build/compact-vs-performance.md
+```
+
+The local Tiny/AVX2 4-worker smoke comparison measured 122.460 ms versus
+112.691 ms (1.087x speedup, -7.98% mean latency, -8.43% P95) and an additional
+45.949 MiB peak RSS. Both runs returned 16 lines with checksum
+`0ebf8b448ab7df47`. The numbers are a reproducibility check, not a cross-machine
+claim; the resident option remains opt-in until the 100-image paired corpus
+clears the same contract and memory gates.
