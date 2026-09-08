@@ -881,3 +881,21 @@ thread affinity, or NUMA policy; each remains a separate measured experiment.
 All 38 Windows x64 and all 38 Windows x86 Release tests passed, including the
 ABI/export, full-OCR reference, Golden corpus, profile, and staged-package
 gates. Linux and WebAssembly remain final CI compile gates on this Windows host.
+
+## REC node hotspots by adaptive width
+
+The profile driver now emits an additive `rec_nodes` section for the 159-node
+recognition graph. Each entry records the node index, operation, accumulated
+nanoseconds, invocation count, and the same counters split by the concrete
+resized REC width bucket (`192`, `256`, `320`, `480`, `640`, `800`, `960`, or
+`other`). The buckets describe the width selected by adaptive preprocessing;
+they are not requested-width labels.
+
+The node counters are captured around the existing graph execution and do not
+change graph scheduling, arithmetic, the public C ABI, or the LWM format. They
+are accumulated worker work, so overlapping line workers can make their sum
+larger than request wall time. `tools/collect_native_ocr_profile.py` validates
+the additive section and exposes the ten largest REC nodes in the generated
+architecture summary. Use that table to choose the next kernel A/B target,
+then verify any candidate with the uninstrumented benchmark, text checksum,
+Golden corpus, and RSS gates.

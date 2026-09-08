@@ -197,6 +197,29 @@ class FullOcrProfileTest(unittest.TestCase):
                     report["lines"],
                 )
 
+                rec_nodes = report["rec_nodes"]
+                self.assertEqual(len(rec_nodes), 159)
+                self.assertEqual(
+                    len({item["node"] for item in rec_nodes}), len(rec_nodes)
+                )
+                self.assertEqual(
+                    sum(item["invocations"] for item in rec_nodes),
+                    sum(item["rec_invocations"] for item in operators),
+                )
+                for item in rec_nodes:
+                    self.assertIn(
+                        item["operation"],
+                        EXPECTED_OPERATORS,
+                    )
+                    self.assertEqual(len(item["by_width"]), 8)
+                    self.assertEqual(
+                        sum(width["invocations"] for width in item["by_width"]),
+                        item["invocations"],
+                    )
+                    self.assertEqual(
+                        [width["max_width"] for width in item["by_width"]],
+                        [192, 256, 320, 480, 640, 800, 960, None],
+                    )
                 rec_width = report["rec_width"]
                 self.assertEqual(rec_width["samples"], report["lines"])
                 self.assertGreater(rec_width["resized_width_sum"], 0)

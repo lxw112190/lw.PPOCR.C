@@ -160,7 +160,10 @@ int main(int argc, char** argv) {
     lw_ocr* ocr = NULL;
     lw_model* det_model = NULL;
     lw_session* det_session = NULL;
+    lw_model* rec_model = NULL;
+    lw_session* rec_session = NULL;
     lw_tensor_desc det_input_desc;
+    lw_tensor_desc rec_input_desc;
     lw_ocr_line* lines = NULL;
     lw_ocr_result result;
     lw_ocr_execution_profile profile;
@@ -244,6 +247,27 @@ int main(int argc, char** argv) {
         goto cleanup;
     }
     lw_error_init(&error);
+    lw_error_init(&error);
+    status = lw_model_load(argv[3], NULL, &rec_model, &error);
+    if (status != LW_STATUS_OK) {
+        fprintf(stderr, "REC analysis model load failed: %s: %s\n", lw_status_string(status),
+                error.message);
+        goto cleanup;
+    }
+    lw_tensor_desc_init(&rec_input_desc);
+    rec_input_desc.dtype = LW_DTYPE_F32;
+    rec_input_desc.rank = 4u;
+    rec_input_desc.dimensions[0] = 1;
+    rec_input_desc.dimensions[1] = 3;
+    rec_input_desc.dimensions[2] = 48;
+    rec_input_desc.dimensions[3] = (int32_t)rec_target_width;
+    lw_error_init(&error);
+    status = lw_session_create(rec_model, &rec_input_desc, 1u, NULL, &rec_session, &error);
+    if (status != LW_STATUS_OK) {
+        fprintf(stderr, "REC analysis session create failed: %s: %s\n", lw_status_string(status),
+                error.message);
+        goto cleanup;
+    }
     status = lw_ocr_create(argv[1], argv[2], argv[3], argv[4], &options, &ocr, &error);
     if (status != LW_STATUS_OK) {
         fprintf(stderr, "OCR create failed: %s: %s\n", lw_status_string(status), error.message);
@@ -541,6 +565,58 @@ int main(int argc, char** argv) {
                    lwm_read_i32(params + 40u), lwm_read_i32(params + 44u));
         }
     }
+    printf("],\"rec_nodes\":[");
+    {
+        static const uint32_t rec_width_upper_bounds[LW_REC_WIDTH_HISTOGRAM_BUCKET_COUNT] = {
+            192u, 256u, 320u, 480u, 640u, 800u, 960u, UINT32_MAX};
+        uint32_t node_index;
+        int first = 1;
+        for (node_index = 0u; node_index < rec_model->info.node_count; ++node_index) {
+            const uint8_t* node = rec_model->bytes + (size_t)rec_model->node_offset +
+                                  (size_t)node_index * LWM_V0_NODE_SIZE;
+            uint32_t operation = (uint32_t)lwm_read_u16(node);
+            uint64_t nanoseconds = node_index < LW_EXECUTION_PROFILE_NODE_CAPACITY
+                                       ? profile.recognizer.execution.node_nanoseconds[node_index]
+                                       : 0u;
+            uint64_t invocations = node_index < LW_EXECUTION_PROFILE_NODE_CAPACITY
+                                       ? profile.recognizer.execution.node_invocations[node_index]
+                                       : 0u;
+            uint32_t bucket;
+            if (invocations == 0u) {
+                continue;
+            }
+            if (!first) {
+                putchar(',');
+            }
+            first = 0;
+            printf("{\"node\":%u,\"operation\":\"%s\",\"nanoseconds\":%llu,"
+                   "\"invocations\":%llu,\"by_width\":[",
+                   node_index, operation < LW_EXECUTION_PROFILE_OPERATOR_CAPACITY
+                                   ? operator_names[operation]
+                                   : "unknown",
+                   (unsigned long long)nanoseconds, (unsigned long long)invocations);
+            for (bucket = 0u; bucket < LW_REC_WIDTH_HISTOGRAM_BUCKET_COUNT; ++bucket) {
+                if (bucket != 0u) {
+                    putchar(',');
+                }
+                if (rec_width_upper_bounds[bucket] == UINT32_MAX) {
+                    printf("{\"max_width\":null,\"nanoseconds\":%llu,\"invocations\":%llu}",
+                           (unsigned long long)
+                               profile.recognizer.node_nanoseconds_by_width[bucket][node_index],
+                           (unsigned long long)
+                               profile.recognizer.node_invocations_by_width[bucket][node_index]);
+                } else {
+                    printf("{\"max_width\":%u,\"nanoseconds\":%llu,\"invocations\":%llu}",
+                           rec_width_upper_bounds[bucket],
+                           (unsigned long long)
+                               profile.recognizer.node_nanoseconds_by_width[bucket][node_index],
+                           (unsigned long long)
+                               profile.recognizer.node_invocations_by_width[bucket][node_index]);
+                }
+            }
+            printf("]}");
+        }
+    }
     printf("]}\n");
     exit_code = 0;
 
@@ -549,6 +625,8 @@ cleanup:
     free(text);
     free(lines);
     lw_ocr_free(ocr);
+    lw_session_free(rec_session);
+    lw_model_free(rec_model);
     lw_session_free(det_session);
     lw_model_free(det_model);
     lw_example_ppm_image_free(&image);

@@ -188,6 +188,42 @@ def normalize_profile(profile: dict[str, Any], iterations: int) -> dict[str, Any
         )
     nodes.sort(key=lambda item: item["milliseconds"], reverse=True)
 
+    rec_nodes = []
+    for item in profile.get("rec_nodes", []):
+        if not isinstance(item, dict):
+            raise RuntimeError("profile rec_nodes contains a non-object")
+        raw_by_width = item.get("by_width")
+        if not isinstance(raw_by_width, list):
+            raise RuntimeError("profile REC node is missing by_width")
+        by_width = []
+        for width_item in raw_by_width:
+            if not isinstance(width_item, dict):
+                raise RuntimeError("profile REC node width entry is not an object")
+            by_width.append(
+                {
+                    "max_width": width_item.get("max_width"),
+                    "milliseconds": milliseconds(width_item.get("nanoseconds")),
+                    "invocations_per_request": require_number(
+                        width_item.get("invocations"),
+                        "profile REC node width invocations",
+                    )
+                    / float(iterations),
+                }
+            )
+        rec_nodes.append(
+            {
+                "node": require_int(item, "node", "profile REC node"),
+                "operation": item.get("operation"),
+                "milliseconds": milliseconds(item.get("nanoseconds")),
+                "invocations_per_request": require_number(
+                    item.get("invocations"), "profile REC node invocations"
+                )
+                / float(iterations),
+                "by_width": by_width,
+            }
+        )
+    rec_nodes.sort(key=lambda item: item["milliseconds"], reverse=True)
+
     implementation_paths: dict[str, dict[str, float]] = {}
     raw_paths = profile.get("implementation_paths")
     if raw_paths is not None:
@@ -240,6 +276,7 @@ def normalize_profile(profile: dict[str, Any], iterations: int) -> dict[str, Any
         "operators": operator_ms,
         "conv_classes": conv_ms,
         "top_det_convolution_nodes": nodes[:20],
+        "top_rec_nodes": rec_nodes[:20],
         "parallel": profile.get("parallel"),
         "rec_width": profile.get("rec_width"),
     }
@@ -445,6 +482,16 @@ def markdown_summary(summary: dict[str, Any]) -> str:
             lines.append(
                 f"| {node['node']} | {node['operation']} | `{node['input']}` | "
                 f"`{node['kernel']}` | {node['milliseconds']:.3f} |"
+            )
+        lines.append("")
+        lines.extend(["", "Largest profiled REC nodes:", "",
+                      "| Node | Operation | ms/request | Invocations/request |",
+                      "|---:|---|---:|---:|"])
+        for node in case["profile"]["top_rec_nodes"][:10]:
+            lines.append(
+                f"| {node['node']} | {node['operation']} | "
+                f"{node['milliseconds']:.3f} | "
+                f"{node['invocations_per_request']:.3f} |"
             )
         lines.append("")
     return "\n".join(lines) + "\n"

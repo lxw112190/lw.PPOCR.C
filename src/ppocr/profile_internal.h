@@ -20,6 +20,10 @@ typedef struct lw_pipeline_component_profile {
     uint64_t session_cache_hits;
     uint64_t session_cache_misses;
     uint64_t session_reconfigurations;
+    uint64_t node_nanoseconds_by_width[LW_REC_WIDTH_HISTOGRAM_BUCKET_COUNT]
+                                    [LW_EXECUTION_PROFILE_NODE_CAPACITY];
+    uint64_t node_invocations_by_width[LW_REC_WIDTH_HISTOGRAM_BUCKET_COUNT]
+                                      [LW_EXECUTION_PROFILE_NODE_CAPACITY];
     lw_execution_profile execution;
 } lw_pipeline_component_profile;
 
@@ -57,6 +61,10 @@ void lw_ocr_profile_add_elapsed(uint64_t* destination, uint64_t started,
                                 const lw_ocr_execution_profile* profile);
 void lw_profile_add_value(uint64_t* destination, uint64_t value);
 uint32_t lw_rec_width_histogram_bucket(uint32_t resized_width);
+void lw_pipeline_profile_capture_node_width_delta(
+    lw_pipeline_component_profile* profile, uint32_t width_bucket,
+    const uint64_t before_nanoseconds[LW_EXECUTION_PROFILE_NODE_CAPACITY],
+    const uint64_t before_invocations[LW_EXECUTION_PROFILE_NODE_CAPACITY]);
 
 lw_status lw_detector_detect_bgr_u8_profiled(
     lw_detector* detector, const uint8_t* source, uint64_t source_byte_count, uint32_t source_width,

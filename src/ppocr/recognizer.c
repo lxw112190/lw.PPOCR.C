@@ -510,6 +510,9 @@ static lw_status recognizer_recognize_bgr_u8_impl(lw_recognizer* recognizer, con
     float score = 0.0f;
     uint32_t emitted_count = 0u;
     uint32_t target_width;
+    uint32_t width_bucket = 0u;
+    uint64_t node_nanoseconds_before[LW_EXECUTION_PROFILE_NODE_CAPACITY];
+    uint64_t node_invocations_before[LW_EXECUTION_PROFILE_NODE_CAPACITY];
     uint64_t started;
     lw_status status;
     if (recognizer == NULL || source == NULL || result == NULL ||
@@ -561,6 +564,13 @@ static lw_status recognizer_recognize_bgr_u8_impl(lw_recognizer* recognizer, con
     }
     lw_pipeline_profile_add_elapsed(profile == NULL ? NULL : &profile->preprocess_nanoseconds,
                                     started, profile);
+    if (profile != NULL) {
+        width_bucket = lw_rec_width_histogram_bucket(resized_width);
+        memcpy(node_nanoseconds_before, profile->execution.node_nanoseconds,
+               sizeof(node_nanoseconds_before));
+        memcpy(node_invocations_before, profile->execution.node_invocations,
+               sizeof(node_invocations_before));
+    }
     started = lw_pipeline_profile_now(profile);
     if (recognizer->best_indices != NULL) {
         status = lw_execute_session_f32_ctc_greedy(
@@ -578,6 +588,10 @@ static lw_status recognizer_recognize_bgr_u8_impl(lw_recognizer* recognizer, con
                            recognizer->session, recognizer->input,
                            recognizer->input_element_count, recognizer->probabilities,
                            recognizer->probability_element_count, &profile->execution, error);
+    }
+    if (status == LW_STATUS_OK && profile != NULL) {
+        lw_pipeline_profile_capture_node_width_delta(
+            profile, width_bucket, node_nanoseconds_before, node_invocations_before);
     }
     lw_pipeline_profile_add_elapsed(profile == NULL ? NULL : &profile->graph_nanoseconds, started,
                                     profile);
