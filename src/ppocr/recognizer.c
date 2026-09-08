@@ -529,6 +529,21 @@ static lw_status recognizer_recognize_bgr_u8_impl(lw_recognizer* recognizer, con
         return LW_STATUS_MEMORY_LIMIT;
     }
     target_width = lw_recognizer_target_width_for_image(recognizer, source_width, source_height);
+    if (profile != NULL) {
+        if (target_width == recognizer->current_target_width ||
+            target_width == recognizer->cached_target_width) {
+            if (profile->session_cache_hits != UINT64_MAX) {
+                ++profile->session_cache_hits;
+            }
+        } else {
+            if (profile->session_cache_misses != UINT64_MAX) {
+                ++profile->session_cache_misses;
+            }
+            if (profile->session_reconfigurations != UINT64_MAX) {
+                ++profile->session_reconfigurations;
+            }
+        }
+    }
     if (target_width != recognizer->current_target_width) {
         status = configure_session(recognizer, target_width, NULL, error);
         if (status != LW_STATUS_OK) {

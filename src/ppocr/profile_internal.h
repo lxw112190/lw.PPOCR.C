@@ -17,6 +17,9 @@ typedef struct lw_pipeline_component_profile {
     uint64_t preprocess_nanoseconds;
     uint64_t graph_nanoseconds;
     uint64_t postprocess_nanoseconds;
+    uint64_t session_cache_hits;
+    uint64_t session_cache_misses;
+    uint64_t session_reconfigurations;
     lw_execution_profile execution;
 } lw_pipeline_component_profile;
 

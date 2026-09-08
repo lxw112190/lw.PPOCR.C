@@ -422,6 +422,9 @@ static lw_status dispatch_node(lw_session* session, const uint8_t* node, uint32_
         }
         if (session->prepared_nodes != NULL &&
             session->prepared_nodes[node_index].kind == LW_PREPARED_NODE_CONV1X1_PACKED4) {
+            if (profile != NULL && profile->packed_conv1x1_invocations != UINT64_MAX) {
+                ++profile->packed_conv1x1_invocations;
+            }
             const lw_prepared_node* prepared = &session->prepared_nodes[node_index];
             const float* packed_weights =
                 (const float*)(const void*)(session->packed_weights +
@@ -440,6 +443,9 @@ static lw_status dispatch_node(lw_session* session, const uint8_t* node, uint32_
         if (session->prepared_nodes != NULL &&
             session->prepared_nodes[node_index].kind ==
                 LW_PREPARED_NODE_CONV3X3_STRIDE2_PACKED8) {
+            if (profile != NULL && profile->packed_conv3x3_stride2_invocations != UINT64_MAX) {
+                ++profile->packed_conv3x3_stride2_invocations;
+            }
             const lw_prepared_node* prepared = &session->prepared_nodes[node_index];
             const float* packed_weights =
                 (const float*)(const void*)(session->packed_weights +
@@ -457,6 +463,9 @@ static lw_status dispatch_node(lw_session* session, const uint8_t* node, uint32_
                 inputs[0], packed_weights, input_count == 3u ? inputs[2] : NULL,
                 output, input_tensors[0]->dimensions, output_tensor->dimensions);
             return LW_STATUS_OK;
+        }
+        if (profile != NULL && profile->unpacked_conv_invocations != UINT64_MAX) {
+            ++profile->unpacked_conv_invocations;
         }
         parallel_status = dispatch_parallel_conv(
             session, inputs[0], inputs[1], input_count == 3u ? inputs[2] : NULL, output,
@@ -584,6 +593,9 @@ static lw_status dispatch_node(lw_session* session, const uint8_t* node, uint32_
             return LW_STATUS_UNSUPPORTED;
         }
         if (input_tensors[1]->rank != 2u) {
+            if (profile != NULL && profile->unpacked_matmul_invocations != UINT64_MAX) {
+                ++profile->unpacked_matmul_invocations;
+            }
             return lw_scalar_matmul_f32(inputs[0], inputs[1], output, rank,
                                         input_tensors[0]->dimensions, input_tensors[1]->rank,
                                         input_tensors[1]->dimensions, output_tensor->rank,
@@ -597,6 +609,9 @@ static lw_status dispatch_node(lw_session* session, const uint8_t* node, uint32_
         }
         if (lw_simd_level_is_avx2(simd_level) && session->prepared_nodes != NULL &&
             session->prepared_nodes[node_index].kind == LW_PREPARED_NODE_MATMUL_PACKED16) {
+            if (profile != NULL && profile->packed_matmul_invocations != UINT64_MAX) {
+                ++profile->packed_matmul_invocations;
+            }
             const lw_prepared_node* prepared = &session->prepared_nodes[node_index];
             const float* packed_weights =
                 (const float*)(const void*)(session->packed_weights +
@@ -607,6 +622,9 @@ static lw_status dispatch_node(lw_session* session, const uint8_t* node, uint32_
                                              (uint32_t)input_tensors[0]->dimensions[rank - 1u],
                                              (uint32_t)input_tensors[1]->dimensions[1]);
             return LW_STATUS_OK;
+        }
+        if (profile != NULL && profile->unpacked_matmul_invocations != UINT64_MAX) {
+            ++profile->unpacked_matmul_invocations;
         }
         return lw_matmul_shared_f32(inputs[0], inputs[1], output, (uint32_t)batch_count,
                                     (uint32_t)input_tensors[0]->dimensions[rank - 2u],
@@ -828,6 +846,9 @@ static void profile_fused_gelu(lw_execution_profile* profile, const lw_session* 
     uint32_t offset;
     if (profile == NULL) {
         return;
+    }
+    if (profile->fused_gelu_invocations != UINT64_MAX) {
+        ++profile->fused_gelu_invocations;
     }
     /* The public profile schema has no fused-GELU operator. Attribute the
      * combined work to Erf and retain one invocation for every semantic node;
@@ -1206,6 +1227,21 @@ lw_status lw_execute_session_f32_ctc_greedy(
     softmax_node_index = session->model->info.node_count - 1u;
     fused_projection = match_packed_ctc_projection(session, input, logits_index, time_steps,
                                                    class_count, &projection);
+    if (profile != NULL) {
+        if (profile->ctc_greedy_invocations != UINT64_MAX) {
+            ++profile->ctc_greedy_invocations;
+        }
+        if (fused_projection) {
+            if (profile->ctc_packed_projection_invocations != UINT64_MAX) {
+                ++profile->ctc_packed_projection_invocations;
+            }
+            if (profile->packed_matmul_invocations != UINT64_MAX) {
+                ++profile->packed_matmul_invocations;
+            }
+        } else if (profile->ctc_generic_projection_invocations != UINT64_MAX) {
+            ++profile->ctc_generic_projection_invocations;
+        }
+    }
     status = execute_session_nodes_f32(
         session, input, input_element_count,
         fused_projection ? projection.matmul_node_index : softmax_node_index, profile, error);

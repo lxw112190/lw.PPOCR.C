@@ -93,6 +93,23 @@ static uint64_t operator_invocations(const lw_ocr_execution_profile* profile, ui
     return add_saturated(total, profile->recognizer.execution.operator_invocations[operation]);
 }
 
+static void print_execution_path_counters(const lw_execution_profile* profile) {
+    printf("{\"packed_conv1x1\":%llu,\"packed_conv3x3_stride2\":%llu,"
+           "\"unpacked_conv\":%llu,\"packed_matmul\":%llu,"
+           "\"unpacked_matmul\":%llu,\"fused_gelu\":%llu,"
+           "\"ctc_greedy\":%llu,\"ctc_packed_projection\":%llu,"
+           "\"ctc_generic_projection\":%llu}",
+           (unsigned long long)profile->packed_conv1x1_invocations,
+           (unsigned long long)profile->packed_conv3x3_stride2_invocations,
+           (unsigned long long)profile->unpacked_conv_invocations,
+           (unsigned long long)profile->packed_matmul_invocations,
+           (unsigned long long)profile->unpacked_matmul_invocations,
+           (unsigned long long)profile->fused_gelu_invocations,
+           (unsigned long long)profile->ctc_greedy_invocations,
+           (unsigned long long)profile->ctc_packed_projection_invocations,
+           (unsigned long long)profile->ctc_generic_projection_invocations);
+}
+
 static void print_tensor_dimensions(const lw_runtime_tensor* tensor) {
     uint32_t dimension;
     putchar('[');
@@ -382,6 +399,18 @@ int main(int argc, char** argv) {
            (unsigned long long)profile.recognizer.preprocess_nanoseconds,
            (unsigned long long)profile.recognizer.graph_nanoseconds,
            (unsigned long long)profile.recognizer.postprocess_nanoseconds);
+    printf("\"rec_session_cache\":{\"hits\":%llu,\"misses\":%llu,"
+           "\"reconfigurations\":%llu},",
+           (unsigned long long)profile.recognizer.session_cache_hits,
+           (unsigned long long)profile.recognizer.session_cache_misses,
+           (unsigned long long)profile.recognizer.session_reconfigurations);
+    printf("\"implementation_paths\":{\"detector\":");
+    print_execution_path_counters(&profile.detector.execution);
+    printf(",\"classifier\":");
+    print_execution_path_counters(&profile.classifier.execution);
+    printf(",\"recognizer\":");
+    print_execution_path_counters(&profile.recognizer.execution);
+    printf("},");
     printf("\"graph_work_nanoseconds\":%llu,\"operators\":[",
            (unsigned long long)graph_work_nanoseconds);
     for (index = 1u; index < LW_EXECUTION_PROFILE_OPERATOR_CAPACITY; ++index) {

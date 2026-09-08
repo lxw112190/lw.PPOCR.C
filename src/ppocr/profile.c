@@ -61,6 +61,9 @@ void lw_pipeline_component_profile_accumulate(lw_pipeline_component_profile* des
     add_saturated(&destination->preprocess_nanoseconds, source->preprocess_nanoseconds);
     add_saturated(&destination->graph_nanoseconds, source->graph_nanoseconds);
     add_saturated(&destination->postprocess_nanoseconds, source->postprocess_nanoseconds);
+    add_saturated(&destination->session_cache_hits, source->session_cache_hits);
+    add_saturated(&destination->session_cache_misses, source->session_cache_misses);
+    add_saturated(&destination->session_reconfigurations, source->session_reconfigurations);
     for (index = 0u; index < LW_EXECUTION_PROFILE_OPERATOR_CAPACITY; ++index) {
         add_saturated(&destination->execution.operator_nanoseconds[index],
                       source->execution.operator_nanoseconds[index]);
@@ -85,6 +88,24 @@ void lw_pipeline_component_profile_accumulate(lw_pipeline_component_profile* des
         add_saturated(&destination->execution.conv_transpose_thread_histogram[index],
                       source->execution.conv_transpose_thread_histogram[index]);
     }
+    add_saturated(&destination->execution.packed_conv1x1_invocations,
+                  source->execution.packed_conv1x1_invocations);
+    add_saturated(&destination->execution.packed_conv3x3_stride2_invocations,
+                  source->execution.packed_conv3x3_stride2_invocations);
+    add_saturated(&destination->execution.unpacked_conv_invocations,
+                  source->execution.unpacked_conv_invocations);
+    add_saturated(&destination->execution.packed_matmul_invocations,
+                  source->execution.packed_matmul_invocations);
+    add_saturated(&destination->execution.unpacked_matmul_invocations,
+                  source->execution.unpacked_matmul_invocations);
+    add_saturated(&destination->execution.fused_gelu_invocations,
+                  source->execution.fused_gelu_invocations);
+    add_saturated(&destination->execution.ctc_greedy_invocations,
+                  source->execution.ctc_greedy_invocations);
+    add_saturated(&destination->execution.ctc_packed_projection_invocations,
+                  source->execution.ctc_packed_projection_invocations);
+    add_saturated(&destination->execution.ctc_generic_projection_invocations,
+                  source->execution.ctc_generic_projection_invocations);
 }
 
 uint64_t lw_pipeline_profile_now(const lw_pipeline_component_profile* profile) {

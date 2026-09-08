@@ -45,6 +45,30 @@ and CLS operators that the older REC-only profile did not need. Conv work is
 also classified as 1x1, ordinary 3x3, Depthwise 3x3, ordinary stride-2 3x3, or
 other Conv.
 
+## Implementation-path diagnostics
+
+The implementation_paths section is an internal, additive diagnostic section.
+Its counters are separated into detector, classifier, and recognizer, so a
+profile can distinguish packed kernels from the unpacked/parallel generic
+route:
+
+- packed_conv1x1 and packed_conv3x3_stride2 count prepared-weight Conv paths;
+- unpacked_conv and unpacked_matmul count Conv/MatMul calls that did not use
+  those prepared layouts (they may still use a parallel generic kernel);
+- packed_matmul includes the REC terminal CTC projection fast path;
+- ctc_packed_projection versus ctc_generic_projection identifies the terminal
+  REC projection implementation;
+- fused_gelu counts the AVX2 GELU chain fusion.
+
+The rec_session_cache object contains hits, misses, and reconfigurations for
+the adaptive REC Session lookup. A cache hit means the requested adaptive REC
+width already has either the active or the retained secondary Session. A miss
+causes a concrete-width Session rebuild. These counters are intended to select
+the next A/B optimization; they are not part of the public C ABI.
+
+tools/collect_native_ocr_profile.py preserves these counters in each case of
+the architecture profile summary and normalizes them per measured request.
+
 ## Native ARM64 performance matrix
 
 The native ARM64 workflow runs the same profile and benchmark drivers on the

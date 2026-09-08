@@ -130,6 +130,15 @@ class FullOcrProfileTest(unittest.TestCase):
                 self.assertGreaterEqual(wall["total"], wall["line_workers"])
 
                 line_work = report["line_work_nanoseconds"]
+                session_cache = report["rec_session_cache"]
+                self.assertEqual(
+                    session_cache["hits"] + session_cache["misses"],
+                    report["lines"],
+                )
+                self.assertEqual(
+                    session_cache["misses"],
+                    session_cache["reconfigurations"],
+                )
                 for stage in (
                     "cls_preprocess",
                     "cls_graph",
@@ -153,6 +162,39 @@ class FullOcrProfileTest(unittest.TestCase):
                 self.assertGreater(report["graph_work_nanoseconds"], 0)
                 self.assertAlmostEqual(
                     sum(item["percentage"] for item in operators), 100.0, places=3
+                )
+
+                implementation_paths = report["implementation_paths"]
+                for component_name, component_key in (
+                    ("detector", "det_invocations"),
+                    ("classifier", "cls_invocations"),
+                    ("recognizer", "rec_invocations"),
+                ):
+                    paths = implementation_paths[component_name]
+                    conv = next(
+                        item for item in operators if item["name"] == "Conv"
+                    )[component_key]
+                    self.assertEqual(
+                        paths["packed_conv1x1"]
+                        + paths["packed_conv3x3_stride2"]
+                        + paths["unpacked_conv"],
+                        conv,
+                    )
+                    matmul = next(
+                        item for item in operators if item["name"] == "MatMul"
+                    )[component_key]
+                    self.assertEqual(
+                        paths["packed_matmul"] + paths["unpacked_matmul"],
+                        matmul,
+                    )
+                self.assertEqual(
+                    implementation_paths["recognizer"]["ctc_greedy"],
+                    report["lines"],
+                )
+                self.assertEqual(
+                    implementation_paths["recognizer"]["ctc_packed_projection"]
+                    + implementation_paths["recognizer"]["ctc_generic_projection"],
+                    report["lines"],
                 )
 
                 rec_width = report["rec_width"]

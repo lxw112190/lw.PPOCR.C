@@ -37,6 +37,17 @@ typedef struct lw_execution_profile {
     /* ConvTranspose is tracked separately so the established Conv histogram
      * keeps its original meaning. */
     uint64_t conv_transpose_thread_histogram[LW_EXECUTION_PROFILE_THREAD_HISTOGRAM_CAPACITY];
+    /* Implementation-path counters are intentionally internal. They make
+     * hotspot reports actionable without changing the public C ABI. */
+    uint64_t packed_conv1x1_invocations;
+    uint64_t packed_conv3x3_stride2_invocations;
+    uint64_t unpacked_conv_invocations;
+    uint64_t packed_matmul_invocations;
+    uint64_t unpacked_matmul_invocations;
+    uint64_t fused_gelu_invocations;
+    uint64_t ctc_greedy_invocations;
+    uint64_t ctc_packed_projection_invocations;
+    uint64_t ctc_generic_projection_invocations;
 } lw_execution_profile;
 
 lw_status lw_execute_session_f32(lw_session* session, const float* input,

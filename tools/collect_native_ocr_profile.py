@@ -121,6 +121,20 @@ def normalize_profile(profile: dict[str, Any], iterations: int) -> dict[str, Any
     if not isinstance(wall, dict) or not isinstance(line_work, dict):
         raise RuntimeError("profile is missing wall_nanoseconds or line_work_nanoseconds")
 
+    session_cache: dict[str, float] = {}
+    raw_session_cache = profile.get("rec_session_cache")
+    if raw_session_cache is not None:
+        if not isinstance(raw_session_cache, dict):
+            raise RuntimeError("profile rec_session_cache must be an object")
+        for key in ("hits", "misses", "reconfigurations"):
+            session_cache[key] = (
+                require_number(
+                    raw_session_cache.get(key),
+                    f"profile rec_session_cache.{key}",
+                )
+                / float(iterations)
+            )
+
     operator_ms: dict[str, Any] = {}
     for item in profile.get("operators", []):
         if not isinstance(item, dict):
@@ -174,6 +188,37 @@ def normalize_profile(profile: dict[str, Any], iterations: int) -> dict[str, Any
         )
     nodes.sort(key=lambda item: item["milliseconds"], reverse=True)
 
+    implementation_paths: dict[str, dict[str, float]] = {}
+    raw_paths = profile.get("implementation_paths")
+    if raw_paths is not None:
+        if not isinstance(raw_paths, dict):
+            raise RuntimeError("profile implementation_paths must be an object")
+        for component in ("detector", "classifier", "recognizer"):
+            raw_component = raw_paths.get(component)
+            if not isinstance(raw_component, dict):
+                raise RuntimeError(
+                    f"profile implementation_paths is missing {component}"
+                )
+            implementation_paths[component] = {}
+            for key in (
+                "packed_conv1x1",
+                "packed_conv3x3_stride2",
+                "unpacked_conv",
+                "packed_matmul",
+                "unpacked_matmul",
+                "fused_gelu",
+                "ctc_greedy",
+                "ctc_packed_projection",
+                "ctc_generic_projection",
+            ):
+                implementation_paths[component][key] = (
+                    require_number(
+                        raw_component.get(key),
+                        f"profile implementation path {component}.{key}",
+                    )
+                    / float(iterations)
+                )
+
     return {
         "iterations": iterations,
         "lines": require_int(profile, "lines", "profile"),
@@ -184,8 +229,10 @@ def normalize_profile(profile: dict[str, Any], iterations: int) -> dict[str, Any
         "line_work_ms_per_request": {
             key: milliseconds(value) for key, value in line_work.items()
         },
+        "rec_session_cache": session_cache,
         "graph_work_ms_per_request": milliseconds(profile.get("graph_work_nanoseconds")),
         "conv_ms_per_request": milliseconds(profile.get("conv_nanoseconds")),
+        "implementation_paths": implementation_paths,
         "conv_invocations_per_request": require_number(
             profile.get("conv_invocations"), "profile Conv invocations"
         )
