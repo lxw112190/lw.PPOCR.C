@@ -265,6 +265,7 @@ jobs:
           $cases = [Collections.Generic.List[string]]::new()
           $profiles = [Collections.Generic.List[string]]::new()
           $profiles.Add('normalized-fixed320')
+          $profiles.Add('normalized-adaptive960')
           if ('${{ inputs.include_product }}' -eq 'true') { $profiles.Add('product') }
           $order = if (($replica % 2) -eq 0) { @('c', 'sharp') } else { @('sharp', 'c') }
 
@@ -272,7 +273,7 @@ jobs:
             foreach ($workers in 1, 4) {
               foreach ($engine in $order) {
                 Remove-Item Env:DOTNET_EnableAVX512 -ErrorAction SilentlyContinue
-                if ($profile -eq 'normalized-fixed320') {
+                if ($profile -like 'normalized-*') {
                   $env:DOTNET_EnableAVX512 = '0'
                 }
                 $caseId = "tiny-$engine-$($workers)w-$profile-r$replica"

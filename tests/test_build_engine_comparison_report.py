@@ -47,7 +47,7 @@ class EngineComparisonReportTests(unittest.TestCase):
 
     def _write_contract(self) -> None:
         value = {
-            "schema_version": 1,
+            "schema_version": 2,
             "name": "test",
             "simd_repository": "lxw112190/SimdPaddleOCR",
             "simd_ref": HARNESS_COMMIT,
@@ -65,6 +65,11 @@ class EngineComparisonReportTests(unittest.TestCase):
                     "requested_isa": "avx2",
                     "sharp": {"rec_policy": "fixed", "rec_width": 320},
                     "c": {"rec_policy": "fixed", "rec_width": 320},
+                },
+                "normalized-adaptive960": {
+                    "requested_isa": "avx2",
+                    "sharp": {"rec_policy": "lw-adaptive960", "rec_width": 960},
+                    "c": {"rec_policy": "adaptive960", "rec_width": 960},
                 },
                 "product": {
                     "requested_isa": "best",
@@ -134,7 +139,7 @@ class EngineComparisonReportTests(unittest.TestCase):
             result_dir = replica_dir / "results"
             result_dir.mkdir(parents=True)
             cases = []
-            for profile in ("normalized-fixed320", "product"):
+            for profile in ("normalized-fixed320", "normalized-adaptive960", "product"):
                 for workers in (1, 4):
                     for engine in ("sharp", "c"):
                         name = f"{profile}-{workers}w-{engine}-r{replica}.json"
@@ -166,14 +171,23 @@ class EngineComparisonReportTests(unittest.TestCase):
         self, replica: int, engine: str, profile: str, workers: int
     ) -> dict[str, object]:
         product = profile == "product"
+        adaptive = profile == "normalized-adaptive960"
         rec_policy = (
             "native-adaptive"
             if engine == "sharp" and product
+            else "lw-adaptive960"
+            if engine == "sharp" and adaptive
             else "adaptive-max"
             if engine == "c" and product
+            else "adaptive960"
+            if engine == "c" and adaptive
             else "fixed"
         )
-        rec_width = 960 if engine == "c" and product else 320
+        rec_width = (
+            960
+            if adaptive or (product and engine == "c")
+            else 320
+        )
         rows = []
         exact = 0
         for index in range(1, 4):
@@ -269,7 +283,7 @@ class EngineComparisonReportTests(unittest.TestCase):
 
     def test_builds_paired_report_and_disagreements(self) -> None:
         manifest = self.build()
-        self.assertEqual(manifest["cases"], 24)
+        self.assertEqual(manifest["cases"], 36)
         self.assertEqual(set(manifest["c_runtime_dlls"]), {"1", "2", "3"})
         summary = (self.output / "SUMMARY.md").read_text(encoding="utf-8")
         self.assertIn("Ratios are calculated only within the same replica", summary)
@@ -325,6 +339,16 @@ class EngineComparisonReportTests(unittest.TestCase):
         with self.assertRaisesRegex(ComparisonError, "not AVX2"):
             self.build()
 
+    def test_adaptive_normalized_isa_mismatch_is_rejected(self) -> None:
+        target = next(
+            self.results.rglob("normalized-adaptive960-1w-sharp-r1.json")
+        )
+        value = json.loads(target.read_text(encoding="utf-8"))
+        value["meta"]["effective_isa"] = "avx512"
+        target.write_text(json.dumps(value), encoding="utf-8")
+        with self.assertRaisesRegex(ComparisonError, "not AVX2"):
+            self.build()
+
     def test_product_profile_can_be_omitted(self) -> None:
         for manifest_path in self.results.rglob("replica-manifest.json"):
             manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
@@ -347,8 +371,10 @@ class EngineComparisonReportTests(unittest.TestCase):
             include_product=False,
             keep_detailed_results=False,
         )
-        self.assertEqual(result["cases"], 12)
-        self.assertEqual(result["profiles"], ["normalized-fixed320"])
+        self.assertEqual(result["cases"], 24)
+        self.assertEqual(
+            result["profiles"], ["normalized-fixed320", "normalized-adaptive960"]
+        )
 
     def test_repository_contract_pins_published_harness_commit(self) -> None:
         contract_path = (
@@ -359,7 +385,7 @@ class EngineComparisonReportTests(unittest.TestCase):
         contract = load_contract(contract_path)
         self.assertEqual(
             contract["simd_ref"],
-            "ce60557f2591cf7ab91e84860d4dffd8ad431ed3",
+            "3e4192f2ec03b84701d3c5c1658e277fdaa7aa12",
         )
 
 

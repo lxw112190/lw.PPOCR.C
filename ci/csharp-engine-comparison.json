@@ -1,8 +1,8 @@
 {
-  "schema_version": 1,
-  "name": "lw-ppocr-c-vs-simdpaddleocr-v1",
+  "schema_version": 2,
+  "name": "lw-ppocr-c-vs-simdpaddleocr-v2",
   "simd_repository": "lxw112190/SimdPaddleOCR",
-  "simd_ref": "ce60557f2591cf7ab91e84860d4dffd8ad431ed3",
+  "simd_ref": "3e4192f2ec03b84701d3c5c1658e277fdaa7aa12",
   "dataset": {
     "generator_project": "test/Sdcb.SimdPaddleOCR.TestData",
     "expected_images": 100,
@@ -27,6 +27,17 @@
       "c": {
         "rec_policy": "fixed",
         "rec_width": 320
+      }
+    },
+    "normalized-adaptive960": {
+      "requested_isa": "avx2",
+      "sharp": {
+        "rec_policy": "lw-adaptive960",
+        "rec_width": 960
+      },
+      "c": {
+        "rec_policy": "adaptive960",
+        "rec_width": 960
       }
     },
     "product": {

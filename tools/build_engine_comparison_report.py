@@ -96,17 +96,17 @@ def finite_number(value: Any, label: str, *, positive: bool = False) -> float:
 
 def load_contract(path: Path) -> dict[str, Any]:
     contract = load_json(path)
-    if contract.get("schema_version") != 1:
-        raise ComparisonError("comparison contract schema_version must be 1")
+    if contract.get("schema_version") != 2:
+        raise ComparisonError("comparison contract schema_version must be 2")
     require_full_sha(contract.get("simd_ref"), "simd_ref")
     if contract.get("simd_repository") != "lxw112190/SimdPaddleOCR":
         raise ComparisonError("comparison contract uses an unexpected harness repository")
     if contract.get("models") != ["tiny"]:
-        raise ComparisonError("comparison v1 must contain only the tiny model")
+        raise ComparisonError("comparison v2 must contain only the tiny model")
     if contract.get("workers") != [1, 4]:
-        raise ComparisonError("comparison v1 workers must be [1, 4]")
+        raise ComparisonError("comparison v2 workers must be [1, 4]")
     if contract.get("replicas") != 3:
-        raise ComparisonError("comparison v1 requires three paired replicas")
+        raise ComparisonError("comparison v2 requires three paired replicas")
     dataset = contract.get("dataset")
     if not isinstance(dataset, dict):
         raise ComparisonError("comparison contract lacks dataset")
@@ -118,13 +118,18 @@ def load_contract(path: Path) -> dict[str, Any]:
     if expected != warmup + measured or expected <= 1 or warmup != 1:
         raise ComparisonError("dataset counts must describe one warm-up plus measured images")
     if dataset.get("generator_project") != "test/Sdcb.SimdPaddleOCR.TestData":
-        raise ComparisonError("comparison v1 uses an unexpected dataset generator")
+        raise ComparisonError("comparison v2 uses an unexpected dataset generator")
     profiles = contract.get("profiles")
     expected_profiles = {
         "normalized-fixed320": {
             "requested_isa": "avx2",
             "sharp": {"rec_policy": "fixed", "rec_width": 320},
             "c": {"rec_policy": "fixed", "rec_width": 320},
+        },
+        "normalized-adaptive960": {
+            "requested_isa": "avx2",
+            "sharp": {"rec_policy": "lw-adaptive960", "rec_width": 960},
+            "c": {"rec_policy": "adaptive960", "rec_width": 960},
         },
         "product": {
             "requested_isa": "best",
@@ -133,7 +138,7 @@ def load_contract(path: Path) -> dict[str, Any]:
         },
     }
     if profiles != expected_profiles:
-        raise ComparisonError("comparison v1 profile semantics have drifted")
+        raise ComparisonError("comparison v2 profile semantics have drifted")
     expected_normalized = {
         "reading_order": "horizontal",
         "detector": {
@@ -147,15 +152,22 @@ def load_contract(path: Path) -> dict[str, Any]:
         "classifier": {"enabled": True, "threshold": 0.9},
     }
     if contract.get("normalized_options") != expected_normalized:
-        raise ComparisonError("comparison v1 normalized DET/CLS options have drifted")
+        raise ComparisonError("comparison v2 normalized DET/CLS options have drifted")
     policy = contract.get("comparison_policy")
     if not isinstance(policy, dict) or policy.get("ratios") != "paired-within-replica":
         raise ComparisonError("comparison ratios must be paired within each replica")
     if policy.get("performance_gate") is not False or policy.get("accuracy_gate") is not False:
-        raise ComparisonError("performance and accuracy must remain informational in v1")
+        raise ComparisonError("performance and accuracy must remain informational in v2")
     if policy.get("correctness_gate") is not True:
-        raise ComparisonError("correctness must be gating in v1")
+        raise ComparisonError("correctness must be gating in v2")
     return contract
+
+
+def selected_profiles(include_product: bool) -> list[str]:
+    profiles = ["normalized-fixed320", "normalized-adaptive960"]
+    if include_product:
+        profiles.append("product")
+    return profiles
 
 
 def read_sha256s(path: Path) -> dict[str, str]:
@@ -260,7 +272,7 @@ def validate_run(
     effective_isa = meta.get("effective_isa")
     if not isinstance(effective_isa, str) or effective_isa in ("", "unknown"):
         raise ComparisonError(f"effective ISA is missing: {path}")
-    if profile == "normalized-fixed320" and effective_isa != "avx2":
+    if profile in ("normalized-fixed320", "normalized-adaptive960") and effective_isa != "avx2":
         raise ComparisonError(f"normalized benchmark is not AVX2: {path}")
 
     expected_images = contract["dataset"]["expected_images"]
@@ -363,7 +375,7 @@ def load_runs(
                 )
             )
 
-    profiles = ["normalized-fixed320"] + (["product"] if include_product else [])
+    profiles = selected_profiles(include_product)
     expected = {
         (replica, engine, profile, workers)
         for replica in range(1, contract["replicas"] + 1)
@@ -644,7 +656,7 @@ def build_line_diagnostics(
     contributors.sort(
         key=lambda item: (-item["c_extra_errors"], item["file"], item["line_index"])
     )
-    summary_profile = "product" if "product" in profiles else "normalized-fixed320"
+    summary_profile = "product" if "product" in profiles else "normalized-adaptive960"
     summary_workers = max(workers_values)
     summary_contributors = [
         item
@@ -788,7 +800,7 @@ def build_markdown(
             f"{c_run.meta['effective_isa']} | {sharp.meta['effective_isa']} |"
         )
 
-    summary_profile = "product" if "product" in profiles else "normalized-fixed320"
+    summary_profile = "product" if "product" in profiles else "normalized-adaptive960"
     lines.extend(
         [
             "",
@@ -821,15 +833,16 @@ def build_markdown(
         [
             "",
             "> `normalized-fixed320` is an implementation-normalization workload. Long lines are intentionally compressed, so its accuracy must not be presented as product OCR quality.",
+            "> `normalized-adaptive960` uses the same bounded REC width policy as C and is the preferred equal-policy quality comparison.",
         ]
     )
 
     for profile in profiles:
-        title = (
-            "Normalized fixed-320 / AVX2"
-            if profile == "normalized-fixed320"
-            else "Product profile"
-        )
+        title = {
+            "normalized-fixed320": "Normalized fixed-320 / AVX2",
+            "normalized-adaptive960": "Normalized adaptive-960 / AVX2",
+            "product": "Product profile",
+        }[profile]
         lines.extend(["", f"## {title}", ""])
         if profile == "product":
             lines.extend([
@@ -907,7 +920,7 @@ def build_markdown(
         "",
         "- Contract, SHA identity, case completeness, AVX2 parity, paired-runner "
         "identity, C determinism and result structure are gating.",
-        "- Performance and accuracy values are informational in schema v1.",
+        "- Performance and accuracy values are informational in schema v2.",
         "",
     ])
     return chr(10).join(lines)
@@ -942,7 +955,7 @@ def build_report(
         model_hashes,
         include_product,
     )
-    profiles = ["normalized-fixed320"] + (["product"] if include_product else [])
+    profiles = selected_profiles(include_product)
     contract_sha = sha256_file(contract_path)
     markdown = build_markdown(
         runs, contract, lw_commit, contract_sha, dataset_info, profiles

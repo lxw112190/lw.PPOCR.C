@@ -11,19 +11,19 @@ profile artifact，不改变发布包，也不把性能结果设为失败门禁�
 
 ## 固定合同
 
-机器可读合同位于 ci/csharp-engine-comparison.json。当前 v1 固定：
+机器可读合同位于 ci/csharp-engine-comparison.json。当前 v2 固定：
 
 - SimdPaddleOCR 仓库和 40 位 commit；
 - PP-OCRv6 Tiny；
 - 1 与 4 个 line workers；
 - 3 个独立 GitHub-hosted Windows x64 replicas；
 - 100 张生成图片，其中第 1 张为 warm-up，后续 99 张计入统计；
-- Normalized fixed-320 与 Product 两种 profile；
+- Normalized fixed-320、Normalized adaptive-960 与 Product 三种 profile；
 - performance 与 accuracy 仅报告，contract/correctness 才会导致失败。
 
 合同变化必须和报告器、测试及工作流放在同一提交中审查。不要只改 YAML 中的参数。
 
-## 两种 profile
+## 三种 profile
 
 ### Normalized fixed-320
 
@@ -38,6 +38,13 @@ profile artifact，不改变发布包，也不把性能结果设为失败门禁�
 | DET/CLS | 合同中的显式参数 | 同一组显式参数 |
 
 任一引擎实际 ISA 不是 AVX2，case 直接失败，不生成“近似公平”的结果。
+
+### Normalized adaptive-960
+
+该 profile 是本项目最重要的 equal-policy 对比：C# 和 C 都使用同一套
+`ceil(48 * source_width / source_height)` 整数计算，并从 `192/320/480/640/960`
+中选择第一个不小于自然宽度的桶，最大宽度为 960。两边使用相同 DET、CLS、Tiny
+模型、阅读顺序和 AVX2 约束。它用于区分“REC 宽度策略差异”和真正的 Runtime/算子差异。
 
 ### Product
 
@@ -133,7 +140,7 @@ Actions Step Summary 直接显示：
 - C 与 C# 不在同一 replica machine；
 - case 缺失、结果 schema/计数无效或参考行数不一致。
 
-性能慢于另一实现、CER 较高或 Exact Line Rate 较低在 v1 中只属于分析信息。
+性能慢于另一实现、CER 较高或 Exact Line Rate 较低在 v2 中只属于分析信息。
 
 ## 结果边界
 
