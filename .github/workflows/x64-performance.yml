@@ -201,3 +201,99 @@ jobs:
           path: x64-profile-results/
           if-no-files-found: error
           retention-days: 30
+
+  resident-aot:
+    name: Native x64 Resident A/B
+    needs: prepare-assets
+    runs-on: windows-2022
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements-converter.txt
+      - name: Install Python test and converter dependencies
+        run: python -m pip install -r requirements-converter.txt
+      - name: Download prepared OCR assets
+        uses: actions/download-artifact@v8
+        with:
+          name: prepared-x64-ocr-assets
+          path: .ci/preconverted
+      - name: Verify prepared OCR assets
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          foreach ($line in Get-Content -LiteralPath '.ci/preconverted/SHA256SUMS') {
+            $parts = $line.Trim() -split ' +', 2
+            if ($parts.Count -ne 2) { throw "invalid checksum line: $line" }
+            $name = $parts[1].TrimStart('*')
+            $actual = (Get-FileHash -LiteralPath ".ci/preconverted/$name" -Algorithm SHA256).Hash.ToLowerInvariant()
+            if ($actual -ne $parts[0].ToLowerInvariant()) {
+              throw "SHA-256 mismatch: $name"
+            }
+          }
+      - name: Configure compact and resident builds
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $common = @(
+            '-S', '.',
+            '-G', 'Visual Studio 17 2022', '-A', 'x64',
+            '-DBUILD_TESTING=ON',
+            '-DLW_BUILD_HTTP_DEMO=OFF',
+            '-DLW_BUILD_CSHARP_DEMOS=OFF',
+            "-DLW_PRECONVERTED_ASSETS_DIR=$env:GITHUB_WORKSPACE/.ci/preconverted"
+          )
+          cmake @common -B build-x64-compact -DLW_REC_RESIDENT_WIDTHS=OFF
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cmake @common -B build-x64-resident -DLW_REC_RESIDENT_WIDTHS=ON
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Build compact and resident benchmark drivers
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          cmake --build build-x64-compact --config Release --parallel 2 --target full-ocr-intra-benchmark
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cmake --build build-x64-resident --config Release --parallel 2 --target full-ocr-profile-driver full-ocr-intra-benchmark
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Run resident profile gate
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          ctest --test-dir build-x64-resident -C Release --output-on-failure -R '^full_ocr_operator_profile$'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Compare compact and resident profiles
+        shell: pwsh
+        env:
+          AOT_WARMUP: ${{ inputs.warmup }}
+          AOT_ITERATIONS: ${{ inputs.iterations }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          New-Item -ItemType Directory -Force -Path x64-resident-results | Out-Null
+          $compactDriver = (Resolve-Path 'build-x64-compact/Release/full-ocr-intra-benchmark.exe').Path
+          $residentDriver = (Resolve-Path 'build-x64-resident/Release/full-ocr-intra-benchmark.exe').Path
+          python tools/compare_rec_runtime_profiles.py `
+            --compact-driver $compactDriver `
+            --performance-driver $residentDriver `
+            --det .ci/preconverted/det.lwm `
+            --cls .ci/preconverted/cls.lwm `
+            --rec .ci/preconverted/rec.lwm `
+            --dictionary .ci/preconverted/ppocr_keys.txt `
+            --image .ci/preconverted/sample.ppm `
+            --warmup $env:AOT_WARMUP `
+            --iterations $env:AOT_ITERATIONS `
+            --workers 4 `
+            --target-width 960 `
+            --det-threads 4 `
+            --json-output x64-resident-results/compact-vs-resident.json `
+            --markdown-output x64-resident-results/compact-vs-resident.md
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Get-Content -LiteralPath x64-resident-results/compact-vs-resident.md | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+      - uses: actions/upload-artifact@v7
+        with:
+          name: lw-ppocr-x64-resident-results-${{ github.sha }}
+          path: x64-resident-results/
+          if-no-files-found: error
+          retention-days: 30

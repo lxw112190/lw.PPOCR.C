@@ -118,3 +118,5 @@ When `LW_REC_RESIDENT_WIDTHS=ON`, the existing `full_ocr_operator_profile` CTest
 is additionally run with `--expect-resident`; it requires zero REC session-cache misses
 and zero reconfigurations for both one-worker and four-worker cases. The default
 Compact build keeps the original cache assertions.
+
+The manual `Native x64 OCR Performance` workflow now includes a `Native x64 Resident A/B` job. It builds both modes from the same prepared assets, runs the Resident zero-reconfiguration gate, and uploads the JSON/Markdown comparison artifact.
