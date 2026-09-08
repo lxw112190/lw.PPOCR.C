@@ -17,6 +17,19 @@
 
 #define LW_REC_DEFAULT_TARGET_WIDTH 960u
 #define LW_REC_DEFAULT_MAX_IMAGE_PIXELS UINT64_C(40000000)
+#define LW_REC_RESIDENT_WIDTH_COUNT 5u
+
+typedef struct lw_rec_resident_slot {
+    lw_session* session;
+    float* input;
+    float* probabilities;
+    uint32_t* best_indices;
+    float* best_probabilities;
+    uint64_t input_element_count;
+    uint64_t probability_element_count;
+    uint32_t target_width;
+    uint32_t time_steps;
+} lw_rec_resident_slot;
 
 struct lw_recognizer {
     lw_model* model;
@@ -42,6 +55,8 @@ struct lw_recognizer {
     uint32_t current_target_width;
     uint32_t current_time_steps;
     uint32_t adaptive_width_enabled;
+    uint8_t resident_widths_enabled;
+    lw_rec_resident_slot resident_slots[LW_REC_RESIDENT_WIDTH_COUNT];
     lw_recognizer_info info;
 };
 
@@ -68,6 +83,50 @@ static void release_cached_session(lw_recognizer* recognizer) {
     recognizer->cached_time_steps = 0u;
 }
 
+static void release_resident_slot(lw_rec_resident_slot* slot) {
+    if (slot == NULL) {
+        return;
+    }
+    free(slot->best_probabilities);
+    free(slot->best_indices);
+    free(slot->probabilities);
+    free(slot->input);
+    lw_session_free(slot->session);
+    memset(slot, 0, sizeof(*slot));
+}
+
+static void swap_active_with_resident_slot(lw_recognizer* recognizer,
+                                            lw_rec_resident_slot* slot) {
+    lw_session* session = recognizer->session;
+    float* input = recognizer->input;
+    float* probabilities = recognizer->probabilities;
+    uint32_t* best_indices = recognizer->best_indices;
+    float* best_probabilities = recognizer->best_probabilities;
+    uint64_t input_element_count = recognizer->input_element_count;
+    uint64_t probability_element_count = recognizer->probability_element_count;
+    uint32_t target_width = recognizer->current_target_width;
+    uint32_t time_steps = recognizer->current_time_steps;
+
+    recognizer->session = slot->session;
+    recognizer->input = slot->input;
+    recognizer->probabilities = slot->probabilities;
+    recognizer->best_indices = slot->best_indices;
+    recognizer->best_probabilities = slot->best_probabilities;
+    recognizer->input_element_count = slot->input_element_count;
+    recognizer->probability_element_count = slot->probability_element_count;
+    recognizer->current_target_width = slot->target_width;
+    recognizer->current_time_steps = slot->time_steps;
+
+    slot->session = session;
+    slot->input = input;
+    slot->probabilities = probabilities;
+    slot->best_indices = best_indices;
+    slot->best_probabilities = best_probabilities;
+    slot->input_element_count = input_element_count;
+    slot->probability_element_count = probability_element_count;
+    slot->target_width = target_width;
+    slot->time_steps = time_steps;
+}
 static void activate_cached_session(lw_recognizer* recognizer) {
     lw_session* session = recognizer->session;
     float* input = recognizer->input;
@@ -193,6 +252,37 @@ static lw_status configure_session(lw_recognizer* recognizer, uint32_t target_wi
     uint32_t class_count;
     int use_ctc_greedy;
     lw_status status;
+
+    if (recognizer->resident_widths_enabled != 0u) {
+        uint32_t slot_index;
+        if (recognizer->current_target_width == target_width) {
+            if (configured_info != NULL) {
+                lw_session_info_init(configured_info);
+                status = lw_session_get_info(recognizer->session, configured_info);
+                if (status != LW_STATUS_OK) {
+                    lw_set_error(error, status, "unable to read resident recognizer session information");
+                    return status;
+                }
+            }
+            return LW_STATUS_OK;
+        }
+        for (slot_index = 0u; slot_index < LW_REC_RESIDENT_WIDTH_COUNT; ++slot_index) {
+            if (recognizer->resident_slots[slot_index].target_width == target_width) {
+                swap_active_with_resident_slot(recognizer, &recognizer->resident_slots[slot_index]);
+                if (configured_info != NULL) {
+                    lw_session_info_init(configured_info);
+                    status = lw_session_get_info(recognizer->session, configured_info);
+                    if (status != LW_STATUS_OK) {
+                        lw_set_error(error, status, "unable to read resident recognizer session information");
+                        return status;
+                    }
+                }
+                return LW_STATUS_OK;
+            }
+        }
+        lw_set_error(error, LW_STATUS_INVALID_ARGUMENT, "requested REC width is not resident");
+        return LW_STATUS_INVALID_ARGUMENT;
+    }
 
     if (recognizer->cached_session != NULL && recognizer->cached_target_width == target_width) {
         activate_cached_session(recognizer);
@@ -334,6 +424,74 @@ static uint32_t adaptive_target_width(uint32_t source_width, uint32_t source_hei
     return maximum_width;
 }
 
+lw_status lw_recognizer_enable_resident_widths(lw_recognizer* recognizer, lw_error* error) {
+    static const uint32_t resident_widths[LW_REC_RESIDENT_WIDTH_COUNT] = {
+        192u, 320u, 480u, 640u, 960u};
+    uint32_t index;
+    if (recognizer == NULL) {
+        lw_set_error(error, LW_STATUS_INVALID_ARGUMENT, "recognizer is required");
+        return LW_STATUS_INVALID_ARGUMENT;
+    }
+    if (recognizer->resident_widths_enabled != 0u) {
+        lw_set_error(error, LW_STATUS_OK, "");
+        return LW_STATUS_OK;
+    }
+    if (recognizer->info.target_width != 960u) {
+        lw_set_error(error, LW_STATUS_UNSUPPORTED,
+                     "resident REC widths require a 960-pixel maximum width");
+        return LW_STATUS_UNSUPPORTED;
+    }
+    for (index = 0u; index < LW_REC_RESIDENT_WIDTH_COUNT; ++index) {
+        lw_recognizer temporary = *recognizer;
+        lw_session_info session_info;
+        lw_status status;
+        lw_rec_resident_slot* slot = &recognizer->resident_slots[index];
+        if (resident_widths[index] == recognizer->current_target_width) {
+            continue;
+        }
+        memset(slot, 0, sizeof(*slot));
+        temporary.session = NULL;
+        temporary.input = NULL;
+        temporary.probabilities = NULL;
+        temporary.best_indices = NULL;
+        temporary.best_probabilities = NULL;
+        temporary.input_element_count = 0u;
+        temporary.probability_element_count = 0u;
+        temporary.cached_session = NULL;
+        temporary.cached_input = NULL;
+        temporary.cached_probabilities = NULL;
+        temporary.cached_best_indices = NULL;
+        temporary.cached_best_probabilities = NULL;
+        temporary.cached_input_element_count = 0u;
+        temporary.cached_probability_element_count = 0u;
+        temporary.cached_target_width = 0u;
+        temporary.cached_time_steps = 0u;
+        temporary.current_target_width = 0u;
+        temporary.current_time_steps = 0u;
+        temporary.resident_widths_enabled = 0u;
+        lw_session_info_init(&session_info);
+        status = configure_session(&temporary, resident_widths[index], &session_info, error);
+        if (status != LW_STATUS_OK) {
+            uint32_t cleanup_index;
+            for (cleanup_index = 0u; cleanup_index < LW_REC_RESIDENT_WIDTH_COUNT; ++cleanup_index) {
+                release_resident_slot(&recognizer->resident_slots[cleanup_index]);
+            }
+            return status;
+        }
+        slot->session = temporary.session;
+        slot->input = temporary.input;
+        slot->probabilities = temporary.probabilities;
+        slot->best_indices = temporary.best_indices;
+        slot->best_probabilities = temporary.best_probabilities;
+        slot->input_element_count = temporary.input_element_count;
+        slot->probability_element_count = temporary.probability_element_count;
+        slot->target_width = temporary.current_target_width;
+        slot->time_steps = temporary.current_time_steps;
+    }
+    recognizer->resident_widths_enabled = 1u;
+    lw_set_error(error, LW_STATUS_OK, "");
+    return LW_STATUS_OK;
+}
 lw_status lw_recognizer_enable_adaptive_width(lw_recognizer* recognizer, uint32_t enabled,
                                               lw_error* error) {
     if (recognizer == NULL || enabled > 1u) {
@@ -483,6 +641,12 @@ void lw_recognizer_free(lw_recognizer* recognizer) {
     free(recognizer->probabilities);
     free(recognizer->input);
     lw_session_free(recognizer->session);
+    {
+        uint32_t slot_index;
+        for (slot_index = 0u; slot_index < LW_REC_RESIDENT_WIDTH_COUNT; ++slot_index) {
+            release_resident_slot(&recognizer->resident_slots[slot_index]);
+        }
+    }
     release_cached_session(recognizer);
     lw_rec_dictionary_free(recognizer->dictionary);
     lw_model_free(recognizer->model);
@@ -533,7 +697,8 @@ static lw_status recognizer_recognize_bgr_u8_impl(lw_recognizer* recognizer, con
     }
     target_width = lw_recognizer_target_width_for_image(recognizer, source_width, source_height);
     if (profile != NULL) {
-        if (target_width == recognizer->current_target_width ||
+        if (recognizer->resident_widths_enabled != 0u ||
+            target_width == recognizer->current_target_width ||
             target_width == recognizer->cached_target_width) {
             if (profile->session_cache_hits != UINT64_MAX) {
                 ++profile->session_cache_hits;

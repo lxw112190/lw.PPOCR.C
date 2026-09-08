@@ -254,6 +254,13 @@ lw_status lw_ocr_create(const char* detector_model_path_utf8,
                 if (status != LW_STATUS_OK)
                     goto fail;
             }
+#if defined(LW_REC_RESIDENT_WIDTHS) && LW_REC_RESIDENT_WIDTHS
+            if (values.recognizer.target_width == 960u) {
+                status = lw_recognizer_enable_resident_widths(ocr->recognizers[worker_index], error);
+                if (status != LW_STATUS_OK)
+                    goto fail;
+            }
+#endif
         }
     }
     lw_detector_info_init(&detector_info);

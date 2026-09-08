@@ -60,3 +60,29 @@ Only after a candidate clears those gates should the project consider persistent
 multi-width plans, larger worker-private scratch arenas, AOT prepared layouts,
 or fused REC blocks. Compact behavior remains the fallback for WASM, low-memory
 ARM, and other constrained targets.
+## Experimental resident-width profile
+
+Native builds can opt into the first space-for-time experiment with:
+
+```powershell
+cmake -S . -B build-performance-vs `
+  -DLW_REC_RESIDENT_WIDTHS=ON `
+  -DBUILD_TESTING=ON
+```
+
+This is deliberately off by default. With the bundled Tiny/AVX2 500x500
+fixture, one local five-request smoke comparison measured:
+
+| Profile | Workers | OCR mean | Peak RSS |
+|---|---:|---:|---:|
+| Compact | 1 | 275.569 ms | 81.7 MiB |
+| Resident widths | 1 | 279.086 ms | 97.0 MiB |
+| Compact | 4 | 124.498 ms | 128.7 MiB |
+| Resident widths | 4 | 111.101 ms | 175.0 MiB |
+
+The resident variant prepared 192/320/480/640/960 sessions for every worker
+and switched between them without session construction. Both variants returned
+16 lines and checksum `0ebf8b448ab7df47`. These are local smoke measurements,
+not portable performance claims; the resident mode is still experimental and
+requires the uninstrumented benchmark, full OCR profile, Golden corpus, and
+100-image comparison before it can become a user-facing option.

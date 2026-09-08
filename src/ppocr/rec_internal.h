@@ -17,6 +17,7 @@ typedef struct lw_model lw_model;
  * stable C ABI and recognition-only behavior remain unchanged. */
 lw_status lw_recognizer_enable_adaptive_width(lw_recognizer* recognizer, uint32_t enabled,
                                               lw_error* error);
+lw_status lw_recognizer_enable_resident_widths(lw_recognizer* recognizer, lw_error* error);
 uint32_t lw_recognizer_target_width_for_image(const lw_recognizer* recognizer,
                                               uint32_t source_width, uint32_t source_height);
 uint32_t lw_recognizer_current_target_width(const lw_recognizer* recognizer);

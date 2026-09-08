@@ -10,6 +10,8 @@ option(LW_RUNTIME_ONLY
     "Build only the dependency-free native runtime for an embedding target" OFF)
 option(LW_WASM_SIMD128
     "Enable portable WebAssembly SIMD128 for the standalone OCR HTML" ON)
+option(LW_REC_RESIDENT_WIDTHS
+    "Prewarm all standard REC widths for native performance experiments" OFF)
 set(LW_WASM_HOST_ABI_VERSION "1" CACHE STRING
     "WASM Host ABI version embedded in the Web adapter and Node manifest")
 set(LW_LWM_FORMAT_VERSION "0.1" CACHE STRING
@@ -319,6 +321,9 @@ set_target_properties(lw_ppocr_c PROPERTIES
     OUTPUT_NAME lw_ppocr_c_static
     POSITION_INDEPENDENT_CODE ON)
 lw_configure_runtime_target(lw_ppocr_c)
+if(LW_REC_RESIDENT_WIDTHS AND NOT EMSCRIPTEN)
+    target_compile_definitions(lw_ppocr_c PRIVATE LW_REC_RESIDENT_WIDTHS=1)
+endif()
 
 if(NOT EMSCRIPTEN AND NOT LW_RUNTIME_ONLY)
 add_library(lw_ppocr_c_shared SHARED ${LW_PPOCR_C_SOURCES})
@@ -332,6 +337,9 @@ target_compile_definitions(lw_ppocr_c_shared
     PRIVATE LW_PPOCR_C_BUILD LW_PPOCR_C_SHARED
     INTERFACE LW_PPOCR_C_SHARED)
 lw_configure_runtime_target(lw_ppocr_c_shared)
+if(LW_REC_RESIDENT_WIDTHS)
+    target_compile_definitions(lw_ppocr_c_shared PRIVATE LW_REC_RESIDENT_WIDTHS=1)
+endif()
 endif()
 
 if(LW_RUNTIME_ONLY)
