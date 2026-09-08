@@ -146,7 +146,8 @@ jobs:
       fail-fast: false
       matrix:
         replica: ${{ fromJSON(needs.plan.outputs.replicas) }}
-    runs-on: windows-2025
+    # Pin the image because this job deliberately uses the VS 2022 generator.
+    runs-on: windows-2022
     timeout-minutes: 180
     steps:
       - uses: actions/checkout@v7
