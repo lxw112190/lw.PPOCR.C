@@ -139,6 +139,9 @@ class FullOcrProfileTest(unittest.TestCase):
                     session_cache["misses"],
                     session_cache["reconfigurations"],
                 )
+                if ARGUMENTS.expect_resident:
+                    self.assertEqual(session_cache["misses"], 0)
+                    self.assertEqual(session_cache["reconfigurations"], 0)
                 for stage in (
                     "cls_preprocess",
                     "cls_graph",
@@ -355,6 +358,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--rec-model", required=True)
     parser.add_argument("--dictionary", required=True)
     parser.add_argument("--image", required=True)
+    parser.add_argument("--expect-resident", action="store_true")
     return parser.parse_args()
 
 

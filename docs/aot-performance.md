@@ -113,3 +113,8 @@ The local Tiny/AVX2 4-worker smoke comparison measured 122.460 ms versus
 `0ebf8b448ab7df47`. The numbers are a reproducibility check, not a cross-machine
 claim; the resident option remains opt-in until the 100-image paired corpus
 clears the same contract and memory gates.
+
+When `LW_REC_RESIDENT_WIDTHS=ON`, the existing `full_ocr_operator_profile` CTest
+is additionally run with `--expect-resident`; it requires zero REC session-cache misses
+and zero reconfigurations for both one-worker and four-worker cases. The default
+Compact build keeps the original cache assertions.

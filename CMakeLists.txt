@@ -1413,16 +1413,21 @@ if(BUILD_TESTING AND NOT EMSCRIPTEN)
         target_compile_options(full-ocr-profile-driver PRIVATE
             -Wall -Wextra -Wpedantic -Werror)
     endif()
+    set(full_ocr_profile_test_args
+        --driver "$<TARGET_FILE:full-ocr-profile-driver>"
+        --det-model "${LW_PPOCR_C_DET_LWM}"
+        --cls-model "${LW_PPOCR_C_CLS_LWM}"
+        --rec-model "${LW_PPOCR_C_REC_LWM}"
+        --dictionary "${CMAKE_CURRENT_SOURCE_DIR}/models/ppocrv6-tiny/ppocr_keys.txt"
+        --image "${LW_PPOCR_C_DET_DEMO_PPM}")
+    if(LW_REC_RESIDENT_WIDTHS AND NOT EMSCRIPTEN)
+        list(APPEND full_ocr_profile_test_args --expect-resident)
+    endif()
     add_test(
         NAME full_ocr_operator_profile
         COMMAND "${Python3_EXECUTABLE}"
                 "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_full_ocr_profile.py"
-                --driver "$<TARGET_FILE:full-ocr-profile-driver>"
-                --det-model "${LW_PPOCR_C_DET_LWM}"
-                --cls-model "${LW_PPOCR_C_CLS_LWM}"
-                --rec-model "${LW_PPOCR_C_REC_LWM}"
-                --dictionary "${CMAKE_CURRENT_SOURCE_DIR}/models/ppocrv6-tiny/ppocr_keys.txt"
-                --image "${LW_PPOCR_C_DET_DEMO_PPM}")
+                ${full_ocr_profile_test_args})
     set_tests_properties(full_ocr_operator_profile PROPERTIES
         WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
         TIMEOUT 360)
