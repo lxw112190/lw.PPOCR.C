@@ -114,7 +114,8 @@ jobs:
             -DLW_PACKAGE_PLATFORM_OVERRIDE=linux-arm64-ubuntu22.04
           cmake --build build-arm64 --parallel 2 --target \
             full-ocr-profile-driver full-ocr-intra-benchmark \
-            simd-backend-driver conv-reference-driver kernel-reference-driver
+            simd-backend-driver conv-reference-driver kernel-reference-driver \
+            ocr-pipeline-driver
       - name: Run ARM64 correctness gates
         run: |
           set -euo pipefail
