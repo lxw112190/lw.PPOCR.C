@@ -56,6 +56,9 @@ falls back to scalar. See the [platform matrix](docs/platform-matrix.md) and
 performance claims; LoongArch performance still requires physical hardware.
 The manual [ARM64 OCR performance workflow](docs/arm64-performance.md)
 collects native operator and RSS profiles before new NEON kernels are added.
+The manual [Native x64 OCR Performance workflow](docs/engine-comparison.md)
+collects Windows AVX2 stage, operator, REC-width, and RSS profiles before
+targeted x64 optimization.
 
 ### Performance snapshot
 
@@ -252,6 +255,7 @@ bundles as versioned ZIP/TAR.GZ assets when the release workflow runs.
   [kernel optimization](docs/kernel-optimization.md)
 - [Correctness-gated full-OCR comparison with OpenCV DNN](docs/opencv-dnn-comparison.md)
 - [Paired C vs C# OCR engine comparison methodology](docs/engine-comparison.md)
+- [Native x64 OCR profile workflow](docs/engine-comparison.md)
 - [Browser JavaScript SDK](docs/web-sdk.md) and
   [standalone HTML usage](docs/standalone-html.md)
 - [Node.js/WASM distribution](docs/NODE_WASM_DISTRIBUTION.md)

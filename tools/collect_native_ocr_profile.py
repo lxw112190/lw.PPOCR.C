@@ -520,7 +520,7 @@ def collect(args: argparse.Namespace) -> int:
     (output_dir / "environment.json").write_text(
         json.dumps(summary["platform"], indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
     )
-    (output_dir / "arm64-profile-summary.json").write_text(
+    (output_dir / args.summary_name).write_text(
         json.dumps(summary, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
     )
     (output_dir / "SUMMARY.md").write_text(markdown_summary(summary), encoding="utf-8")
@@ -549,6 +549,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--timeout", type=lambda value: parse_positive(value, "timeout"), default=1800)
     parser.add_argument("--expected-backend", default="neon")
     parser.add_argument("--commit")
+    parser.add_argument(
+        "--summary-name",
+        default="arm64-profile-summary.json",
+        help="JSON summary filename; the default preserves the ARM64 artifact contract",
+    )
     parser.add_argument("--require-rss", action="store_true")
     parser.add_argument(
         "--case",

@@ -74,6 +74,9 @@ amd64 的 SSE2/AVX2 性能数据，LoongArch 性能仍需客户实体机验证�
 仓库还提供手动的
 [`ARM64 OCR 性能基线`](docs/arm64-performance.md)，用于在新增 NEON 算子前采集原生
 算子耗时、线程扩展和 RSS；GitHub ARM64 runner 数据与 RK3576 实体机数据分开记录。
+另外提供手动的
+[`Windows x64 OCR 性能分析`](docs/engine-comparison.md)，在 AVX2 runner 上采集
+DET/CLS/REC 分阶段、算子、REC 宽度和 RSS，作为定向 x64 优化前的基线。
 
 ## 性能口径说明
 
@@ -340,6 +343,7 @@ HTTP Demo 和正式发布包均不链接、加载或携带 OpenCV。
 - [性能基线与优化](docs/performance-baseline.md)
 - [完整 OCR 分阶段与算子性能分析](docs/full-ocr-profile.md)
 - [C 与 C# OCR 引擎同机配对对比方法](docs/engine-comparison.md)
+- [Windows x64 OCR 性能分析工作流](docs/engine-comparison.md)
 - [浏览器 JavaScript SDK](docs/web-sdk.md)
 - [单文件离线 HTML 使用与定制](docs/standalone-html.md)
 - [Node.js/WASM 发行包](docs/NODE_WASM_DISTRIBUTION.md)

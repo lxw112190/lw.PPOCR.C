@@ -1,0 +1,201 @@
+name: Native x64 OCR Performance
+
+on:
+  workflow_dispatch:
+    inputs:
+      warmup:
+        description: Benchmark warm-up calls per case
+        required: false
+        default: "3"
+      iterations:
+        description: Benchmark measured calls per case
+        required: false
+        default: "10"
+      profile_iterations:
+        description: Instrumented profile iterations per case
+        required: false
+        default: "3"
+      case_set:
+        description: Parallel case matrix
+        required: false
+        type: choice
+        options:
+          - compact
+          - full
+        default: full
+
+permissions:
+  contents: read
+
+jobs:
+  prepare-assets:
+    name: Prepare architecture-independent OCR assets
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements-converter.txt
+      - name: Install converter dependencies
+        run: python -m pip install -r requirements-converter.txt
+      - name: Convert models and fixtures once
+        run: |
+          set -euo pipefail
+          cmake -S . -B build-assets -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DBUILD_TESTING=OFF \
+            -DLW_BUILD_HTTP_DEMO=OFF
+          cmake --build build-assets --parallel 2 --target \
+            convert_rec_model convert_cls_model convert_det_model \
+            rec_demo_fixture det_demo_fixture
+          mkdir -p prepared-assets
+          cp build-assets/models/rec.lwm prepared-assets/
+          cp build-assets/models/rec-lwm.json prepared-assets/
+          cp build-assets/models/cls.lwm prepared-assets/
+          cp build-assets/models/cls-lwm.json prepared-assets/
+          cp build-assets/models/det.lwm prepared-assets/
+          cp build-assets/models/det-lwm.json prepared-assets/
+          cp build-assets/models/sample-crop.ppm prepared-assets/
+          cp build-assets/models/sample.ppm prepared-assets/
+          cp models/ppocrv6-tiny/ppocr_keys.txt prepared-assets/
+          (cd prepared-assets && sha256sum \
+            rec.lwm rec-lwm.json cls.lwm cls-lwm.json \
+            det.lwm det-lwm.json sample-crop.ppm sample.ppm \
+            ppocr_keys.txt > SHA256SUMS)
+      - uses: actions/upload-artifact@v7
+        with:
+          name: prepared-x64-ocr-assets
+          path: prepared-assets/
+          if-no-files-found: error
+          retention-days: 7
+
+  native-x64:
+    name: Native Windows x64 profile
+    needs: prepare-assets
+    runs-on: windows-2022
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements-converter.txt
+      - name: Install Python test and converter dependencies
+        run: python -m pip install -r requirements-converter.txt
+      - name: Download prepared OCR assets
+        uses: actions/download-artifact@v8
+        with:
+          name: prepared-x64-ocr-assets
+          path: .ci/preconverted
+      - name: Verify prepared OCR assets
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          foreach ($line in Get-Content -LiteralPath '.ci/preconverted/SHA256SUMS') {
+            $parts = $line.Trim() -split ' +', 2
+            if ($parts.Count -ne 2) { throw "invalid checksum line: $line" }
+            $name = $parts[1].TrimStart('*')
+            $actual = (Get-FileHash -LiteralPath ".ci/preconverted/$name" -Algorithm SHA256).Hash.ToLowerInvariant()
+            if ($actual -ne $parts[0].ToLowerInvariant()) {
+              throw "SHA-256 mismatch: $name"
+            }
+          }
+      - name: Record native build environment
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          New-Item -ItemType Directory -Force -Path .ci | Out-Null
+          $cpu = (Get-CimInstance Win32_Processor | Select-Object -First 1 -ExpandProperty Name)
+          @(
+            'project=lw.PPOCR.C'
+            "commit=$env:GITHUB_SHA"
+            'verification=native-github-hosted-windows-x64-runner'
+            'requested_architecture=x64'
+            "machine=$env:PROCESSOR_ARCHITECTURE"
+            "cpu=$cpu"
+            "compiler=$((cl 2>&1 | Select-Object -First 1))"
+            "cmake=$((cmake --version | Select-Object -First 1))"
+            "logical_processors=$env:NUMBER_OF_PROCESSORS"
+          ) | Set-Content -LiteralPath .ci/BUILD-ENVIRONMENT-x64.txt -Encoding utf8
+          Get-Content -LiteralPath .ci/BUILD-ENVIRONMENT-x64.txt
+      - name: Configure and build profile drivers
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $configureArgs = @(
+            '-S', '.', '-B', 'build-x64',
+            '-G', 'Visual Studio 17 2022', '-A', 'x64',
+            '-DBUILD_TESTING=ON',
+            '-DLW_BUILD_HTTP_DEMO=OFF',
+            '-DLW_BUILD_CSHARP_DEMOS=OFF',
+            "-DLW_PRECONVERTED_ASSETS_DIR=$env:GITHUB_WORKSPACE/.ci/preconverted",
+            "-DLW_BUILD_ENVIRONMENT_FILE=$env:GITHUB_WORKSPACE/.ci/BUILD-ENVIRONMENT-x64.txt"
+          )
+          cmake @configureArgs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cmake --build build-x64 --config Release --parallel 2 --target `
+            full-ocr-profile-driver full-ocr-intra-benchmark simd-backend-driver
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Require AVX2 backend
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $output = & build-x64/Release/simd-backend-driver.exe
+          $output | Write-Output
+          $line = $output | Where-Object { $_.StartsWith('SIMD backend:') } | Select-Object -First 1
+          if (-not $line) { throw 'cannot parse SIMD backend' }
+          $backend = $line.Substring('SIMD backend:'.Length).Trim().ToLowerInvariant()
+          if ($backend -ne 'avx2') { throw "x64 profile requires AVX2, got $backend" }
+      - name: Run x64 backend smoke test
+        shell: pwsh
+        run: |
+          ctest --test-dir build-x64 -C Release --output-on-failure -R '^simd_backend_detection$'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Collect native OCR profile
+        shell: pwsh
+        env:
+          PROFILE_WARMUP: ${{ inputs.warmup }}
+          PROFILE_ITERATIONS: ${{ inputs.iterations }}
+          PROFILE_ITERATIONS_INSTRUMENTED: ${{ inputs.profile_iterations }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ('${{ inputs.case_set }}' -eq 'compact') {
+            $cases = @('1:1', '4:1', '1:4', '4:4')
+          } else {
+            $cases = @('1:1', '2:1', '4:1', '1:2', '2:2', '4:2', '1:4', '2:4', '4:4')
+          }
+          $caseArgs = @()
+          foreach ($case in $cases) { $caseArgs += @('--case', $case) }
+          $profileDriver = (Resolve-Path 'build-x64/Release/full-ocr-profile-driver.exe').Path
+          $benchmarkDriver = (Resolve-Path 'build-x64/Release/full-ocr-intra-benchmark.exe').Path
+          python tools/collect_native_ocr_profile.py `
+            --profile-driver $profileDriver `
+            --benchmark-driver $benchmarkDriver `
+            --det .ci/preconverted/det.lwm `
+            --cls .ci/preconverted/cls.lwm `
+            --rec .ci/preconverted/rec.lwm `
+            --dictionary .ci/preconverted/ppocr_keys.txt `
+            --image .ci/preconverted/sample.ppm `
+            --variant tiny `
+            --target-width 960 `
+            --warmup $env:PROFILE_WARMUP `
+            --iterations $env:PROFILE_ITERATIONS `
+            --profile-iterations $env:PROFILE_ITERATIONS_INSTRUMENTED `
+            --expected-backend avx2 `
+            --require-rss `
+            --commit $env:GITHUB_SHA `
+            --summary-name x64-profile-summary.json `
+            --output x64-profile-results `
+            @caseArgs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Get-Content -LiteralPath x64-profile-results/SUMMARY.md | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+      - uses: actions/upload-artifact@v7
+        with:
+          name: lw-ppocr-x64-profile-results-${{ github.sha }}
+          path: x64-profile-results/
+          if-no-files-found: error
+          retention-days: 30

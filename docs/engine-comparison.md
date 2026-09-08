@@ -4,6 +4,11 @@
 lw.PPOCR.C 与固定版本 SimdPaddleOCR 的完整 OCR 延迟、内存和文字准确率。
 它是优化决策工具，不是普通提交门禁，也不用于证明某个项目在所有硬件上更快。
 
+另外提供手动工作流 “Native x64 OCR Performance”。它在 Windows x64 AVX2
+runner 上复用 `full-ocr-profile-driver` 和 `full-ocr-intra-benchmark`，用于拆分
+DET/CLS/REC 阶段、算子、DET 卷积节点、REC 宽度和峰值 RSS。该 workflow 只生成
+profile artifact，不改变发布包，也不把性能结果设为失败门禁。
+
 ## 固定合同
 
 机器可读合同位于 ci/csharp-engine-comparison.json。当前 v1 固定：
@@ -72,6 +77,17 @@ C → C#，降低固定运行顺序对 CPU boost、温度和后台负载的影�
 
 Normalized profile 始终执行，replica 数、worker 数、模型和固定参数由合同控制，不能从
 UI 临时改动。
+
+需要定位当前 x64 热点时，选择 “Native x64 OCR Performance”：
+
+1. `warmup` 和 `iterations` 控制非插桩 benchmark；
+2. `profile_iterations` 控制带算子计时的 profile；
+3. `case_set=compact` 只跑 1/4 worker 的核心组合，`full` 还包含 DET 线程组合；
+4. workflow 要求实际 C backend 为 AVX2，并上传 `SUMMARY.md`、逐 case JSON、
+   `x64-profile-summary.json` 和环境信息。
+
+该 profile 使用 bundled Tiny `sample.ppm`，用于快速发现阶段热点；它不是 100 图 C/C#
+比较的替代品。发现热点后，仍需在同一实体机或配对 comparison workflow 中复测。
 
 ## 输出
 
