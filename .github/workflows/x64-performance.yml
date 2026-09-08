@@ -110,6 +110,8 @@ jobs:
           $ErrorActionPreference = 'Stop'
           New-Item -ItemType Directory -Force -Path .ci | Out-Null
           $cpu = (Get-CimInstance Win32_Processor | Select-Object -First 1 -ExpandProperty Name)
+          $cl = Get-Command cl.exe -ErrorAction SilentlyContinue
+          $compiler = if ($null -ne $cl) { $cl.Source } else { 'Visual Studio 17 2022 (resolved by CMake)' }
           @(
             'project=lw.PPOCR.C'
             "commit=$env:GITHUB_SHA"
@@ -117,7 +119,7 @@ jobs:
             'requested_architecture=x64'
             "machine=$env:PROCESSOR_ARCHITECTURE"
             "cpu=$cpu"
-            "compiler=$((cl 2>&1 | Select-Object -First 1))"
+            "compiler=$compiler"
             "cmake=$((cmake --version | Select-Object -First 1))"
             "logical_processors=$env:NUMBER_OF_PROCESSORS"
           ) | Set-Content -LiteralPath .ci/BUILD-ENVIRONMENT-x64.txt -Encoding utf8
