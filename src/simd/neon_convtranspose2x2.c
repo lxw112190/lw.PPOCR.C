@@ -11,9 +11,10 @@
 #  define LW_COMPILES_NEON_CONV_TRANSPOSE2X2 0
 #endif
 
-void lw_neon_conv_transpose2x2_stride2_f32(
+void lw_neon_conv_transpose2x2_stride2_range_f32(
     const float* input, const float* weights, const float* bias, float* output,
-    const int32_t input_dimensions[4], const int32_t output_dimensions[4]) {
+    const int32_t input_dimensions[4], const int32_t output_dimensions[4],
+    uint32_t output_channel_begin, uint32_t output_channel_end) {
 #if LW_COMPILES_NEON_CONV_TRANSPOSE2X2
     const uint32_t input_channels = (uint32_t)input_dimensions[1];
     const uint32_t output_channels = (uint32_t)output_dimensions[1];
@@ -23,6 +24,7 @@ void lw_neon_conv_transpose2x2_stride2_f32(
     const uint64_t input_plane = (uint64_t)input_height * input_width;
     const uint64_t output_plane =
         (uint64_t)(uint32_t)output_dimensions[2] * output_width;
+    const float32x4_t zero = vdupq_n_f32(0.0f);
     uint32_t batch;
     for (batch = 0u; batch < (uint32_t)input_dimensions[0]; ++batch) {
         const float* batch_input =
@@ -30,7 +32,8 @@ void lw_neon_conv_transpose2x2_stride2_f32(
         float* batch_output =
             output + (size_t)((uint64_t)batch * output_channels * output_plane);
         uint32_t output_channel;
-        for (output_channel = 0u; output_channel < output_channels; ++output_channel) {
+        for (output_channel = output_channel_begin; output_channel < output_channel_end;
+             ++output_channel) {
             float* output_channel_data =
                 batch_output + (size_t)((uint64_t)output_channel * output_plane);
             const float initial_value = bias == NULL ? 0.0f : bias[output_channel];
@@ -50,6 +53,10 @@ void lw_neon_conv_transpose2x2_stride2_f32(
                 const float* channel_weights =
                     weights + (size_t)(((uint64_t)input_channel * output_channels +
                                         output_channel) * 4u);
+                const float weight0 = channel_weights[0];
+                const float weight1 = channel_weights[1];
+                const float weight2 = channel_weights[2];
+                const float weight3 = channel_weights[3];
                 uint32_t input_y;
                 for (input_y = 0u; input_y < input_height; ++input_y) {
                     const float* input_row =
@@ -60,55 +67,35 @@ void lw_neon_conv_transpose2x2_stride2_f32(
                     uint32_t input_x = 0u;
                     for (; input_x + 4u <= input_width; input_x += 4u) {
                         const float32x4_t values = vld1q_f32(input_row + input_x);
-                        const float32x4_t zero = vdupq_n_f32(0.0f);
                         const float32x4x2_t even = vzipq_f32(values, zero);
                         const float32x4x2_t odd = vzipq_f32(zero, values);
                         const uint32_t output_x = input_x * 2u;
-                        float32x4_t output_values;
+                        float32x4_t row0_low = vld1q_f32(output_row0 + output_x);
+                        float32x4_t row0_high = vld1q_f32(output_row0 + output_x + 4u);
+                        float32x4_t row1_low = vld1q_f32(output_row1 + output_x);
+                        float32x4_t row1_high = vld1q_f32(output_row1 + output_x + 4u);
 
-                        output_values = vld1q_f32(output_row0 + output_x);
-                        vst1q_f32(output_row0 + output_x,
-                                  vaddq_f32(output_values,
-                                            vmulq_n_f32(even.val[0], channel_weights[0])));
-                        output_values = vld1q_f32(output_row0 + output_x + 4u);
-                        vst1q_f32(output_row0 + output_x + 4u,
-                                  vaddq_f32(output_values,
-                                            vmulq_n_f32(even.val[1], channel_weights[0])));
+                        row0_low = vaddq_f32(row0_low, vmulq_n_f32(even.val[0], weight0));
+                        row0_high = vaddq_f32(row0_high, vmulq_n_f32(even.val[1], weight0));
+                        row0_low = vaddq_f32(row0_low, vmulq_n_f32(odd.val[0], weight1));
+                        row0_high = vaddq_f32(row0_high, vmulq_n_f32(odd.val[1], weight1));
+                        row1_low = vaddq_f32(row1_low, vmulq_n_f32(even.val[0], weight2));
+                        row1_high = vaddq_f32(row1_high, vmulq_n_f32(even.val[1], weight2));
+                        row1_low = vaddq_f32(row1_low, vmulq_n_f32(odd.val[0], weight3));
+                        row1_high = vaddq_f32(row1_high, vmulq_n_f32(odd.val[1], weight3));
 
-                        output_values = vld1q_f32(output_row0 + output_x);
-                        vst1q_f32(output_row0 + output_x,
-                                  vaddq_f32(output_values,
-                                            vmulq_n_f32(odd.val[0], channel_weights[1])));
-                        output_values = vld1q_f32(output_row0 + output_x + 4u);
-                        vst1q_f32(output_row0 + output_x + 4u,
-                                  vaddq_f32(output_values,
-                                            vmulq_n_f32(odd.val[1], channel_weights[1])));
-
-                        output_values = vld1q_f32(output_row1 + output_x);
-                        vst1q_f32(output_row1 + output_x,
-                                  vaddq_f32(output_values,
-                                            vmulq_n_f32(even.val[0], channel_weights[2])));
-                        output_values = vld1q_f32(output_row1 + output_x + 4u);
-                        vst1q_f32(output_row1 + output_x + 4u,
-                                  vaddq_f32(output_values,
-                                            vmulq_n_f32(even.val[1], channel_weights[2])));
-
-                        output_values = vld1q_f32(output_row1 + output_x);
-                        vst1q_f32(output_row1 + output_x,
-                                  vaddq_f32(output_values,
-                                            vmulq_n_f32(odd.val[0], channel_weights[3])));
-                        output_values = vld1q_f32(output_row1 + output_x + 4u);
-                        vst1q_f32(output_row1 + output_x + 4u,
-                                  vaddq_f32(output_values,
-                                            vmulq_n_f32(odd.val[1], channel_weights[3])));
+                        vst1q_f32(output_row0 + output_x, row0_low);
+                        vst1q_f32(output_row0 + output_x + 4u, row0_high);
+                        vst1q_f32(output_row1 + output_x, row1_low);
+                        vst1q_f32(output_row1 + output_x + 4u, row1_high);
                     }
                     for (; input_x < input_width; ++input_x) {
                         const float value = input_row[input_x];
                         const uint32_t output_x = input_x * 2u;
-                        output_row0[output_x] += value * channel_weights[0];
-                        output_row0[output_x + 1u] += value * channel_weights[1];
-                        output_row1[output_x] += value * channel_weights[2];
-                        output_row1[output_x + 1u] += value * channel_weights[3];
+                        output_row0[output_x] += value * weight0;
+                        output_row0[output_x + 1u] += value * weight1;
+                        output_row1[output_x] += value * weight2;
+                        output_row1[output_x + 1u] += value * weight3;
                     }
                 }
             }
@@ -121,5 +108,15 @@ void lw_neon_conv_transpose2x2_stride2_f32(
     (void)output;
     (void)input_dimensions;
     (void)output_dimensions;
+    (void)output_channel_begin;
+    (void)output_channel_end;
 #endif
+}
+
+void lw_neon_conv_transpose2x2_stride2_f32(
+    const float* input, const float* weights, const float* bias, float* output,
+    const int32_t input_dimensions[4], const int32_t output_dimensions[4]) {
+    lw_neon_conv_transpose2x2_stride2_range_f32(
+        input, weights, bias, output, input_dimensions, output_dimensions, 0u,
+        (uint32_t)output_dimensions[1]);
 }

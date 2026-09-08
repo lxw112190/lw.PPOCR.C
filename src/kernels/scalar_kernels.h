@@ -109,6 +109,10 @@ lw_status lw_scalar_conv_transpose2d_f32(
 void lw_scalar_conv_transpose2x2_stride2_f32(
     const float* input, const float* weights, const float* bias, float* output,
     const int32_t input_dimensions[4], const int32_t output_dimensions[4]);
+void lw_scalar_conv_transpose2x2_stride2_range_f32(
+    const float* input, const float* weights, const float* bias, float* output,
+    const int32_t input_dimensions[4], const int32_t output_dimensions[4],
+    uint32_t output_channel_begin, uint32_t output_channel_end);
 void lw_scalar_conv1x1_unit_f32(const float* input, const float* weights, const float* bias,
                                 float* output, const int32_t input_dimensions[4],
                                 const int32_t output_dimensions[4], uint32_t groups,

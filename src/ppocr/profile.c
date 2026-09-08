@@ -82,6 +82,8 @@ void lw_pipeline_component_profile_accumulate(lw_pipeline_component_profile* des
     for (index = 0u; index < LW_EXECUTION_PROFILE_THREAD_HISTOGRAM_CAPACITY; ++index) {
         add_saturated(&destination->execution.conv_thread_histogram[index],
                       source->execution.conv_thread_histogram[index]);
+        add_saturated(&destination->execution.conv_transpose_thread_histogram[index],
+                      source->execution.conv_transpose_thread_histogram[index]);
     }
 }
 

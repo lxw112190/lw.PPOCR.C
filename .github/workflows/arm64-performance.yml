@@ -15,6 +15,14 @@ on:
         description: Instrumented profile iterations per case
         required: false
         default: "3"
+      case_set:
+        description: Parallel case matrix
+        required: false
+        type: choice
+        options:
+          - compact
+          - full
+        default: full
 
 permissions:
   contents: read
@@ -128,6 +136,15 @@ jobs:
           PROFILE_ITERATIONS_INSTRUMENTED: ${{ inputs.profile_iterations }}
         run: |
           set -euo pipefail
+          case_args=()
+          if [[ '${{ inputs.case_set }}' == 'compact' ]]; then
+            cases=("1:1" "4:1" "1:4" "4:4")
+          else
+            cases=("1:1" "2:1" "4:1" "1:2" "2:2" "4:2" "1:4" "2:4" "4:4")
+          fi
+          for case in "${cases[@]}"; do
+            case_args+=(--case "$case")
+          done
           python tools/collect_native_ocr_profile.py \
             --profile-driver build-arm64/full-ocr-profile-driver \
             --benchmark-driver build-arm64/full-ocr-intra-benchmark \
@@ -144,6 +161,7 @@ jobs:
             --expected-backend neon \
             --require-rss \
             --commit "$GITHUB_SHA" \
+            "${case_args[@]}" \
             --output arm64-profile-results
           cat arm64-profile-results/SUMMARY.md >> "$GITHUB_STEP_SUMMARY"
       - name: Build downloadable ARM64 profile kit

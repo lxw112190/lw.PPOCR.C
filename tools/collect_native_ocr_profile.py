@@ -20,7 +20,11 @@ from pathlib import Path
 from typing import Any
 
 
-DEFAULT_CASES = ("1:1", "4:1", "1:4", "4:4")
+DEFAULT_CASES = (
+    "1:1", "2:1", "4:1",
+    "1:2", "2:2", "4:2",
+    "1:4", "2:4", "4:4",
+)
 
 
 def parse_positive(value: str, name: str) -> int:
@@ -235,6 +239,13 @@ def normalize_benchmark(
         "after_detector_ms": require_number(
             benchmark.get("after_detector_ms"), "benchmark after_detector_ms"
         ),
+        "after_detector_ms_deprecated": benchmark.get(
+            "after_detector_ms_deprecated", False
+        ),
+        "ocr_minus_standalone_detector_ms": require_number(
+            benchmark.get("ocr_minus_standalone_detector_ms", benchmark.get("after_detector_ms")),
+            "benchmark ocr_minus_standalone_detector_ms",
+        ),
         "throughput_per_second": require_number(
             benchmark.get("throughput_per_second"), "benchmark throughput", positive=True
         ),
@@ -247,6 +258,22 @@ def normalize_benchmark(
 
 
 def markdown_summary(summary: dict[str, Any]) -> str:
+    cases = summary["cases"]
+    case_map = {
+        (case["benchmark"]["workers"], case["benchmark"]["det_threads_requested"]): case
+        for case in cases
+    }
+    baseline_case = case_map.get((1, 1))
+    baseline_ocr = (
+        baseline_case["benchmark"]["ocr_ms"]["mean"] if baseline_case else None
+    )
+    baseline_rss = (
+        baseline_case["benchmark"]["peak_rss_bytes"] if baseline_case else None
+    )
+
+    def format_optional(value: float | None, suffix: str = "") -> str:
+        return "n/a" if value is None else f"{value:.3f}{suffix}"
+
     lines = [
         "# Native OCR profile summary",
         "",
@@ -255,48 +282,122 @@ def markdown_summary(summary: dict[str, Any]) -> str:
         f"- Model: `{summary['model']['variant']}`",
         f"- REC target width: `{summary['settings']['rec_target_width']}`",
         "",
-        "| Line workers | DET threads | DET mean (ms) | OCR mean (ms) | OCR P95 (ms) | Peak RSS (MiB) | Lines | Checksum |",
-        "|---:|---:|---:|---:|---:|---:|---:|---|",
+        "| Line workers | DET requested | DET actual | Standalone DET (ms) | OCR mean (ms) | OCR P95 (ms) | Speedup | RSS peak (MiB) | RSS Δ (MiB) | Lines | Checksum |",
+        "|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|",
     ]
-    for case in summary["cases"]:
+    for case in cases:
         benchmark = case["benchmark"]
         profile = case["profile"]
+        ocr_mean = benchmark["ocr_ms"]["mean"]
+        speedup = baseline_ocr / ocr_mean if baseline_ocr else None
+        rss_mb = benchmark["peak_rss_bytes"] / 1048576.0
+        rss_delta = (
+            rss_mb - baseline_rss / 1048576.0 if baseline_rss is not None else None
+        )
         lines.append(
-            "| {workers} | {det_threads_requested} | {det:.3f} | {ocr:.3f} | {p95:.3f} | "
-            "{rss:.2f} | {lines_count} | `{checksum}` |".format(
+            "| {workers} | {det_threads_requested} | {det_threads_actual} | {det:.3f} | "
+            "{ocr:.3f} | {p95:.3f} | {speedup} | {rss:.2f} | {rss_delta} | "
+            "{lines_count} | `{checksum}` |".format(
                 workers=benchmark["workers"],
                 det_threads_requested=benchmark["det_threads_requested"],
+                det_threads_actual=benchmark["det_threads_actual"],
                 det=benchmark["detector_ms"]["mean"],
-                ocr=benchmark["ocr_ms"]["mean"],
+                ocr=ocr_mean,
                 p95=benchmark["ocr_ms"]["p95"],
-                rss=benchmark["peak_rss_bytes"] / 1048576.0,
+                speedup=format_optional(speedup, "x"),
+                rss=rss_mb,
+                rss_delta=format_optional(rss_delta, ""),
                 lines_count=profile["lines"],
                 checksum=profile["output_checksum"],
             )
         )
+    lines.extend(["", "- `Standalone DET` is measured by the standalone detector benchmark.",
+                  "- `det_threads_actual` is the actual OCR-handle DET intra-op count.",
+                  "- `RSS Δ` and speedup are relative to workers=1, requested DET threads=1.", ""])
+    lines.extend(["## Observed parallel scaling", ""])
+
+    def scaling_line(label: str, keys: list[tuple[int, int]]) -> None:
+        values = []
+        for key in keys:
+            case = case_map.get(key)
+            if case is None:
+                continue
+            values.append(
+                f"{key[0]}:{key[1]}={case['benchmark']['ocr_ms']['mean']:.3f} ms"
+            )
+        if values:
+            lines.append(f"- {label}: " + ", ".join(values))
+
+    scaling_line("Line workers at DET threads=1", [(1, 1), (2, 1), (4, 1)])
+    scaling_line("DET intra-op at workers=1", [(1, 1), (1, 2), (1, 4)])
+    combined = case_map.get((4, 4))
+    if baseline_case and combined:
+        combined_speedup = baseline_ocr / combined["benchmark"]["ocr_ms"]["mean"]
+        combined_rss_delta = (
+            combined["benchmark"]["peak_rss_bytes"] - baseline_rss
+        ) / 1048576.0
+        lines.append(f"- Combined 1:1 → 4:4: {combined_speedup:.3f}x, "
+                     f"RSS Δ {combined_rss_delta:+.2f} MiB")
+    lines.extend(["", "## Best observed configuration on this runner", ""])
+    best = min(cases, key=lambda case: case["benchmark"]["ocr_ms"]["mean"])
+    best_benchmark = best["benchmark"]
+    lines.append(
+        f"- Line workers: {best_benchmark['workers']}\n"
+        f"- DET threads requested/actual: {best_benchmark['det_threads_requested']} / "
+        f"{best_benchmark['det_threads_actual']}\n"
+        f"- Mean OCR: {best_benchmark['ocr_ms']['mean']:.3f} ms\n"
+        f"- P95 OCR: {best_benchmark['ocr_ms']['p95']:.3f} ms\n"
+        f"- Peak RSS: {best_benchmark['peak_rss_bytes'] / 1048576.0:.2f} MiB"
+    )
     lines.extend(
         [
             "",
-            "## Largest profiled DET convolution nodes",
+            "## Stage breakdown",
             "",
         ]
     )
-    for case in summary["cases"]:
+    wall_stages = (
+        ("DET preprocess", "det_preprocess"),
+        ("DET graph", "det_graph"),
+        ("DET postprocess", "det_postprocess"),
+        ("Crop", "crop"),
+        ("Line workers critical path", "line_worker_critical"),
+        ("Output", "output"),
+    )
+    line_stages = (
+        ("CLS preprocess", "cls_preprocess"),
+        ("CLS graph", "cls_graph"),
+        ("CLS postprocess", "cls_postprocess"),
+        ("REC preprocess", "rec_preprocess"),
+        ("REC graph", "rec_graph"),
+        ("REC postprocess", "rec_postprocess"),
+    )
+    for case in cases:
         lines.append(
             f"### workers={case['benchmark']['workers']}, det_threads={case['benchmark']['det_threads_requested']}"
         )
         lines.append("")
-        lines.append("| Node | Operation | Input | Kernel | ms/request |")
-        lines.append("|---:|---|---|---|---:|")
+        wall = case["profile"]["wall_ms_per_request"]
+        total = wall["total"]
+        lines.append("| Stage | Profiled ms/request | % of profiled wall |")
+        lines.append("|---|---:|---:|")
+        for label, key in wall_stages:
+            lines.append(
+                f"| {label} | {wall[key]:.3f} | "
+                f"{(wall[key] * 100.0 / total) if total else 0.0:.2f}% |"
+            )
+        lines.extend(["", "Accumulated line work (not wall time; stages must not be summed with each other):", "",
+                      "| Stage | Accumulated ms/request |", "|---|---:|"])
+        line_work = case["profile"]["line_work_ms_per_request"]
+        for label, key in line_stages:
+            lines.append(f"| {label} | {line_work[key]:.3f} |")
+        lines.extend(["", "Largest profiled DET convolution nodes:", "",
+                      "| Node | Operation | Input | Kernel | ms/request |",
+                      "|---:|---|---|---|---:|"])
         for node in case["profile"]["top_det_convolution_nodes"][:10]:
             lines.append(
-                "| {node} | {operation} | `{input}` | `{kernel}` | {milliseconds:.3f} |".format(
-                    node=node["node"],
-                    operation=node["operation"],
-                    input=node["input"],
-                    kernel=node["kernel"],
-                    milliseconds=node["milliseconds"],
-                )
+                f"| {node['node']} | {node['operation']} | `{node['input']}` | "
+                f"`{node['kernel']}` | {node['milliseconds']:.3f} |"
             )
         lines.append("")
     return "\n".join(lines) + "\n"

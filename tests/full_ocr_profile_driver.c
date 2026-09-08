@@ -165,6 +165,8 @@ int main(int argc, char** argv) {
     uint64_t conv_invocations = 0u;
     uint64_t det_serial_conv_invocations = 0u;
     uint64_t det_parallel_conv_invocations = 0u;
+    uint64_t det_serial_conv_transpose_invocations = 0u;
+    uint64_t det_parallel_conv_transpose_invocations = 0u;
     double mean_rec_width;
     double mean_rec_padding_ratio;
     uint32_t index;
@@ -315,6 +317,12 @@ int main(int argc, char** argv) {
     for (index = 2u; index < LW_EXECUTION_PROFILE_THREAD_HISTOGRAM_CAPACITY; ++index) {
         det_parallel_conv_invocations += profile.detector.execution.conv_thread_histogram[index];
     }
+    det_serial_conv_transpose_invocations =
+        profile.detector.execution.conv_transpose_thread_histogram[1];
+    for (index = 2u; index < LW_EXECUTION_PROFILE_THREAD_HISTOGRAM_CAPACITY; ++index) {
+        det_parallel_conv_transpose_invocations +=
+            profile.detector.execution.conv_transpose_thread_histogram[index];
+    }
     printf("{\"schema_version\":1,\"image_width\":%u,\"image_height\":%u,", image.width,
            image.height);
     printf("\"iterations\":%u,\"workers\":%u,\"rec_target_width\":%u,\"lines\":%u,"
@@ -325,17 +333,29 @@ int main(int argc, char** argv) {
            "\"available_processors\":%u,\"smt_width\":%u,"
            "\"det_intra_cap\":%u,\"det_intra_actual\":%u,"
            "\"serial_conv_invocations\":%llu,\"parallel_conv_invocations\":%llu,"
+           "\"serial_conv_transpose_invocations\":%llu,"
+           "\"parallel_conv_transpose_invocations\":%llu,"
            "\"det_conv_thread_histogram\":[",
            cpu_topology.logical_processors, cpu_topology.physical_cores,
            cpu_topology.available_processors, cpu_topology.smt_width,
            lw_ocr_get_det_intra_op_thread_cap(ocr), lw_ocr_get_det_intra_op_thread_count(ocr),
            (unsigned long long)det_serial_conv_invocations,
-           (unsigned long long)det_parallel_conv_invocations);
+           (unsigned long long)det_parallel_conv_invocations,
+           (unsigned long long)det_serial_conv_transpose_invocations,
+           (unsigned long long)det_parallel_conv_transpose_invocations);
     for (index = 1u; index < LW_EXECUTION_PROFILE_THREAD_HISTOGRAM_CAPACITY; ++index) {
         if (index != 1u) {
             putchar(',');
         }
         printf("%llu", (unsigned long long)profile.detector.execution.conv_thread_histogram[index]);
+    }
+    printf("],\"det_conv_transpose_thread_histogram\":[");
+    for (index = 1u; index < LW_EXECUTION_PROFILE_THREAD_HISTOGRAM_CAPACITY; ++index) {
+        if (index != 1u) {
+            putchar(',');
+        }
+        printf("%llu", (unsigned long long)
+                           profile.detector.execution.conv_transpose_thread_histogram[index]);
     }
     printf("]},");
     printf("\"wall_nanoseconds\":{");

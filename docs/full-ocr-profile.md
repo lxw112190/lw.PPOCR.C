@@ -45,6 +45,33 @@ and CLS operators that the older REC-only profile did not need. Conv work is
 also classified as 1x1, ordinary 3x3, Depthwise 3x3, ordinary stride-2 3x3, or
 other Conv.
 
+## Native ARM64 performance matrix
+
+The native ARM64 workflow runs the same profile and benchmark drivers on the
+GitHub-hosted `ubuntu-22.04-arm` runner. Its default `full` case set covers
+all combinations of line workers `1/2/4` and DET intra-op threads `1/2/4`.
+Use the workflow's `compact` choice only for a quick smoke run (`1:1`, `4:1`,
+`1:4`, `4:4`); release-facing comparisons should use `full`.
+
+Each row is reported as `line_workers:det_threads`. The report records the
+requested and actual DET thread counts, standalone detector time, full OCR
+mean/P95, peak RSS, line count, and the complete text checksum. `Standalone
+DET` is a separate detector-only benchmark; it is useful for context but is
+not subtracted from full OCR to claim an exact internal stage duration. The
+actual stage breakdown comes from the profile driver's sequential DET, crop,
+line-worker, and output timings.
+
+The DET profile also records `det_conv_transpose_thread_histogram`. In the
+serialized report, index zero counts serial ConvTranspose calls (one worker)
+and indices one through fifteen count calls using two through sixteen
+intra-op workers. The histogram is a correctness and scheduling diagnostic;
+it does not change the public C ABI or LWM format.
+
+All ARM64 changes must retain the full-OCR text checksum and pass the scalar
+reference comparison. NEON ConvTranspose range execution is only selected for
+the validated 2x2, stride-2, group-1, zero-padding shape; all other shapes
+continue through the canonical scalar fallback.
+
 ## First Windows x64 result
 
 On the local AVX2 development host, five profiled runs of the bundled 500x500
@@ -98,7 +125,7 @@ a separate build directory before changing the kernels.
 
 | Metric | Baseline | Specialized kernels | Change |
 |---|---:|---:|---:|
-| DET mean | 494.960 ms | 168.194 ms | -66.0% |
+| Standalone DET mean | 494.960 ms | 168.194 ms | -66.0% |
 | Full OCR mean, 1 worker | 845.416 ms | 484.385 ms | -42.7% |
 | Full OCR mean, 4 workers | 618.641 ms | 256.651 ms | -58.5% |
 | Full OCR throughput, 4 workers | 1.616/s | 3.896/s | 2.41x |

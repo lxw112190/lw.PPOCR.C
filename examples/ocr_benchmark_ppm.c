@@ -348,7 +348,10 @@ static int benchmark_main(int argc, char** argv) {
     memcpy(sorted, ocr_times, (size_t)iteration_count * sizeof(*sorted));
     printf("\"ocr_ms\":{\"mean\":%.6f,\"p95\":%.6f},", ocr_sum / iteration_count,
            percentile(sorted, iteration_count, 95u));
-    printf("\"after_detector_ms\":%.6f,\"throughput_per_second\":%.6f,",
+    printf("\"after_detector_ms\":%.6f,\"after_detector_ms_deprecated\":true,"
+           "\"ocr_minus_standalone_detector_ms\":%.6f,"
+           "\"throughput_per_second\":%.6f,",
+           (ocr_sum - detector_sum) / iteration_count,
            (ocr_sum - detector_sum) / iteration_count, 1000.0 / (ocr_sum / iteration_count));
     printf("\"rss_after_warmup_bytes\":%llu,\"rss_final_bytes\":%llu,"
            "\"peak_rss_bytes\":%llu}\n",

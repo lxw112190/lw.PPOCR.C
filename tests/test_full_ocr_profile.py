@@ -94,6 +94,20 @@ class FullOcrProfileTest(unittest.TestCase):
                     parallel["parallel_conv_invocations"],
                     sum(parallel["det_conv_thread_histogram"][1:]),
                 )
+                self.assertEqual(
+                    len(parallel["det_conv_transpose_thread_histogram"]), 16
+                )
+                self.assertEqual(
+                    parallel["serial_conv_transpose_invocations"],
+                    parallel["det_conv_transpose_thread_histogram"][0],
+                )
+                self.assertEqual(
+                    parallel["parallel_conv_transpose_invocations"],
+                    sum(parallel["det_conv_transpose_thread_histogram"][1:]),
+                )
+                self.assertGreater(
+                    sum(parallel["det_conv_transpose_thread_histogram"]), 0
+                )
 
                 wall = report["wall_nanoseconds"]
                 for stage in (
@@ -232,10 +246,20 @@ class FullOcrProfileTest(unittest.TestCase):
                     [item["invocations"] for item in report["operators"]],
                     [item["invocations"] for item in reference["operators"]],
                 )
+                transpose_histogram = parallel[
+                    "det_conv_transpose_thread_histogram"
+                ]
+                if parallel["det_intra_actual"] > 1:
+                    self.assertGreater(sum(transpose_histogram[1:]), 0)
 
         serial_histogram = reports[0]["parallel"]["det_conv_thread_histogram"]
         self.assertGreater(serial_histogram[0], 0)
         self.assertEqual(sum(serial_histogram[1:]), 0)
+        serial_transpose_histogram = reports[0]["parallel"][
+            "det_conv_transpose_thread_histogram"
+        ]
+        self.assertGreater(serial_transpose_histogram[0], 0)
+        self.assertEqual(sum(serial_transpose_histogram[1:]), 0)
 
     def test_profile_accepts_long_text_target_width(self) -> None:
         reports = [self.run_profile(1, 960), self.run_profile(4, 960)]

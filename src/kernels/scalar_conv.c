@@ -865,6 +865,15 @@ void lw_scalar_conv_transpose2x2_stride2_f32(const float* input, const float* we
                                              const float* bias, float* output,
                                              const int32_t input_dimensions[4],
                                              const int32_t output_dimensions[4]) {
+    lw_scalar_conv_transpose2x2_stride2_range_f32(
+        input, weights, bias, output, input_dimensions, output_dimensions, 0u,
+        (uint32_t)output_dimensions[1]);
+}
+
+void lw_scalar_conv_transpose2x2_stride2_range_f32(
+    const float* input, const float* weights, const float* bias, float* output,
+    const int32_t input_dimensions[4], const int32_t output_dimensions[4],
+    uint32_t output_channel_begin, uint32_t output_channel_end) {
     uint32_t input_channels = (uint32_t)input_dimensions[1];
     uint32_t output_channels = (uint32_t)output_dimensions[1];
     uint32_t input_height = (uint32_t)input_dimensions[2];
@@ -877,7 +886,8 @@ void lw_scalar_conv_transpose2x2_stride2_f32(const float* input, const float* we
         const float* batch_input = input + (size_t)((uint64_t)batch * input_channels * input_plane);
         float* batch_output = output + (size_t)((uint64_t)batch * output_channels * output_plane);
         uint32_t output_channel;
-        for (output_channel = 0u; output_channel < output_channels; ++output_channel) {
+        for (output_channel = output_channel_begin; output_channel < output_channel_end;
+             ++output_channel) {
             float* output_channel_data =
                 batch_output + (size_t)((uint64_t)output_channel * output_plane);
             float initial = bias == NULL ? 0.0f : bias[output_channel];

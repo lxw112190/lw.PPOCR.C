@@ -501,6 +501,7 @@ int main(void) {
     float transpose_conv_sse2_output[288];
     float transpose_conv_avx2_output[288];
     float transpose_conv_arch_output[288];
+    float transpose_conv_range_output[288];
     lw_simd_level simd_level;
     lw_status status;
 
@@ -1141,6 +1142,20 @@ int main(void) {
         transpose_conv_simd_input, transpose_conv_simd_weights, transpose_conv_simd_bias,
         transpose_conv_arch_output, transpose_conv_simd_input_dimensions,
         transpose_conv_simd_output_dimensions);
+    memset(transpose_conv_range_output, 0xa5, sizeof(transpose_conv_range_output));
+    lw_scalar_conv_transpose2x2_stride2_range_f32(
+        transpose_conv_simd_input, transpose_conv_simd_weights, transpose_conv_simd_bias,
+        transpose_conv_range_output, transpose_conv_simd_input_dimensions,
+        transpose_conv_simd_output_dimensions, 0u, 1u);
+    lw_scalar_conv_transpose2x2_stride2_range_f32(
+        transpose_conv_simd_input, transpose_conv_simd_weights, transpose_conv_simd_bias,
+        transpose_conv_range_output, transpose_conv_simd_input_dimensions,
+        transpose_conv_simd_output_dimensions, 1u, 3u);
+    if (memcmp(transpose_conv_arch_output, transpose_conv_range_output,
+               sizeof(transpose_conv_range_output)) != 0) {
+        fprintf(stderr, "scalar ranged transpose Conv differs from full output\n");
+        return 1;
+    }
     status = lw_scalar_conv_transpose2d_f32(
         transpose_conv_simd_input, transpose_conv_simd_weights, transpose_conv_simd_bias, 3u,
         transpose_conv_simd_output, transpose_conv_simd_input_dimensions,
@@ -1164,6 +1179,20 @@ int main(void) {
             fprintf(stderr, "SSE2 transpose Conv differs from dispatched output\n");
             return 1;
         }
+        memset(transpose_conv_range_output, 0xa5, sizeof(transpose_conv_range_output));
+        lw_sse2_conv_transpose2x2_stride2_range_f32(
+            transpose_conv_simd_input, transpose_conv_simd_weights, transpose_conv_simd_bias,
+            transpose_conv_range_output, transpose_conv_simd_input_dimensions,
+            transpose_conv_simd_output_dimensions, 0u, 1u);
+        lw_sse2_conv_transpose2x2_stride2_range_f32(
+            transpose_conv_simd_input, transpose_conv_simd_weights, transpose_conv_simd_bias,
+            transpose_conv_range_output, transpose_conv_simd_input_dimensions,
+            transpose_conv_simd_output_dimensions, 1u, 3u);
+        if (memcmp(transpose_conv_arch_output, transpose_conv_range_output,
+                   sizeof(transpose_conv_range_output)) != 0) {
+            fprintf(stderr, "SSE2 ranged transpose Conv differs from full output\n");
+            return 1;
+        }
     }
     if (lw_simd_level_is_neon(simd_level)) {
         lw_neon_conv_transpose2x2_stride2_f32(
@@ -1175,6 +1204,20 @@ int main(void) {
             fprintf(stderr, "NEON transpose Conv differs from dispatched output\n");
             return 1;
         }
+        memset(transpose_conv_range_output, 0xa5, sizeof(transpose_conv_range_output));
+        lw_neon_conv_transpose2x2_stride2_range_f32(
+            transpose_conv_simd_input, transpose_conv_simd_weights, transpose_conv_simd_bias,
+            transpose_conv_range_output, transpose_conv_simd_input_dimensions,
+            transpose_conv_simd_output_dimensions, 0u, 1u);
+        lw_neon_conv_transpose2x2_stride2_range_f32(
+            transpose_conv_simd_input, transpose_conv_simd_weights, transpose_conv_simd_bias,
+            transpose_conv_range_output, transpose_conv_simd_input_dimensions,
+            transpose_conv_simd_output_dimensions, 1u, 3u);
+        if (memcmp(transpose_conv_simd_output, transpose_conv_range_output,
+                   sizeof(transpose_conv_range_output)) != 0) {
+            fprintf(stderr, "NEON ranged transpose Conv differs from full output\n");
+            return 1;
+        }
     }
     if (lw_simd_level_is_avx2(simd_level)) {
         lw_avx2_conv_transpose2x2_stride2_f32(
@@ -1184,6 +1227,20 @@ int main(void) {
         if (memcmp(transpose_conv_arch_output, transpose_conv_avx2_output,
                    sizeof(transpose_conv_simd_output)) != 0) {
             fprintf(stderr, "AVX2 transpose Conv differs from dispatched output\n");
+            return 1;
+        }
+        memset(transpose_conv_range_output, 0xa5, sizeof(transpose_conv_range_output));
+        lw_avx2_conv_transpose2x2_stride2_range_f32(
+            transpose_conv_simd_input, transpose_conv_simd_weights, transpose_conv_simd_bias,
+            transpose_conv_range_output, transpose_conv_simd_input_dimensions,
+            transpose_conv_simd_output_dimensions, 0u, 1u);
+        lw_avx2_conv_transpose2x2_stride2_range_f32(
+            transpose_conv_simd_input, transpose_conv_simd_weights, transpose_conv_simd_bias,
+            transpose_conv_range_output, transpose_conv_simd_input_dimensions,
+            transpose_conv_simd_output_dimensions, 1u, 3u);
+        if (memcmp(transpose_conv_arch_output, transpose_conv_range_output,
+                   sizeof(transpose_conv_range_output)) != 0) {
+            fprintf(stderr, "AVX2 ranged transpose Conv differs from full output\n");
             return 1;
         }
     }

@@ -133,13 +133,25 @@ void lw_avx2_conv_transpose2x2_stride2_f32(const float* input, const float* weig
                                            const float* bias, float* output,
                                            const int32_t input_dimensions[4],
                                            const int32_t output_dimensions[4]);
+void lw_avx2_conv_transpose2x2_stride2_range_f32(
+    const float* input, const float* weights, const float* bias, float* output,
+    const int32_t input_dimensions[4], const int32_t output_dimensions[4],
+    uint32_t output_channel_begin, uint32_t output_channel_end);
 void lw_sse2_conv_transpose2x2_stride2_f32(const float* input, const float* weights,
                                            const float* bias, float* output,
                                            const int32_t input_dimensions[4],
                                            const int32_t output_dimensions[4]);
+void lw_sse2_conv_transpose2x2_stride2_range_f32(
+    const float* input, const float* weights, const float* bias, float* output,
+    const int32_t input_dimensions[4], const int32_t output_dimensions[4],
+    uint32_t output_channel_begin, uint32_t output_channel_end);
 void lw_neon_conv_transpose2x2_stride2_f32(const float* input, const float* weights,
                                            const float* bias, float* output,
                                            const int32_t input_dimensions[4],
                                            const int32_t output_dimensions[4]);
+void lw_neon_conv_transpose2x2_stride2_range_f32(
+    const float* input, const float* weights, const float* bias, float* output,
+    const int32_t input_dimensions[4], const int32_t output_dimensions[4],
+    uint32_t output_channel_begin, uint32_t output_channel_end);
 
 #endif

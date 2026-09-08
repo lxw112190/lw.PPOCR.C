@@ -8,9 +8,10 @@
 #define LW_COMPILES_SSE2_CONV_TRANSPOSE2X2 LW_SIMD_HAS_SSE2_INTRINSICS
 
 LW_SIMD_SSE2_TARGET
-void lw_sse2_conv_transpose2x2_stride2_f32(
+void lw_sse2_conv_transpose2x2_stride2_range_f32(
     const float* input, const float* weights, const float* bias, float* output,
-    const int32_t input_dimensions[4], const int32_t output_dimensions[4]) {
+    const int32_t input_dimensions[4], const int32_t output_dimensions[4],
+    uint32_t output_channel_begin, uint32_t output_channel_end) {
 #if LW_COMPILES_SSE2_CONV_TRANSPOSE2X2
     uint32_t input_channels = (uint32_t)input_dimensions[1];
     uint32_t output_channels = (uint32_t)output_dimensions[1];
@@ -30,7 +31,8 @@ void lw_sse2_conv_transpose2x2_stride2_f32(
         float* batch_output =
             output + (size_t)((uint64_t)batch * output_channels * output_plane);
         uint32_t output_channel;
-        for (output_channel = 0u; output_channel < output_channels; ++output_channel) {
+        for (output_channel = output_channel_begin; output_channel < output_channel_end;
+             ++output_channel) {
             float* output_channel_data =
                 batch_output + (size_t)((uint64_t)output_channel * output_plane);
             float initial_value = bias == NULL ? 0.0f : bias[output_channel];
@@ -114,5 +116,15 @@ void lw_sse2_conv_transpose2x2_stride2_f32(
     (void)output;
     (void)input_dimensions;
     (void)output_dimensions;
+    (void)output_channel_begin;
+    (void)output_channel_end;
 #endif
+}
+
+void lw_sse2_conv_transpose2x2_stride2_f32(
+    const float* input, const float* weights, const float* bias, float* output,
+    const int32_t input_dimensions[4], const int32_t output_dimensions[4]) {
+    lw_sse2_conv_transpose2x2_stride2_range_f32(
+        input, weights, bias, output, input_dimensions, output_dimensions, 0u,
+        (uint32_t)output_dimensions[1]);
 }

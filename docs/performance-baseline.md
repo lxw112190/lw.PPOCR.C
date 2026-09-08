@@ -222,7 +222,7 @@ The full-OCR benchmark on the same local x64 host used the 500x500 bundled
 16-line fixture, AVX2, three warm-ups, and eight measured iterations. Both
 processes used the same optimized binary; only `worker_count` changed.
 
-| Workers | DET mean | Full OCR mean | After DET | Throughput | RSS after warm-up |
+| Workers | Standalone DET mean | Full OCR mean | OCR - standalone DET (deprecated) | Throughput | RSS after warm-up |
 |---:|---:|---:|---:|---:|---:|
 | 1 | 506.096 ms | 862.322 ms | 356.226 ms | 1.160/s | 67.58 MiB |
 | 4 | 506.596 ms | 626.414 ms | 119.818 ms | 1.596/s | 98.02 MiB |

@@ -19,6 +19,7 @@
 #include <string.h>
 
 #define LW_PARALLEL_CONV_MIN_MULTIPLY_ADDS UINT64_C(8000000)
+#define LW_PARALLEL_CONV_TRANSPOSE_MIN_MULTIPLY_ADDS UINT64_C(8000000)
 
 enum {
     LW_OP_CONV = 1,
@@ -103,6 +104,23 @@ typedef struct lw_parallel_conv_context {
     uint32_t packed;
     lw_status statuses[LW_PARALLEL_MAX_WORKERS];
 } lw_parallel_conv_context;
+
+typedef struct lw_parallel_conv_transpose_context {
+    const float* input;
+    const float* weights;
+    const float* bias;
+    float* output;
+    int32_t input_dimensions[4];
+    int32_t weight_dimensions[4];
+    int32_t output_dimensions[4];
+    int32_t kernel[2];
+    int32_t strides[2];
+    int32_t dilations[2];
+    int32_t pads[4];
+    uint32_t groups;
+    uint32_t bias_count;
+    lw_simd_level simd_level;
+} lw_parallel_conv_transpose_context;
 
 static uint64_t multiply_saturated(uint64_t left, uint64_t right) {
     return right != 0u && left > UINT64_MAX / right ? UINT64_MAX : left * right;
@@ -251,6 +269,107 @@ static lw_status dispatch_parallel_conv(lw_session* session, const float* input,
             return context.statuses[worker_index];
         }
     }
+    return LW_STATUS_OK;
+}
+
+static uint32_t parallel_conv_transpose_worker_count(
+    const lw_session* session, const lw_parallel_conv_transpose_context* context) {
+    uint32_t maximum_workers;
+    uint32_t output_channels;
+    uint64_t work;
+    if (session->intra_op_thread_count <= 1u || context->groups != 1u ||
+        context->input_dimensions[0] != 1 || context->output_dimensions[0] != 1 ||
+        context->kernel[0] != 2 || context->kernel[1] != 2 || context->strides[0] != 2 ||
+        context->strides[1] != 2 || context->dilations[0] != 1 ||
+        context->dilations[1] != 1 || context->pads[0] != 0 || context->pads[1] != 0 ||
+        context->pads[2] != 0 || context->pads[3] != 0 ||
+        context->weight_dimensions[0] != context->input_dimensions[1] ||
+        context->weight_dimensions[1] != context->output_dimensions[1] ||
+        context->weight_dimensions[2] != 2 || context->weight_dimensions[3] != 2 ||
+        context->output_dimensions[2] != context->input_dimensions[2] * 2 ||
+        context->output_dimensions[3] != context->input_dimensions[3] * 2 ||
+        (context->bias == NULL ? context->bias_count != 0u
+                               : context->bias_count !=
+                                     (uint32_t)context->output_dimensions[1])) {
+        return 1u;
+    }
+    output_channels = (uint32_t)context->output_dimensions[1];
+    maximum_workers = output_channels;
+    if (maximum_workers > session->intra_op_thread_count) {
+        maximum_workers = session->intra_op_thread_count;
+    }
+    if (maximum_workers < 2u) {
+        return 1u;
+    }
+    work = multiply_saturated(output_channels, (uint32_t)context->input_dimensions[1]);
+    work = multiply_saturated(work, (uint32_t)context->input_dimensions[2]);
+    work = multiply_saturated(work, (uint32_t)context->input_dimensions[3]);
+    work = multiply_saturated(work, 4u);
+    return work >= LW_PARALLEL_CONV_TRANSPOSE_MIN_MULTIPLY_ADDS ? maximum_workers : 1u;
+}
+
+static void execute_parallel_conv_transpose_slice(void* opaque, uint32_t worker_index,
+                                                  uint32_t worker_count) {
+    lw_parallel_conv_transpose_context* context =
+        (lw_parallel_conv_transpose_context*)opaque;
+    const uint32_t output_channels = (uint32_t)context->output_dimensions[1];
+    const uint32_t channel_begin =
+        (uint32_t)(((uint64_t)output_channels * worker_index) / worker_count);
+    const uint32_t channel_end =
+        (uint32_t)(((uint64_t)output_channels * (worker_index + 1u)) / worker_count);
+    if (lw_simd_level_is_avx2(context->simd_level)) {
+        lw_avx2_conv_transpose2x2_stride2_range_f32(
+            context->input, context->weights, context->bias, context->output,
+            context->input_dimensions, context->output_dimensions, channel_begin, channel_end);
+    } else if (lw_simd_level_is_neon(context->simd_level)) {
+        lw_neon_conv_transpose2x2_stride2_range_f32(
+            context->input, context->weights, context->bias, context->output,
+            context->input_dimensions, context->output_dimensions, channel_begin, channel_end);
+    } else if (lw_simd_level_is_sse2(context->simd_level)) {
+        lw_sse2_conv_transpose2x2_stride2_range_f32(
+            context->input, context->weights, context->bias, context->output,
+            context->input_dimensions, context->output_dimensions, channel_begin, channel_end);
+    } else {
+        lw_scalar_conv_transpose2x2_stride2_range_f32(
+            context->input, context->weights, context->bias, context->output,
+            context->input_dimensions, context->output_dimensions, channel_begin, channel_end);
+    }
+}
+
+static lw_status dispatch_parallel_conv_transpose(
+    lw_session* session, const float* input, const float* weights, const float* bias,
+    uint32_t bias_count, float* output, const int32_t input_dimensions[4],
+    const int32_t weight_dimensions[4], const int32_t output_dimensions[4],
+    const int32_t kernel[2], const int32_t strides[2], const int32_t dilations[2],
+    const int32_t pads[4], uint32_t groups, lw_simd_level simd_level,
+    lw_execution_profile* profile) {
+    lw_parallel_conv_transpose_context context;
+    uint32_t worker_count;
+    memset(&context, 0, sizeof(context));
+    context.input = input;
+    context.weights = weights;
+    context.bias = bias;
+    context.output = output;
+    memcpy(context.input_dimensions, input_dimensions, sizeof(context.input_dimensions));
+    memcpy(context.weight_dimensions, weight_dimensions, sizeof(context.weight_dimensions));
+    memcpy(context.output_dimensions, output_dimensions, sizeof(context.output_dimensions));
+    memcpy(context.kernel, kernel, sizeof(context.kernel));
+    memcpy(context.strides, strides, sizeof(context.strides));
+    memcpy(context.dilations, dilations, sizeof(context.dilations));
+    memcpy(context.pads, pads, sizeof(context.pads));
+    context.groups = groups;
+    context.bias_count = bias_count;
+    context.simd_level = simd_level;
+    worker_count = parallel_conv_transpose_worker_count(session, &context);
+    if (profile != NULL && worker_count < LW_EXECUTION_PROFILE_THREAD_HISTOGRAM_CAPACITY &&
+        profile->conv_transpose_thread_histogram[worker_count] != UINT64_MAX) {
+        ++profile->conv_transpose_thread_histogram[worker_count];
+    }
+    if (worker_count <= 1u) {
+        return LW_STATUS_UNSUPPORTED;
+    }
+    lw_thread_pool_run(session->thread_pool, worker_count,
+                       execute_parallel_conv_transpose_slice, &context);
     return LW_STATUS_OK;
 }
 
@@ -524,6 +643,14 @@ static lw_status dispatch_node(lw_session* session, const uint8_t* node, uint32_
                            lwm_read_i32(params + 40), lwm_read_i32(params + 44)};
         if (input_count != 2u && input_count != 3u) {
             return LW_STATUS_INVALID_SHAPE;
+        }
+        if (dispatch_parallel_conv_transpose(
+                session, inputs[0], inputs[1], input_count == 3u ? inputs[2] : NULL,
+                input_count == 3u ? (uint32_t)tensor_element_count(input_tensors[2]) : 0u,
+                output, input_tensors[0]->dimensions, input_tensors[1]->dimensions,
+                output_tensor->dimensions, kernel, strides, dilations, pads,
+                lwm_read_u32(params + 4), simd_level, profile) == LW_STATUS_OK) {
+            return LW_STATUS_OK;
         }
         return lw_scalar_conv_transpose2d_f32(
             inputs[0], inputs[1], input_count == 3u ? inputs[2] : NULL,
