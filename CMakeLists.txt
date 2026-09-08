@@ -879,6 +879,13 @@ if(BUILD_TESTING AND NOT EMSCRIPTEN)
         WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
 
     add_test(
+        NAME rec_aot_pattern_analysis
+        COMMAND "${Python3_EXECUTABLE}" -m unittest -v
+                tests.test_analyze_rec_aot_patterns)
+    set_tests_properties(rec_aot_pattern_analysis PROPERTIES
+        WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
+
+    add_test(
         NAME opencv_dnn_comparison_helpers
         COMMAND "${Python3_EXECUTABLE}" -m unittest -v
                 tests.test_compare_opencv_dnn)
