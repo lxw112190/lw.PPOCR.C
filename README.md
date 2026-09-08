@@ -251,6 +251,7 @@ bundles as versioned ZIP/TAR.GZ assets when the release workflow runs.
   [full-OCR profile](docs/full-ocr-profile.md), and
   [kernel optimization](docs/kernel-optimization.md)
 - [Correctness-gated full-OCR comparison with OpenCV DNN](docs/opencv-dnn-comparison.md)
+- [Paired C vs C# OCR engine comparison methodology](docs/engine-comparison.md)
 - [Browser JavaScript SDK](docs/web-sdk.md) and
   [standalone HTML usage](docs/standalone-html.md)
 - [Node.js/WASM distribution](docs/NODE_WASM_DISTRIBUTION.md)

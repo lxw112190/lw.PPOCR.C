@@ -1,0 +1,379 @@
+name: C vs C# OCR Engine Comparison
+
+on:
+  workflow_dispatch:
+    inputs:
+      include_product:
+        description: Include product-profile comparison
+        required: false
+        type: boolean
+        default: true
+      keep_detailed_results:
+        description: Keep per-image disagreement JSON
+        required: false
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: csharp-engine-comparison-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  plan:
+    name: Validate comparison contract
+    runs-on: ubuntu-24.04
+    outputs:
+      simd_repository: ${{ steps.contract.outputs.simd_repository }}
+      simd_ref: ${{ steps.contract.outputs.simd_ref }}
+      replicas: ${{ steps.contract.outputs.replicas }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - id: contract
+        name: Read pinned comparison plan
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -c "from pathlib import Path; from tools.build_engine_comparison_report import load_contract; load_contract(Path('ci/csharp-engine-comparison.json'))"
+          repo="$(python -c "import json; print(json.load(open('ci/csharp-engine-comparison.json', encoding='utf-8'))['simd_repository'])")"
+          ref="$(python -c "import json; print(json.load(open('ci/csharp-engine-comparison.json', encoding='utf-8'))['simd_ref'])")"
+          replicas="$(python -c "import json; c=json.load(open('ci/csharp-engine-comparison.json', encoding='utf-8')); print(json.dumps(list(range(1, c['replicas'] + 1)), separators=(',', ':')))")"
+          echo "simd_repository=$repo" >> "$GITHUB_OUTPUT"
+          echo "simd_ref=$ref" >> "$GITHUB_OUTPUT"
+          echo "replicas=$replicas" >> "$GITHUB_OUTPUT"
+
+  prepare-dataset:
+    name: Generate shared OCR dataset
+    needs: plan
+    runs-on: windows-2025
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7
+        with:
+          repository: ${{ needs.plan.outputs.simd_repository }}
+          ref: ${{ needs.plan.outputs.simd_ref }}
+          path: .ci/SimdPaddleOCR
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: "10.0.x"
+      - name: Generate dataset once
+        shell: pwsh
+        run: >
+          dotnet run --project
+          .ci/SimdPaddleOCR/test/Sdcb.SimdPaddleOCR.TestData
+          -c Release -- --out dataset
+      - name: Record and verify dataset identity
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $files = Get-ChildItem -LiteralPath dataset -File | Sort-Object Name
+          if (($files | Where-Object Name -Like 'img-*.jpg').Count -ne 100) {
+            throw 'expected exactly 100 generated JPG files'
+          }
+          $lines = foreach ($file in $files) {
+            $hash = (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+            "$hash  $($file.Name)"
+          }
+          [IO.File]::WriteAllLines(
+            (Join-Path (Resolve-Path dataset) 'SHA256SUMS'),
+            $lines,
+            [Text.UTF8Encoding]::new($false))
+          $manifestHash = (Get-FileHash -LiteralPath dataset/metadata.json -Algorithm SHA256).Hash.ToLowerInvariant()
+          [IO.File]::WriteAllText(
+            (Join-Path (Resolve-Path dataset) 'MANIFEST-SHA256'),
+            $manifestHash + [char]10,
+            [Text.UTF8Encoding]::new($false))
+          Write-Output "Dataset manifest SHA-256: $manifestHash"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: csharp-comparison-dataset
+          path: dataset/
+          if-no-files-found: error
+          retention-days: 30
+
+  prepare-lw-models:
+    name: Prepare current lw.PPOCR.C Tiny assets
+    needs: plan
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements-converter.txt
+      - name: Install converter dependencies
+        run: python -m pip install -r requirements-converter.txt
+      - name: Convert current Tiny models
+        shell: bash
+        run: |
+          set -euo pipefail
+          cmake -S . -B build-comparison-assets -G Ninja -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF -DLW_BUILD_HTTP_DEMO=OFF -DLW_BUILD_CSHARP_DEMOS=OFF
+          cmake --build build-comparison-assets --parallel 2 --target convert_rec_model convert_cls_model convert_det_model rec_demo_fixture det_demo_fixture
+          mkdir -p prepared-comparison-assets
+          cp build-comparison-assets/models/rec.lwm prepared-comparison-assets/
+          cp build-comparison-assets/models/rec-lwm.json prepared-comparison-assets/
+          cp build-comparison-assets/models/cls.lwm prepared-comparison-assets/
+          cp build-comparison-assets/models/cls-lwm.json prepared-comparison-assets/
+          cp build-comparison-assets/models/det.lwm prepared-comparison-assets/
+          cp build-comparison-assets/models/det-lwm.json prepared-comparison-assets/
+          cp build-comparison-assets/models/sample-crop.ppm prepared-comparison-assets/
+          cp build-comparison-assets/models/sample.ppm prepared-comparison-assets/
+          cp models/ppocrv6-tiny/ppocr_keys.txt prepared-comparison-assets/
+          (cd prepared-comparison-assets && sha256sum rec.lwm rec-lwm.json cls.lwm cls-lwm.json det.lwm det-lwm.json sample-crop.ppm sample.ppm ppocr_keys.txt > SHA256SUMS)
+          (cd prepared-comparison-assets && sha256sum --check SHA256SUMS)
+      - uses: actions/upload-artifact@v7
+        with:
+          name: csharp-comparison-lw-models
+          path: prepared-comparison-assets/
+          if-no-files-found: error
+          retention-days: 30
+
+  compare-win-x64:
+    name: Paired Windows x64 comparison (replica ${{ matrix.replica }})
+    needs:
+      - plan
+      - prepare-dataset
+      - prepare-lw-models
+    strategy:
+      fail-fast: false
+      matrix:
+        replica: ${{ fromJSON(needs.plan.outputs.replicas) }}
+    runs-on: windows-2025
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7
+        with:
+          repository: ${{ needs.plan.outputs.simd_repository }}
+          ref: ${{ needs.plan.outputs.simd_ref }}
+          path: .ci/SimdPaddleOCR
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: "10.0.x"
+      - uses: actions/download-artifact@v8
+        with:
+          name: csharp-comparison-dataset
+          path: dataset
+      - uses: actions/download-artifact@v8
+        with:
+          name: csharp-comparison-lw-models
+          path: .ci/preconverted
+      - name: Verify shared inputs
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          foreach ($root in @('dataset', '.ci/preconverted')) {
+            foreach ($line in Get-Content -LiteralPath "$root/SHA256SUMS") {
+              $parts = $line.Trim() -split ' +', 2
+              if ($parts.Count -ne 2) { throw "invalid checksum line: $line" }
+              $name = $parts[1].TrimStart('*')
+              $actual = (Get-FileHash -LiteralPath "$root/$name" -Algorithm SHA256).Hash.ToLowerInvariant()
+              if ($actual -ne $parts[0].ToLowerInvariant()) {
+                throw "SHA-256 mismatch: $root/$name"
+              }
+            }
+          }
+      - name: Build current C runtime on this runner
+        shell: pwsh
+        run: |
+          $configureArgs = @(
+            '-S', '.', '-B', 'build-csharp-comparison',
+            '-G', 'Visual Studio 17 2022', '-A', 'x64',
+            '-DBUILD_TESTING=ON',
+            '-DLW_BUILD_HTTP_DEMO=OFF',
+            '-DLW_BUILD_CSHARP_DEMOS=OFF',
+            "-DLW_PRECONVERTED_ASSETS_DIR=$env:GITHUB_WORKSPACE/.ci/preconverted")
+          cmake @configureArgs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cmake --build build-csharp-comparison --config Release --parallel 2 --target lw_ppocr_c_shared simd-backend-driver
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Require AVX2 C backend and stage external assets
+        id: native
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $backendOutput = & build-csharp-comparison/Release/simd-backend-driver.exe
+          $backendOutput | Write-Output
+          $backendLine = $backendOutput |
+            Where-Object { $_.StartsWith('SIMD backend:') } |
+            Select-Object -First 1
+          if (-not $backendLine) { throw 'cannot parse C SIMD backend' }
+          $backend = $backendLine.Substring('SIMD backend:'.Length).Trim().ToLowerInvariant()
+          if ($backend -ne 'avx2') {
+            throw "normalized comparison requires C AVX2, got $backend"
+          }
+          New-Item -ItemType Directory -Force -Path c-assets | Out-Null
+          Copy-Item -LiteralPath build-csharp-comparison/Release/lw_ppocr_c.dll -Destination c-assets/
+          Copy-Item -LiteralPath .ci/preconverted/det.lwm -Destination c-assets/
+          Copy-Item -LiteralPath .ci/preconverted/cls.lwm -Destination c-assets/
+          Copy-Item -LiteralPath .ci/preconverted/rec.lwm -Destination c-assets/
+          Copy-Item -LiteralPath .ci/preconverted/ppocr_keys.txt -Destination c-assets/
+          "backend=$backend" >> $env:GITHUB_OUTPUT
+      - name: Build pinned benchmark harness
+        shell: pwsh
+        run: >
+          dotnet build
+          .ci/SimdPaddleOCR/test/Sdcb.SimdPaddleOCR.Tests/Sdcb.SimdPaddleOCR.Tests.csproj
+          -c Release -r win-x64 --no-self-contained
+      - name: Verify C determinism
+        shell: pwsh
+        env:
+          DOTNET_EnableAVX512: "0"
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $project = '.ci/SimdPaddleOCR/test/Sdcb.SimdPaddleOCR.Tests/Sdcb.SimdPaddleOCR.Tests.csproj'
+          New-Item -ItemType Directory -Force -Path .ci/smoke | Out-Null
+          foreach ($run in 1, 2) {
+            $runArgs = @(
+              '--smoke', '--count', '3', '--benchmark-kind', 'engine',
+              '--engine', 'c', '--workers', '1', '--model', 'tiny',
+              '--comparison-profile', 'normalized-fixed320',
+              '--c-assets-mode', 'external', '--c-assets', 'c-assets',
+              '--c-effective-isa', '${{ steps.native.outputs.backend }}',
+              '--lw-commit', $env:GITHUB_SHA,
+              '--input', 'dataset', '--case-id', "c-determinism-$run",
+              '--replica', '${{ matrix.replica }}',
+              '--out', ".ci/smoke/c-determinism-$run.json")
+            dotnet run --project $project -c Release -r win-x64 --no-self-contained --no-build -- @runArgs
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+          $first = (Get-Content .ci/smoke/c-determinism-1.json -Raw | ConvertFrom-Json).rows |
+            Select-Object file, hash, texts, rotations | ConvertTo-Json -Compress -Depth 5
+          $second = (Get-Content .ci/smoke/c-determinism-2.json -Raw | ConvertFrom-Json).rows |
+            Select-Object file, hash, texts, rotations | ConvertTo-Json -Compress -Depth 5
+          if ($first -ne $second) { throw 'C OCR output is not deterministic' }
+      - name: Run paired comparison suite
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $project = '.ci/SimdPaddleOCR/test/Sdcb.SimdPaddleOCR.Tests/Sdcb.SimdPaddleOCR.Tests.csproj'
+          $replica = [int]'${{ matrix.replica }}'
+          $root = "comparison-replica-$replica"
+          New-Item -ItemType Directory -Force -Path "$root/results" | Out-Null
+          $cases = [Collections.Generic.List[string]]::new()
+          $profiles = [Collections.Generic.List[string]]::new()
+          $profiles.Add('normalized-fixed320')
+          if ('${{ inputs.include_product }}' -eq 'true') { $profiles.Add('product') }
+          $order = if (($replica % 2) -eq 0) { @('c', 'sharp') } else { @('sharp', 'c') }
+
+          foreach ($profile in $profiles) {
+            foreach ($workers in 1, 4) {
+              foreach ($engine in $order) {
+                Remove-Item Env:DOTNET_EnableAVX512 -ErrorAction SilentlyContinue
+                if ($profile -eq 'normalized-fixed320') {
+                  $env:DOTNET_EnableAVX512 = '0'
+                }
+                $caseId = "tiny-$engine-$($workers)w-$profile-r$replica"
+                $relative = "results/$caseId.json"
+                $runArgs = @(
+                  '--benchmark', '--benchmark-kind', 'engine',
+                  '--engine', $engine, '--workers', "$workers", '--model', 'tiny',
+                  '--comparison-profile', $profile, '--count', '100',
+                  '--input', 'dataset', '--case-id', $caseId,
+                  '--replica', "$replica", '--out', "$root/$relative")
+                if ($engine -eq 'c') {
+                  $runArgs += @(
+                    '--c-assets-mode', 'external', '--c-assets', 'c-assets',
+                    '--c-effective-isa', '${{ steps.native.outputs.backend }}',
+                    '--lw-commit', $env:GITHUB_SHA)
+                }
+                Write-Output "::group::$caseId"
+                dotnet run --project $project -c Release -r win-x64 --no-self-contained --no-build -- @runArgs
+                $exitCode = $LASTEXITCODE
+                Write-Output '::endgroup::'
+                if ($exitCode -ne 0) { exit $exitCode }
+                $cases.Add($relative)
+              }
+            }
+          }
+          Remove-Item Env:DOTNET_EnableAVX512 -ErrorAction SilentlyContinue
+          $manifest = [ordered]@{
+            schema_version = 1
+            replica = $replica
+            lw_commit = $env:GITHUB_SHA.ToLowerInvariant()
+            harness_commit = '${{ needs.plan.outputs.simd_ref }}'
+            contract_sha256 = (Get-FileHash ci/csharp-engine-comparison.json -Algorithm SHA256).Hash.ToLowerInvariant()
+            dataset_manifest_sha256 = (Get-FileHash dataset/metadata.json -Algorithm SHA256).Hash.ToLowerInvariant()
+            c_backend = '${{ steps.native.outputs.backend }}'
+            cases = $cases.ToArray()
+          }
+          [IO.File]::WriteAllText(
+            "$root/replica-manifest.json",
+            ($manifest | ConvertTo-Json -Depth 5),
+            [Text.UTF8Encoding]::new($false))
+          Copy-Item ci/csharp-engine-comparison.json "$root/contract.json"
+          Copy-Item .ci/preconverted/SHA256SUMS "$root/lw-models-SHA256SUMS"
+          Copy-Item dataset/SHA256SUMS "$root/dataset-SHA256SUMS"
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: csharp-comparison-replica-${{ matrix.replica }}
+          path: comparison-replica-${{ matrix.replica }}/
+          if-no-files-found: warn
+          retention-days: 30
+
+  report:
+    name: Validate and publish comparison report
+    needs:
+      - plan
+      - prepare-dataset
+      - prepare-lw-models
+      - compare-win-x64
+    if: always() && !cancelled()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - uses: actions/download-artifact@v8
+        with:
+          name: csharp-comparison-dataset
+          path: .ci/dataset
+      - uses: actions/download-artifact@v8
+        with:
+          name: csharp-comparison-lw-models
+          path: .ci/models
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: csharp-comparison-replica-*
+          path: comparison-input
+      - name: Build validated paired report
+        shell: bash
+        run: |
+          set -euo pipefail
+          args=(
+            --contract ci/csharp-engine-comparison.json
+            --input comparison-input
+            --dataset .ci/dataset
+            --model-sha256s .ci/models/SHA256SUMS
+            --output comparison-report
+            --lw-commit "$GITHUB_SHA"
+          )
+          if [[ '${{ inputs.include_product }}' == 'true' ]]; then
+            args+=(--include-product)
+          fi
+          if [[ '${{ inputs.keep_detailed_results }}' == 'true' ]]; then
+            args+=(--keep-detailed-results)
+          fi
+          python tools/build_engine_comparison_report.py "${args[@]}"
+          cat comparison-report/SUMMARY.md >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: lw-ppocr-csharp-comparison-${{ github.sha }}
+          path: comparison-report/
+          if-no-files-found: warn
+          retention-days: 30

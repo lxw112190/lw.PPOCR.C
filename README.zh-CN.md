@@ -339,6 +339,7 @@ HTTP Demo 和正式发布包均不链接、加载或携带 OpenCV。
 - [标量算子](docs/scalar-kernels.md)
 - [性能基线与优化](docs/performance-baseline.md)
 - [完整 OCR 分阶段与算子性能分析](docs/full-ocr-profile.md)
+- [C 与 C# OCR 引擎同机配对对比方法](docs/engine-comparison.md)
 - [浏览器 JavaScript SDK](docs/web-sdk.md)
 - [单文件离线 HTML 使用与定制](docs/standalone-html.md)
 - [Node.js/WASM 发行包](docs/NODE_WASM_DISTRIBUTION.md)
