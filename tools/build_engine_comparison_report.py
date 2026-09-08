@@ -454,6 +454,224 @@ def accuracy_runs(
     )
 
 
+def line_edit_distance(left: str, right: str) -> int:
+    """Return the UTF-8 text's Unicode-code-point Levenshtein distance."""
+    if left == right:
+        return 0
+    if len(left) < len(right):
+        left, right = right, left
+    if not right:
+        return len(left)
+    previous = list(range(len(right) + 1))
+    for left_index, left_char in enumerate(left, 1):
+        current = [left_index]
+        for right_index, right_char in enumerate(right, 1):
+            current.append(
+                min(
+                    current[-1] + 1,
+                    previous[right_index] + 1,
+                    previous[right_index - 1] + (left_char != right_char),
+                )
+            )
+        previous = current
+    return previous[-1]
+
+
+def normalized_line_distance(left: str, right: str) -> float:
+    denominator = max(len(left), len(right), 1)
+    return line_edit_distance(left, right) / denominator
+
+
+def align_lines(
+    expected: list[str], predicted: list[str]
+) -> tuple[list[tuple[int, int | None]], list[int]]:
+    """Align predicted lines to references without shifting all later lines.
+
+    The diagonal operation wins deterministic ties, followed by deletion and
+    insertion. Extra predicted lines are returned separately because they do
+    not have a reference line to which their error can be attributed.
+    """
+    rows = len(expected)
+    columns = len(predicted)
+    costs = [[0.0] * (columns + 1) for _ in range(rows + 1)]
+    choices = [["start"] * (columns + 1) for _ in range(rows + 1)]
+    for row in range(1, rows + 1):
+        costs[row][0] = float(row)
+        choices[row][0] = "delete"
+    for column in range(1, columns + 1):
+        costs[0][column] = float(column)
+        choices[0][column] = "insert"
+    for row in range(1, rows + 1):
+        for column in range(1, columns + 1):
+            candidates = (
+                (
+                    costs[row - 1][column - 1]
+                    + normalized_line_distance(expected[row - 1], predicted[column - 1]),
+                    0,
+                    "match",
+                ),
+                (costs[row - 1][column] + 1.0, 1, "delete"),
+                (costs[row][column - 1] + 1.0, 2, "insert"),
+            )
+            costs[row][column], _, choices[row][column] = min(candidates)
+
+    aligned: list[tuple[int, int | None]] = []
+    extras: list[int] = []
+    row = rows
+    column = columns
+    while row > 0 or column > 0:
+        choice = choices[row][column]
+        if choice == "match":
+            aligned.append((row - 1, column - 1))
+            row -= 1
+            column -= 1
+        elif choice == "delete":
+            aligned.append((row - 1, None))
+            row -= 1
+        elif choice == "insert":
+            extras.append(column - 1)
+            column -= 1
+        else:
+            raise ComparisonError("line alignment produced an invalid traceback")
+    aligned.reverse()
+    extras.reverse()
+    return aligned, extras
+
+
+def build_line_diagnostics(
+    runs: list[Run],
+    references: dict[str, list[str]],
+    profiles: list[str],
+    workers_values: list[int],
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[str]]:
+    line_cases: list[dict[str, Any]] = []
+    contributors: list[dict[str, Any]] = []
+    summary = [
+        "## Line-level accuracy diagnostics",
+        "",
+        "Line alignment uses normalized character edit distance; extra predicted lines are reported separately.",
+        "",
+        "| Profile | Workers | GT lines | Both correct | C# only | C only | Both wrong | Missing/extra |",
+        "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
+    ]
+    for profile in profiles:
+        for workers in workers_values:
+            sharp, c_run = paired(runs, profile, workers)[0]
+            sharp_rows = {
+                row["file"]: row for row in sharp.rows if row.get("warmup") is not True
+            }
+            c_rows = {
+                row["file"]: row for row in c_run.rows if row.get("warmup") is not True
+            }
+            counts = {
+                "gt": 0,
+                "both_correct": 0,
+                "sharp_only": 0,
+                "c_only": 0,
+                "both_wrong": 0,
+                "missing_extra": 0,
+            }
+            for name in sorted(set(sharp_rows) | set(c_rows)):
+                if name not in references or name not in sharp_rows or name not in c_rows:
+                    raise ComparisonError(f"cannot align line diagnostic case: {name}")
+                expected = references[name]
+                sharp_text = sharp_rows[name].get("texts")
+                c_text = c_rows[name].get("texts")
+                if not isinstance(sharp_text, list) or not isinstance(c_text, list):
+                    raise ComparisonError(f"invalid OCR texts in line diagnostic case: {name}")
+                sharp_alignment, sharp_extras = align_lines(expected, sharp_text)
+                c_alignment, c_extras = align_lines(expected, c_text)
+                sharp_by_reference = dict(sharp_alignment)
+                c_by_reference = dict(c_alignment)
+                line_items: list[dict[str, Any]] = []
+                for reference_index, expected_text in enumerate(expected):
+                    sharp_index = sharp_by_reference.get(reference_index)
+                    c_index = c_by_reference.get(reference_index)
+                    sharp_value = None if sharp_index is None else sharp_text[sharp_index]
+                    c_value = None if c_index is None else c_text[c_index]
+                    sharp_edit = line_edit_distance(expected_text, sharp_value or "")
+                    c_edit = line_edit_distance(expected_text, c_value or "")
+                    sharp_correct = sharp_value == expected_text
+                    c_correct = c_value == expected_text
+                    counts["gt"] += 1
+                    if sharp_correct and c_correct:
+                        counts["both_correct"] += 1
+                    elif sharp_correct:
+                        counts["sharp_only"] += 1
+                    elif c_correct:
+                        counts["c_only"] += 1
+                    else:
+                        counts["both_wrong"] += 1
+                    if sharp_value is None or c_value is None:
+                        counts["missing_extra"] += 1
+                    item = {
+                        "profile": profile,
+                        "workers": workers,
+                        "file": name,
+                        "line_index": reference_index,
+                        "reference": expected_text,
+                        "sharp": sharp_value,
+                        "c": c_value,
+                        "sharp_edit": sharp_edit,
+                        "c_edit": c_edit,
+                        "c_extra_errors": c_edit - sharp_edit,
+                    }
+                    line_items.append(item)
+                    contributors.append(item)
+                extra_item = {
+                    "profile": profile,
+                    "workers": workers,
+                    "file": name,
+                    "sharp_extra": [sharp_text[index] for index in sharp_extras],
+                    "c_extra": [c_text[index] for index in c_extras],
+                }
+                if sharp_extras or c_extras:
+                    counts["missing_extra"] += len(sharp_extras) + len(c_extras)
+                line_cases.append(
+                    {
+                        "profile": profile,
+                        "workers": workers,
+                        "file": name,
+                        "lines": line_items,
+                        "extra": extra_item,
+                    }
+                )
+            summary.append(
+                f"| {profile} | {workers} | {counts['gt']} | {counts['both_correct']} | "
+                f"{counts['sharp_only']} | {counts['c_only']} | {counts['both_wrong']} | "
+                f"{counts['missing_extra']} |"
+            )
+    contributors.sort(
+        key=lambda item: (-item["c_extra_errors"], item["file"], item["line_index"])
+    )
+    summary_profile = "product" if "product" in profiles else "normalized-fixed320"
+    summary_workers = max(workers_values)
+    summary_contributors = [
+        item
+        for item in contributors
+        if item["profile"] == summary_profile and item["workers"] == summary_workers
+    ]
+    if not summary_contributors:
+        summary_contributors = contributors
+    summary.extend(
+        [
+            "",
+            "### Top C-vs-C# CER contributors",
+            "",
+            "| Profile | Workers | Image | GT line | C# edit | C edit | C extra errors |",
+            "| --- | ---: | --- | ---: | ---: | ---: | ---: |",
+        ]
+    )
+    for item in summary_contributors[:10]:
+        summary.append(
+            f"| {item['profile']} | {item['workers']} | {item['file']} | "
+            f"{item['line_index']} | {item['sharp_edit']} | {item['c_edit']} | "
+            f"{item['c_extra_errors']} |"
+        )
+    summary.append("")
+    return line_cases, contributors, summary
+
+
 def build_disagreements(
     runs: list[Run],
     references: dict[str, list[str]],
@@ -569,6 +787,42 @@ def build_markdown(
             f"| {replica} | {cpu.replace('|', '/')} | {logical} | {ram} | "
             f"{c_run.meta['effective_isa']} | {sharp.meta['effective_isa']} |"
         )
+
+    summary_profile = "product" if "product" in profiles else "normalized-fixed320"
+    lines.extend(
+        [
+            "",
+            "## Executive summary",
+            "",
+            f"The primary summary profile is `{summary_profile}`. Values are paired within each replica; "
+            "performance and accuracy remain informational.",
+            "",
+            "| Profile | Workers | C/C# latency | C-C# median ms | C peak WS saving | Exact-line gap | CER gap |",
+            "| --- | ---: | ---: | ---: | ---: | ---: | ---: |",
+        ]
+    )
+    for workers in contract["workers"]:
+        pairs = paired(runs, summary_profile, workers)
+        ratios = [c.median_ms / sharp.median_ms for sharp, c in pairs]
+        deltas = [c.median_ms - sharp.median_ms for sharp, c in pairs]
+        memory_savings = [1.0 - c.peak_mb / sharp.peak_mb for sharp, c in pairs]
+        exact_gaps = [
+            c.accuracy["exact_lines"] / c.accuracy["total_lines"]
+            - sharp.accuracy["exact_lines"] / sharp.accuracy["total_lines"]
+            for sharp, c in pairs
+        ]
+        cer_gaps = [float(c.accuracy["cer"]) - float(sharp.accuracy["cer"]) for sharp, c in pairs]
+        lines.append(
+            f"| {summary_profile} | {workers} | {statistics.median(ratios):.3f}x | "
+            f"{statistics.median(deltas):+.3f} | {statistics.median(memory_savings):+.2%} | "
+            f"{statistics.median(exact_gaps):+.2%} | {statistics.median(cer_gaps):+.2%} |"
+        )
+    lines.extend(
+        [
+            "",
+            "> `normalized-fixed320` is an implementation-normalization workload. Long lines are intentionally compressed, so its accuracy must not be presented as product OCR quality.",
+        ]
+    )
 
     for profile in profiles:
         title = (
@@ -696,6 +950,9 @@ def build_report(
     disagreements, disagreement_summary = build_disagreements(
         runs, references, profiles, contract["workers"]
     )
+    line_cases, contributors, line_summary = build_line_diagnostics(
+        runs, references, profiles, contract["workers"]
+    )
 
     if output_dir.exists() and any(output_dir.iterdir()):
         raise ComparisonError(f"output directory must be empty: {output_dir}")
@@ -723,7 +980,7 @@ def build_report(
         markdown + chr(10), encoding="utf-8", newline=chr(10)
     )
     (output_dir / "disagreements" / "SUMMARY.md").write_text(
-        chr(10).join(disagreement_summary) + chr(10),
+        chr(10).join(disagreement_summary + line_summary) + chr(10),
         encoding="utf-8",
         newline=chr(10),
     )
@@ -739,6 +996,26 @@ def build_report(
                 encoding="utf-8",
                 newline=chr(10),
             )
+        (output_dir / "disagreements" / "line-cases.json").write_text(
+            json.dumps(
+                {"schema_version": 1, "alignment": "reference-line-dp", "cases": line_cases},
+                ensure_ascii=False,
+                indent=2,
+            )
+            + chr(10),
+            encoding="utf-8",
+            newline=chr(10),
+        )
+        (output_dir / "disagreements" / "cer-contributors.json").write_text(
+            json.dumps(
+                {"schema_version": 1, "edit_unit": "unicode-code-point", "cases": contributors},
+                ensure_ascii=False,
+                indent=2,
+            )
+            + chr(10),
+            encoding="utf-8",
+            newline=chr(10),
+        )
 
     final_manifest = {
         "schema_version": 1,

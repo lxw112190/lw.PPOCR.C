@@ -78,6 +78,7 @@ UI 临时改动。
 Actions Step Summary 直接显示：
 
 - 两个仓库 commit、合同 SHA 和数据集 SHA；
+- Executive Summary：配对延迟、绝对毫秒差、C 的峰值工作集节省比例，以及 Exact Line/CER 差异；
 - 每个 replica 的 CPU、内存和实际 ISA；
 - 1/4 worker 的 paired latency ratio；
 - Exact Line Rate 与 CER；
@@ -94,6 +95,16 @@ Actions Step Summary 直接显示：
 - 三个 replicas 的原始 benchmark JSON；
 - disagreement 汇总；
 - 可选的逐图片 disagreement JSON。
+
+`disagreements/SUMMARY.md` 还包含行级 accuracy 诊断。它使用参考行作为锚点做
+确定性的 DP 对齐，避免某一条额外识别结果导致后续所有行错位；额外预测行会单独计数。
+保留详细结果时，artifact 还包含：
+
+- `line-cases.json`：每张图片的参考行、C# 行、C 行和逐行编辑距离；
+- `cer-contributors.json`：按 `C edit - C# edit` 排序的差异行。
+
+这些编辑距离用于定位差异，不替代报告中的正式 CER。固定 320 宽度仍是实现对齐工作负载，
+不能直接当作产品 OCR 质量。
 
 ## 硬失败条件
 

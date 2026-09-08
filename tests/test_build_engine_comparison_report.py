@@ -8,6 +8,7 @@ from pathlib import Path
 
 from tools.build_engine_comparison_report import (
     ComparisonError,
+    align_lines,
     build_report,
     load_contract,
 )
@@ -278,6 +279,29 @@ class EngineComparisonReportTests(unittest.TestCase):
             .read_text(encoding="utf-8")
         )
         self.assertGreater(len(disagreements["cases"]), 0)
+        line_cases = json.loads(
+            (self.output / "disagreements" / "line-cases.json")
+            .read_text(encoding="utf-8")
+        )
+        self.assertEqual(line_cases["alignment"], "reference-line-dp")
+        self.assertGreater(len(line_cases["cases"]), 0)
+        contributors = json.loads(
+            (self.output / "disagreements" / "cer-contributors.json")
+            .read_text(encoding="utf-8")
+        )
+        self.assertGreater(len(contributors["cases"]), 0)
+        self.assertIn("Executive summary", summary)
+        disagreement_summary = (
+            self.output / "disagreements" / "SUMMARY.md"
+        ).read_text(encoding="utf-8")
+        self.assertIn("Line-level accuracy diagnostics", disagreement_summary)
+
+    def test_line_alignment_keeps_following_lines_after_insertion(self) -> None:
+        aligned, extras = align_lines(
+            ["A", "B", "C"], ["A", "inserted", "B", "C"]
+        )
+        self.assertEqual(aligned, [(0, 0), (1, 2), (2, 3)])
+        self.assertEqual(extras, [1])
 
     def test_missing_case_is_rejected(self) -> None:
         missing = next(self.results.rglob("*-sharp-r1.json"))
