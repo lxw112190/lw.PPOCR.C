@@ -71,6 +71,9 @@ ARM64 已为 packed pointwise Conv、regular 3x3 Conv 和 2x2 ConvTranspose
 接入 NEON。LoongArch64 通过 Linux HWCAP 检测 LSX/LASX，有 LSX 时使用 LSX packed
 pointwise Conv（LASX CPU 本轮也复用 LSX 内核），否则回退标量。两者都不能直接套用
 amd64 的 SSE2/AVX2 性能数据，LoongArch 性能仍需客户实体机验证。
+仓库还提供手动的
+[`ARM64 OCR 性能基线`](docs/arm64-performance.md)，用于在新增 NEON 算子前采集原生
+算子耗时、线程扩展和 RSS；GitHub ARM64 runner 数据与 RK3576 实体机数据分开记录。
 
 ## 性能口径说明
 

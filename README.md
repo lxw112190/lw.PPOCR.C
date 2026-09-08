@@ -54,6 +54,8 @@ packed pointwise kernel when available (including on LASX CPUs), and otherwise
 falls back to scalar. See the [platform matrix](docs/platform-matrix.md) and
 [development package guide](docs/package.md) before making compatibility or
 performance claims; LoongArch performance still requires physical hardware.
+The manual [ARM64 OCR performance workflow](docs/arm64-performance.md)
+collects native operator and RSS profiles before new NEON kernels are added.
 
 ### Performance snapshot
 
