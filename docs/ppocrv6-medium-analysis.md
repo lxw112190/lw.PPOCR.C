@@ -401,8 +401,10 @@ candidate was also retained after three repeated A/B pairs at both one and
 four workers. A fresh profile is now required before selecting another shape;
 the retained 5x5 path has since received a register-tile follow-up, reducing
 node 251 by about 17–19% in a direct two-iteration A/B while leaving complete
-request wall time within noise. No new shape is being added from an isolated
-node measurement.
+request wall time within noise. The regular 7x7 path has received the same
+four-output register-tile treatment: node 246 fell by about 17.8% in a fresh
+two-iteration A/B, while complete request wall time remained within noise
+(+0.45%). No new shape is being added from an isolated node measurement.
 
 The direct kernel and dispatch path are covered by `conv_kernel_reference`, and
 the complete result is covered by `full_ocr_pipeline_reference`.

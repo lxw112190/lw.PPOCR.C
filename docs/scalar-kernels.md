@@ -64,11 +64,10 @@ Medium DET regular 7x1/1x7 and 5x1/1x5 shapes also have an AVX2 path with the
 same multiply-then-add contract. All other Depthwise, grouped, dilated, or
 asymmetric shapes retain the general Conv implementation.
 
-Regular Medium DET 5x5/pad-2 Conv additionally uses an AVX2 four-output
-register-tile path when the output channel count is divisible by four. It
-keeps the scalar input-channel/kernel order, stores each eight-column tile
-once, and falls back to the existing one-output path for other shapes and
-non-AVX2 targets.
+Regular Medium DET 5x5/pad-2 and 7x7/pad-3 Conv additionally use AVX2
+four-output register-tile paths when the output channel count is divisible by
+four. They keep the same border/tail semantics, store each eight-column tile
+once, and fall back to the existing path for other shapes and non-AVX2 targets.
 
 ## Correctness tests
 

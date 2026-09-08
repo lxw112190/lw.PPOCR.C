@@ -421,8 +421,16 @@ WASM, and unsupported geometries retain the portable reference path.
 Across the positive regular-7x7 nodes, the three-run instrumented average fell
 from approximately 166.8 ms to 25.4 ms on the local Windows x64 host. The full
 OCR checksum stayed `ededc8978c6a78ee` with 16 lines. Because this is node-level
-instrumentation, it is a hotspot checkpoint rather than a release latency claim;
-the subsequent Medium DET regular 5x5 A/B result is documented below.
+instrumentation, it is a hotspot checkpoint rather than a release latency claim.
+
+A follow-up AVX2 path now keeps four output-channel accumulators in registers
+for each eight-column interior tile when the output channel count is divisible
+by four. In a fresh two-iteration A/B on the same Windows x64 Medium 960
+profile, node 246 fell from 77.64 to 63.79 ms (-17.8%). Complete request wall
+time was 14,123.3 ms for the previous path and 14,186.8 ms for the candidate
+(+0.45%, within measurement noise); the checksum remained
+`ededc8978c6a78ee` with 16 lines. Border/tail cases, non-AVX2 targets, and
+other channel counts keep the existing path.
 
 ## Medium DET regular 5x5 SIMD result
 

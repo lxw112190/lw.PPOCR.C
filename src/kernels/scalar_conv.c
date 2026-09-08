@@ -697,8 +697,13 @@ lw_status lw_scalar_conv2d_f32(const float* input, const float* weights, const f
         output_dimensions[3] == input_dimensions[3]) {
         lw_simd_level simd_level = lw_detect_simd_level();
         if (lw_simd_level_is_avx2(simd_level)) {
-            lw_avx2_conv7x7_unit_pad3_f32(input, weights, bias, output, input_dimensions,
-                                           output_dimensions);
+            if (((uint32_t)output_dimensions[1] & 3u) == 0u) {
+                lw_avx2_conv7x7_four_outputs_unit_pad3_f32(
+                    input, weights, bias, output, input_dimensions, output_dimensions);
+            } else {
+                lw_avx2_conv7x7_unit_pad3_f32(input, weights, bias, output, input_dimensions,
+                                               output_dimensions);
+            }
         } else {
             /* Keep the generic reference path for ARM, WASM, and scalar hosts. */
             goto general_convolution;
