@@ -81,6 +81,7 @@ static uint64_t checksum_bytes(const void* data, size_t bytes) {
     return hash;
 }
 
+#if defined(LW_EXPERIMENTAL_AVX2_FMA_DISPATCH)
 static float max_abs_difference(const float* expected, const float* actual, uint64_t count) {
     uint64_t index;
     float maximum = 0.0f;
@@ -92,6 +93,8 @@ static float max_abs_difference(const float* expected, const float* actual, uint
     }
     return maximum;
 }
+#endif
+
 static void add_bias_and_argmax(const float* logits, const float* bias, float* output,
                                 uint32_t* best_indices) {
     uint32_t row;

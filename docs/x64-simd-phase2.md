@@ -88,6 +88,25 @@ The terminal MatMul candidate improves the isolated local benchmark by about 1.4
 over the existing AVX2 path. Full OCR remains checksum-identical in local paired
 runs; promotion still requires the gates below on the full corpus.
 
+## 100-image quality parity checkpoint
+
+The project-owned generated corpus was replayed locally with the default AVX2
+driver and the experimental FMA driver using the same Tiny DET/CLS/REC assets,
+REC target width `960`, and manifest (`seed=20260907`, `614` reference lines).
+The reports were compared with `tools/compare_ocr_dataset_reports.py`:
+
+| Metric | Default AVX2 | Experimental FMA | Delta |
+|---|---:|---:|---:|
+| Detection F1 | 99.3517% | 99.3517% | 0.0000 pp |
+| Exact reference-line rate | 58.1433% | 58.1433% | 0.0000 pp |
+| CER on matched lines | 3.6458% | 3.6458% | 0.0000 pp |
+
+Detection precision, recall, mean matched IoU, matched-line exact rate, missing
+lines, and extra lines were also identical. This is a quality-parity checkpoint,
+not a release gate: generated images remain local-only, and the FMA dispatch stays
+opt-in until repeated runner measurements confirm the performance and working-set
+gates below.
+
 ## Promotion gate
 
 Before enabling FMA in the production dispatch, collect paired measurements on

@@ -141,7 +141,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           cmake --build build-x64 --config Release --parallel 2 --target `
             full-ocr-profile-driver full-ocr-intra-benchmark simd-backend-driver `
-            packed-conv1x1-benchmark-driver
+            packed-conv1x1-benchmark-driver lw-ocr-ppm
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Require AVX2 backend
         shell: pwsh
@@ -235,7 +235,7 @@ jobs:
           )
           cmake @configureArgs
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          cmake --build build-x64-fma --config Release --parallel 2 --target full-ocr-intra-benchmark packed-conv1x1-benchmark-driver packed-matmul-benchmark-driver
+          cmake --build build-x64-fma --config Release --parallel 2 --target full-ocr-intra-benchmark lw-ocr-ppm packed-conv1x1-benchmark-driver packed-matmul-benchmark-driver
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           ctest --test-dir build-x64-fma -C Release --output-on-failure -R '^(packed_conv1x1_benchmark_smoke|packed_matmul_benchmark_smoke)$'
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -280,6 +280,65 @@ jobs:
             Get-Content -LiteralPath $markdownOutput |
               Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
           }
+      - name: Check FMA quality on generated corpus
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if (Test-Path -LiteralPath x64-fma-ocr-results/SKIPPED.txt) {
+            Get-Content -LiteralPath x64-fma-ocr-results/SKIPPED.txt |
+              Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+            exit 0
+          }
+          $dataset = 'build-local-data/lw-generated-ocr'
+          $fontArgs = @()
+          foreach ($font in @('C:\Windows\Fonts\msyh.ttc', 'C:\Windows\Fonts\simsun.ttc')) {
+            if (Test-Path -LiteralPath $font) { $fontArgs += @('--font', $font) }
+          }
+          if ($fontArgs.Count -eq 0) { throw 'no CJK font found for generated OCR corpus' }
+          python tools/generate_ocr_dataset.py `
+            --output $dataset `
+            --count 100 `
+            --seed 20260907 `
+            --format jpg `
+            @fontArgs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $common = @(
+            '--dataset', $dataset,
+            '--detector', '.ci/preconverted/det.lwm',
+            '--classifier', '.ci/preconverted/cls.lwm',
+            '--recognizer', '.ci/preconverted/rec.lwm',
+            '--dictionary', '.ci/preconverted/ppocr_keys.txt',
+            '--rec-max-width', '960',
+            '--timeout-seconds', '180'
+          )
+          python tools/evaluate_ocr_dataset.py `
+            @common `
+            '--driver' 'build-x64/Release/lw-ocr-ppm.exe' `
+            '--model-name' 'tiny-default-100' `
+            '--output' 'x64-fma-ocr-results/tiny-default-100.json'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python tools/evaluate_ocr_dataset.py `
+            @common `
+            '--driver' 'build-x64-fma/Release/lw-ocr-ppm.exe' `
+            '--model-name' 'tiny-fma-100' `
+            '--output' 'x64-fma-ocr-results/tiny-fma-100.json'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python tools/compare_ocr_dataset_reports.py `
+            --baseline 'x64-fma-ocr-results/tiny-default-100.json' `
+            --candidate 'x64-fma-ocr-results/tiny-fma-100.json' `
+            --output 'x64-fma-ocr-results/tiny-fma-accuracy-comparison.json'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python tools/check_ocr_dataset_regression.py `
+            --baseline 'x64-fma-ocr-results/tiny-default-100.json' `
+            --candidate 'x64-fma-ocr-results/tiny-fma-100.json' `
+            --max-f1-drop 0.005 `
+            --max-exact-drop 0.005 `
+            --max-cer-increase 0.005 `
+            --output 'x64-fma-ocr-results/tiny-fma-accuracy-regression.json'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          '### FMA 100-image quality parity' | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+          Get-Content -LiteralPath 'x64-fma-ocr-results/tiny-fma-accuracy-comparison.json' |
+            Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
       - name: Collect native OCR profile
         shell: pwsh
         env:
