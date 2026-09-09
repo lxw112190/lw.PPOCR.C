@@ -2,18 +2,48 @@
 
 [简体中文](README.zh-CN.md) | English
 
-Tiny pure-C inference runtime for PP-OCR.
+Lightweight pure-C inference runtime for PP-OCR.
 
 `lw.PPOCR.C` runs PP-OCR without Python, OpenCV, ONNX Runtime, OpenVINO,
 TensorRT, protobuf, or any other deployment-time runtime dependency.
 
 > This is not a general-purpose ONNX Runtime.
 
+## v0.2.0-preview.1 release candidate
+
+This preview makes PP-OCRv6 Tiny, Small, and Medium available through one
+pure-C Runtime. Tiny remains the default. Small and Medium are opt-in preview
+variants with separate runtime model packs and self-contained browser files.
+The C ABI and LWM v0.1 format are still not frozen.
+
+Download from [GitHub Releases](https://github.com/lxw112190/lw.PPOCR.C/releases)
+according to the integration target:
+
+| Need | Release asset | Notes |
+|---|---|---|
+| Open an offline OCR page | `*-ocr-demo.html` | Tiny; recommended for phones and general use |
+| Try a larger browser model | `*-ocr-demo-small.html` / `*-ocr-demo-medium.html` | Small is opt-in; Medium is desktop-first |
+| Embed OCR in a Web page | `*-web-sdk.js` / `*-web-sdk-small.js` / `*-web-sdk-medium.js` | Same `LwPpocr` API, different embedded models |
+| Native C/C++ | `*-windows-x64-msvc.zip` / `*-linux-x86_64.tar.gz` | Tiny is bundled by default |
+| Android ARM64 | `*-android-arm64.aar` / `*-android-arm64-demo.apk` | `arm64-v8a`, `minSdk 21`, Tiny |
+| Desktop Java/JNI | `*-java-jni-windows-x64.zip` / `*-java-jni-linux-x64.tar.gz` / `*-java-jni-macos-arm64.tar.gz` | Java 8+ console integration |
+| Node.js | `*-node-wasm.zip` | Raw Node 18+ WASM package, Tiny |
+| Change native model variant | `*-ppocrv6-{tiny,small,medium}-runtime.zip` | Namespaced model pack with manifest and hashes |
+
+Download checksum files with the selected assets and verify them before use.
+The Android `SHA256SUMS.txt` covers both its AAR and APK; other primary assets
+have a sidecar `.sha256`. Do not mix binaries, SDK files, models, or dictionaries
+from different releases. When upgrading from `0.1.x`, replace the complete
+matching set and rebuild native/managed consumers because the ABI is not frozen.
+See the [package guide](docs/package.md) and
+[model selection matrix](docs/supported-models.md).
+
 ## Current milestone
 
 The project currently provides:
 
-- Deterministic PP-OCRv6 tiny REC/CLS/DET-to-LWM v0.1 conversion.
+- CI-gated PP-OCRv6 Tiny/Small/Medium runtime model packs, with Tiny as the
+  default and Small/Medium as opt-in preview variants.
 - Safe Conv + BatchNormalization folding during REC/CLS conversion.
 - A bounds-checked C11 model loader, dynamic shape propagation, and reusable
   workspace planning.
@@ -231,16 +261,17 @@ workflow, artifact names, and upgrade limitations.
 ## Desktop Java/JVM JNI example
 
 The development package also includes a deliberately small Java 8+ console
-consumer under `examples/java-jni/`. It supports Windows x64 and Linux x64,
-uses standard `ImageIO` for JPEG/PNG/BMP input, and calls the existing C ABI
-through `lw_ppocr_java` without adding Java dependencies to the core build.
+consumer under `examples/java-jni/`. It supports Windows x64, Linux x64, and
+macOS ARM64, uses standard `ImageIO` for JPEG/PNG/BMP input, and calls the
+existing C ABI through `lw_ppocr_java` without adding Java dependencies to the
+core build.
 It keeps a compatibility text-only API and also exposes immutable detailed
 `OcrResult`/`OcrLine` values with source-image quadrilaterals and detection /
 recognition scores. There is no UI, Android support, Maven artifact, automatic
 native loader, or model download. See the bilingual
 [`examples/java-jni/README.md`](examples/java-jni/README.md) and
 [`examples/java-jni/README.zh-CN.md`](examples/java-jni/README.zh-CN.md).
-The same workflow publishes SHA-256-checked Windows/Linux Java JNI bundles for
+The same workflow publishes SHA-256-checked Windows/Linux/macOS Java JNI bundles for
 CI-verified integration testing. Tagged releases repackage those exact tested
 bundles as versioned ZIP/TAR.GZ assets when the release workflow runs.
 

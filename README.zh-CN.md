@@ -7,7 +7,32 @@ Python、OpenCV、ONNX Runtime、OpenVINO、TensorRT 或 protobuf，适合将文
 集成到桌面软件、嵌入式程序、本地服务和其他对依赖体积敏感的场景。
 
 > 本项目不是通用 ONNX 推理框架。当前目标是可靠、高效地运行已经转换为 LWM 格式的
-> PP-OCRv6 tiny 模型。
+> PP-OCRv6 Tiny、Small 和 Medium；Tiny 为默认模型，Small/Medium 为可选 preview。
+
+## v0.2.0-preview.1 发布候选
+
+这一版通过同一套纯 C Runtime 提供 PP-OCRv6 Tiny、Small、Medium。Tiny 继续作为默认，
+Small 和 Medium 通过独立 Runtime Model Pack 与自包含浏览器文件提供。公共 C ABI 和
+LWM v0.1 格式仍未冻结。
+
+请从 [GitHub Releases](https://github.com/lxw112190/lw.PPOCR.C/releases) 按用途下载：
+
+| 用途 | Release 文件 | 说明 |
+|---|---|---|
+| 双击使用离线 OCR | `*-ocr-demo.html` | Tiny，手机和通用场景首选 |
+| 体验更大浏览器模型 | `*-ocr-demo-small.html` / `*-ocr-demo-medium.html` | Small 按需选择；Medium 桌面优先 |
+| 网页集成 OCR | `*-web-sdk.js` / `*-web-sdk-small.js` / `*-web-sdk-medium.js` | `LwPpocr` API 相同，内嵌模型不同 |
+| 原生 C/C++ | `*-windows-x64-msvc.zip` / `*-linux-x86_64.tar.gz` | 默认内置 Tiny |
+| Android ARM64 | `*-android-arm64.aar` / `*-android-arm64-demo.apk` | `arm64-v8a`、`minSdk 21`、Tiny |
+| 桌面 Java/JNI | `*-java-jni-windows-x64.zip` / `*-java-jni-linux-x64.tar.gz` / `*-java-jni-macos-arm64.tar.gz` | Java 8+ 控制台接入 |
+| Node.js | `*-node-wasm.zip` | Node 18+ 原始 WASM 包，Tiny |
+| 原生端切换模型 | `*-ppocrv6-{tiny,small,medium}-runtime.zip` | 带 manifest 和哈希的命名空间模型包 |
+
+下载产物时请同时下载并验证校验文件。Android 的 `SHA256SUMS.txt` 同时覆盖 AAR 和 APK，
+其他主要产物使用同名 `.sha256`。不要混用不同 Release 的二进制、SDK、模型或字典。
+从 `0.1.x` 升级时应整体替换同一版本的配套文件，并重新编译 Native/Managed 调用方，
+因为 ABI 尚未冻结。详见[开发包说明](docs/package.md)和
+[模型选型矩阵](docs/supported-models.md)。
 
 ## 主要功能
 
@@ -53,7 +78,7 @@ PP-OCR ONNX 模型
 
 ## 当前支持范围
 
-- 模型：PP-OCRv6 tiny；
+- 模型：PP-OCRv6 Tiny（默认），Small/Medium（可选 preview，独立模型包与浏览器产物）；
 - 精度与设备：FP32、CPU；
 - 指令集：标量、x86 SSE2/AVX2、AArch64 NEON、LoongArch LSX；
 - 线程模型：单个 OCR 句柄仍由调用方串行使用；句柄内部先以独立 CPU 预算执行 DET，
@@ -252,13 +277,13 @@ Java `demo-java` 的 Debug/Release 变体但不上传。CI 通过不代表
 ### 桌面 Java/JVM JNI 示例
 
 开发包现在还包含一个克制的 Java 8+ 控制台消费者示例，位于
-`examples/java-jni/`，目前在 Windows x64 和 Linux x64 上由 CI 验证。它使用
+`examples/java-jni/`，目前在 Windows x64、Linux x64 和 macOS ARM64 上由 CI 验证。它使用
 标准库 `ImageIO` 读取 JPEG/PNG/BMP，通过 `lw_ppocr_java` 调用现有 C ABI，
 保留只返回按阅读顺序排列文字的兼容 API，同时提供包含原图四点坐标、检测分数和
 识别分数的不可变 `OcrResult`/`OcrLine` 详细结果 API。该示例不包含 UI、Android、
 Maven 构件、native 自动加载或模型下载。详见
 [`examples/java-jni/README.zh-CN.md`](examples/java-jni/README.zh-CN.md)。
-同一个 workflow 还会发布带 SHA-256 校验的 Windows/Linux Java JNI bundle，
+同一个 workflow 还会发布带 SHA-256 校验的 Windows/Linux/macOS Java JNI bundle，
 用于 CI 验证后的集成测试；正式 tagged release 会把同一份已验证内容重新打包为带版本号的 ZIP/TAR.GZ 资产。
 
 ### Node.js WASM 发行包

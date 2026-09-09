@@ -103,9 +103,10 @@ See `managed-demos.md` for commands and security boundaries.
 The package also contains `examples/java-jni/`, a Java 8+ desktop consumer.
 It builds a thin `lw_ppocr_java` JNI library against the installed CMake
 package, uses Java `ImageIO` for JPEG/PNG/BMP input, and returns ordered text
-lines. It is CI-verified on Windows x64 and Linux x64; it is not an Android or
-Maven distribution. See the example's bilingual README for the complete
-compile/run commands and the Windows `PATH` requirement for dependent DLLs.
+lines. It is CI-verified on Windows x64, Linux x64, and macOS ARM64; it is not
+an Android or Maven distribution. See the example's bilingual README for the
+complete compile/run commands, Windows `PATH` requirement, and Linux/macOS
+RPATH behavior.
 
 Start the native HTTP Demo from the extracted package root:
 

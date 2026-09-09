@@ -1,8 +1,9 @@
 # Java/JVM JNI OCR example
 
 This is a deliberately small desktop Java consumer of the installed
-`lw.PPOCR.C` package. It supports Java 8+, Windows x64 and Linux x64, and
-uses `ImageIO` for JPEG/PNG/BMP decoding. The JNI layer calls the existing
+`lw.PPOCR.C` package. It supports Java 8+ on Windows x64, Linux x64, and
+macOS ARM64, and uses `ImageIO` for JPEG/PNG/BMP decoding. The JNI layer
+calls the existing
 `lw_ocr_*` C ABI; it does not change the runtime, LWM format, or public C
 header.
 
@@ -46,14 +47,17 @@ java "-Djava.library.path=$native" -cp .\build-java-classes OcrDemo `
   C:\lw.PPOCR.C\models C:\lw.PPOCR.C\models\sample.jpg
 ```
 
-Linux embeds an `$ORIGIN` RPATH.
+Linux embeds an `$ORIGIN` RPATH. macOS embeds an `@loader_path` RPATH, so the
+matching core library can remain beside the JNI library without an extra
+`DYLD_LIBRARY_PATH` setting.
 
 ## Download a CI-tested bundle
 
 The `Desktop Java JNI OCR` GitHub Actions workflow can be dispatched manually
-or runs for changes affecting this example. It publishes two temporary Actions
-artifacts: `lw-ppocr-java-jni-windows-x64` and
-`lw-ppocr-java-jni-linux-x64`. They contain the native dependency closure,
+or runs for changes affecting this example. It publishes three temporary Actions
+artifacts: `lw-ppocr-java-jni-windows-x64`,
+`lw-ppocr-java-jni-linux-x64`, and `lw-ppocr-java-jni-macos-arm64`. They
+contain the native dependency closure,
 Java sources, models, licenses, build provenance, and `SHA256SUMS.txt`.
 These are CI downloads retained for 14 days. The tagged release workflow
 repackages the same verified contents as versioned ZIP/TAR.GZ assets; this is
@@ -73,6 +77,15 @@ On Linux:
 ```bash
 javac -encoding UTF-8 -d classes java/NativeOcr.java java/OcrLine.java java/OcrResult.java java/OcrDemo.java
 java -Djava.library.path="$PWD/native" -cp classes OcrDemo \
+  "$PWD/models" "$PWD/models/sample.jpg"
+```
+
+On macOS ARM64:
+
+```bash
+javac -encoding UTF-8 -d classes java/NativeOcr.java java/OcrLine.java java/OcrResult.java java/OcrDemo.java
+LC_ALL=en_US.UTF-8 java -Dfile.encoding=UTF-8 \
+  -Djava.library.path="$PWD/native" -cp classes OcrDemo \
   "$PWD/models" "$PWD/models/sample.jpg"
 ```
 

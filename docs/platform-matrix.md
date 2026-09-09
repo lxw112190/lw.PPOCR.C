@@ -8,6 +8,7 @@ verification.
 | Windows x64 (VS 2022 baseline) | Yes | Yes | Windows 10 development host | Full OCR, DLL/static package and installed HTTP Demo pass |
 | Linux x86_64 (Ubuntu 22.04 baseline) | Yes | Yes | No | Full OCR, package and installed HTTP Demo pass in CI |
 | Browser WASM (modern Chromium / Firefox / Safari) | Yes | Yes | No | Standalone HTML runs real OCR repeatedly with stable WASM heap in CI; SIMD128 is enabled by default |
+| Desktop Java/JNI macOS ARM64 | Integration target | Yes | No | Java 8 JNI bundle, dependency closure, `@loader_path` RPATH, checksums, and 16-line OCR smoke pass on a hosted Apple Silicon runner; this is not a general native package claim |
 | Linux ARM64 (Ubuntu 22.04 baseline) | Yes | Pending next manual workflow run | No | Native build selects NEON; direct packed Conv1x1, regular 3x3 and ConvTranspose correctness plus installed-package OCR are workflow gates |
 | Linux LoongArch64 (Debian 13 baseline) | Experimental | Pending next manual QEMU run | No | Generic package detects LSX/LASX and keeps scalar fallback; LSX packed Conv1x1 is built separately, while customer hardware validation is still required |
 | Windows 7 SP1 x64 | Yes | No | No | Planned compatibility validation |

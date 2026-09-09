@@ -58,6 +58,39 @@ class VersionConsistencyTest(unittest.TestCase):
         self.assertIn(f"git tag -a v{version}-preview.1", package_doc)
         self.assertIn(f'for example "{version}"', web_doc)
 
+    def test_release_candidate_documentation_matches_supported_outputs(self) -> None:
+        version = self.project_version()
+        preview = f"{version}-preview.1"
+        readme = (ROOT / "README.md").read_text(encoding="utf-8")
+        readme_zh = (ROOT / "README.zh-CN.md").read_text(encoding="utf-8")
+        platform_matrix = (ROOT / "docs" / "platform-matrix.md").read_text(
+            encoding="utf-8"
+        )
+        java_readme = (ROOT / "examples" / "java-jni" / "README.md").read_text(
+            encoding="utf-8"
+        )
+        java_readme_zh = (
+            ROOT / "examples" / "java-jni" / "README.zh-CN.md"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn(f"## v{preview} release candidate", readme)
+        self.assertIn(f"## v{preview} 发布候选", readme_zh)
+        for token in ("Tiny", "Small", "Medium", "android-arm64.aar"):
+            self.assertIn(token, readme)
+        for token in ("Tiny", "Small", "Medium", "android-arm64.aar"):
+            self.assertIn(token, readme_zh)
+        self.assertIn("Do not mix binaries", readme)
+        self.assertIn("不要混用不同 Release", readme_zh)
+
+        for artifact in (
+            "lw-ppocr-java-jni-windows-x64",
+            "lw-ppocr-java-jni-linux-x64",
+            "lw-ppocr-java-jni-macos-arm64",
+        ):
+            self.assertIn(artifact, java_readme)
+            self.assertIn(artifact, java_readme_zh)
+        self.assertIn("Desktop Java/JNI macOS ARM64", platform_matrix)
+
 
 if __name__ == "__main__":
     unittest.main()

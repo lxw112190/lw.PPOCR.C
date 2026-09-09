@@ -1,7 +1,7 @@
 # Java/JVM JNI OCR 示例
 
 这是一个非常小的桌面 Java 消费者示例，面向已经安装的
-`lw.PPOCR.C` 开发包。支持 Java 8+、Windows x64 和 Linux x64，图片解码
+`lw.PPOCR.C` 开发包。支持 Java 8+、Windows x64、Linux x64 和 macOS ARM64，图片解码
 直接使用标准库 `ImageIO`，JNI 只调用现有 `lw_ocr_*` C ABI，不修改 Runtime、
 LWM 格式或公共 C 头文件。
 
@@ -43,13 +43,15 @@ java "-Djava.library.path=$native" -cp .\build-java-classes OcrDemo `
   C:\lw.PPOCR.C\models C:\lw.PPOCR.C\models\sample.jpg
 ```
 
-Linux 会设置 `$ORIGIN` RPATH。
+Linux 会设置 `$ORIGIN` RPATH。macOS 会设置 `@loader_path` RPATH，因此匹配的
+核心动态库可以直接放在 JNI 动态库旁边，无需额外设置 `DYLD_LIBRARY_PATH`。
 
 ## 下载 CI 验证的 bundle
 
 `Desktop Java JNI OCR` GitHub Actions workflow 支持手动运行，也会在影响
-本示例的代码变更时运行。它会生成两个临时 Actions artifact：
-`lw-ppocr-java-jni-windows-x64` 和 `lw-ppocr-java-jni-linux-x64`。其中包含
+本示例的代码变更时运行。它会生成三个临时 Actions artifact：
+`lw-ppocr-java-jni-windows-x64`、`lw-ppocr-java-jni-linux-x64` 和
+`lw-ppocr-java-jni-macos-arm64`。其中包含
 native 依赖闭包、Java 源码、模型、许可证、构建信息以及
 `SHA256SUMS.txt`。Actions 中的 bundle 保留 14 天；tagged release 会将同一份
 已验证内容重新打包为带版本号的 ZIP/TAR.GZ。它仍是 Preview 集成包，不代表
@@ -69,6 +71,15 @@ Linux 下：
 ```bash
 javac -encoding UTF-8 -d classes java/NativeOcr.java java/OcrLine.java java/OcrResult.java java/OcrDemo.java
 java -Djava.library.path="$PWD/native" -cp classes OcrDemo \
+  "$PWD/models" "$PWD/models/sample.jpg"
+```
+
+macOS ARM64 下：
+
+```bash
+javac -encoding UTF-8 -d classes java/NativeOcr.java java/OcrLine.java java/OcrResult.java java/OcrDemo.java
+LC_ALL=en_US.UTF-8 java -Dfile.encoding=UTF-8 \
+  -Djava.library.path="$PWD/native" -cp classes OcrDemo \
   "$PWD/models" "$PWD/models/sample.jpg"
 ```
 
