@@ -65,6 +65,8 @@ latency, checksum, and RSS measurements only.
 The Native x64 OCR Performance workflow runs this experiment at 1 worker/1 DET
 thread and 4 workers/4 DET threads. The JSON and Markdown outputs are uploaded
 as the `lw-ppocr-x64-fma-ocr-results-*` artifact.
+The Conv1x1 summary also lists the three slowest and three fastest shapes,
+which is the input for a future shape-aware dispatch policy.
 
 ## Promotion gate
 

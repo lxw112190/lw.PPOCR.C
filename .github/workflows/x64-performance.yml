@@ -184,6 +184,13 @@ jobs:
             if ($fmaCases.Count -ne $json.cases.Count) { throw "FMA fields missing for width $width" }
             $ratios = @($fmaCases | ForEach-Object { [double]$_.dispatched_ms / [double]$_.fma_ms })
             $errors = @($fmaCases | ForEach-Object { [double]$_.fma_max_abs_error })
+            $rankedCases = @($fmaCases | ForEach-Object {
+              [pscustomobject]@{ name = $_.name; dispatch_over_fma = [double]$_.dispatched_ms / [double]$_.fma_ms }
+            })
+            $slowestCases = @($rankedCases | Sort-Object dispatch_over_fma | Select-Object -First 3)
+            $fastestCases = @($rankedCases | Sort-Object dispatch_over_fma -Descending | Select-Object -First 3)
+            $slowestText = ($slowestCases | ForEach-Object { "$($_.name)=$([math]::Round($_.dispatch_over_fma, 3))x" }) -join ", "
+            $fastestText = ($fastestCases | ForEach-Object { "$($_.name)=$([math]::Round($_.dispatch_over_fma, 3))x" }) -join ", "
             $sortedRatios = @($ratios | Sort-Object)
             $summary = [pscustomobject]@{
               width = $width
@@ -193,6 +200,8 @@ jobs:
               minimum_dispatch_over_fma = ($ratios | Measure-Object -Minimum).Minimum
               maximum_dispatch_over_fma = ($ratios | Measure-Object -Maximum).Maximum
               maximum_absolute_error = ($errors | Measure-Object -Maximum).Maximum
+              slowest_cases = $slowestText
+              fastest_cases = $fastestText
             }
             $json | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath "x64-fma-results/conv1x1-$width.json" -Encoding utf8
             $summary | ConvertTo-Json | Set-Content -LiteralPath "x64-fma-results/conv1x1-$width-summary.json" -Encoding utf8
@@ -201,6 +210,8 @@ jobs:
             "- median dispatch/FMA: $([double]$summary.median_dispatch_over_fma)" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
             "- range: $([double]$summary.minimum_dispatch_over_fma) - $([double]$summary.maximum_dispatch_over_fma)" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
             "- max absolute error: $([double]$summary.maximum_absolute_error)" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+            "- slowest shapes: $($summary.slowest_cases)" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+            "- fastest shapes: $($summary.fastest_cases)" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
           }
       - name: Build experimental FMA OCR driver
         shell: pwsh
