@@ -19,37 +19,41 @@ and model files are unchanged.
 
 ## FMA candidate
 
-src/simd/avx2_fma_packed_conv1x1.c is an isolated candidate implementation.
+src/simd/avx2_fma_packed_conv1x1.c is an isolated Conv1x1 candidate.
 It uses the same PACKED4 weight layout and geometry as the current AVX2
-Conv1x1 kernel, but uses explicit _mm256_fmadd_ps instructions. It is
-compiled with AVX2+FMA target attributes on GCC/Clang and /arch:AVX2 on
-MSVC.
+Conv1x1 kernel, but uses explicit _mm256_fmadd_ps instructions. The second
+candidate, src/simd/avx2_fma_packed_matmul.c, covers only the Tiny terminal
+CTC projection shape `[1,40,80] x [80,6906]` and keeps the existing packed
+weight layout. Both are compiled with AVX2+FMA target attributes on GCC/Clang
+and `/arch:AVX2` on MSVC.
 
-The candidate is deliberately not connected to the default production dispatch. This
-keeps non-FMA hosts safe and preserves the current deterministic OCR path. A
-native-only experimental build may opt into a shape-aware dispatch policy while
-paired A/B data is collected.
+The candidates are deliberately not connected to the default production dispatch.
+This keeps non-FMA hosts safe and preserves the current deterministic OCR path.
+A native-only experimental build may opt into a shape-aware dispatch policy
+while paired A/B data is collected.
 
 ## Benchmark contract
 
-The existing packed Conv1x1 benchmark reports optional fields when the host
-supports AVX2+FMA:
+The packed Conv1x1 benchmark reports optional fields when the host supports
+AVX2+FMA. The packed MatMul benchmark separately measures the terminal
+projection shape and checks its argmax contract:
 
 - fma_ms;
 - fma_speedup;
 - fma_max_abs_error;
 - fma_checksum.
 
-The candidate must remain finite and within the current exploratory absolute
-error bound of 1e-2. The smoke test only validates that it is measurable,
-machine-readable, and numerically bounded; it does not promote it to the
+The candidates must remain finite and within the current exploratory absolute
+error bound of `1e-2`. The smoke tests only validate that they are measurable,
+machine-readable, and numerically bounded; they do not promote them to the
 default backend.
 
 Run locally after configuring a Release build:
 
-    cmake --build build --target packed-conv1x1-benchmark-driver --config Release
+    cmake --build build --target packed-conv1x1-benchmark-driver packed-matmul-benchmark-driver --config Release
     build\Release\packed-conv1x1-benchmark-driver.exe 960 20
-    ctest --test-dir build -C Release -R packed_conv1x1_benchmark_smoke --output-on-failure
+    build\Release\packed-matmul-benchmark-driver.exe 20
+    ctest --test-dir build -C Release -R "packed_(conv1x1|matmul)_benchmark_smoke" --output-on-failure
 
 ## End-to-end experiment build
 
@@ -61,8 +65,8 @@ normal dispatch. Configure that build with:
 Then run the same `full-ocr-intra-benchmark` command against the default and
 `build-fma` binaries. The experimental option is native-only, defaults to OFF,
 and does not change the public ABI or model files. The performance workflow also
-builds the experimental Conv1x1 driver and runs its smoke test. It is intended
-for paired latency, checksum, and RSS measurements only.
+builds the experimental Conv1x1 and terminal MatMul drivers and runs both smoke
+tests. It is intended for paired latency, checksum, and RSS measurements only.
 
 The Native x64 OCR Performance workflow runs this experiment at 1 worker/1 DET
 thread and 4 workers/4 DET threads. The JSON and Markdown outputs are uploaded
@@ -73,16 +77,16 @@ which is the input for a future shape-aware dispatch policy.
 ## Shape-aware experimental dispatch
 
 `LW_EXPERIMENTAL_AVX2_FMA_DISPATCH=ON` enables a native-only policy that routes
-only the measured beneficial Tiny/REC shapes to the FMA candidate. Unknown shapes
-and the measured regressions (the large medium/late shapes) remain on regular AVX2.
+only the measured beneficial Tiny/REC Conv1x1 shapes and the terminal Tiny MatMul
+shape to the FMA candidates. Unknown shapes and the measured Conv1x1 regressions
+(the large medium/late shapes) remain on regular AVX2.
 The default build keeps the existing AVX2 dispatch and is unchanged.
 
-The experimental benchmark accepts the small FMA rounding difference with a
-`1.0e-2` maximum absolute error bound; the default benchmark remains byte-exact.
-On the local paired 4-worker/DET4 sample, the shape-aware build reduced mean OCR
-latency by 5.45% with a 0.15 MiB RSS increase, identical checksum, and 16 lines.
-These numbers are directional only; promotion still requires the gates below on the
-full corpus.
+The experimental benchmarks accept the small FMA rounding difference with a
+`1.0e-2` maximum absolute error bound; the default benchmarks remain byte-exact.
+The terminal MatMul candidate improves the isolated local benchmark by about 1.4x
+over the existing AVX2 path. Full OCR remains checksum-identical in local paired
+runs; promotion still requires the gates below on the full corpus.
 
 ## Promotion gate
 

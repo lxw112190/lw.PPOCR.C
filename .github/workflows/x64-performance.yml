@@ -235,9 +235,9 @@ jobs:
           )
           cmake @configureArgs
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          cmake --build build-x64-fma --config Release --parallel 2 --target full-ocr-intra-benchmark packed-conv1x1-benchmark-driver
+          cmake --build build-x64-fma --config Release --parallel 2 --target full-ocr-intra-benchmark packed-conv1x1-benchmark-driver packed-matmul-benchmark-driver
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          ctest --test-dir build-x64-fma -C Release --output-on-failure -R '^packed_conv1x1_benchmark_smoke$'
+          ctest --test-dir build-x64-fma -C Release --output-on-failure -R '^(packed_conv1x1_benchmark_smoke|packed_matmul_benchmark_smoke)$'
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Compare default and experimental FMA OCR
         shell: pwsh

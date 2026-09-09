@@ -13,7 +13,7 @@ option(LW_WASM_SIMD128
 option(LW_REC_RESIDENT_WIDTHS
     "Prewarm all standard REC widths for native performance experiments" OFF)
 option(LW_EXPERIMENTAL_AVX2_FMA_DISPATCH
-    "Use the experimental AVX2+FMA Conv1x1 path in native builds" OFF)
+    "Use experimental AVX2+FMA Conv1x1 and terminal MatMul paths in native builds" OFF)
 set(LW_WASM_HOST_ABI_VERSION "1" CACHE STRING
     "WASM Host ABI version embedded in the Web adapter and Node manifest")
 set(LW_LWM_FORMAT_VERSION "0.1" CACHE STRING
@@ -222,6 +222,7 @@ set(LW_PPOCR_C_SOURCES
     src/simd/avx2_erf.c
     src/simd/avx2_softmax.c
     src/simd/avx2_matmul.c
+    src/simd/avx2_fma_packed_matmul.c
     src/simd/avx2_packed_conv1x1.c
     src/simd/avx2_fma_packed_conv1x1.c
     src/simd/cpu_features.c
@@ -249,6 +250,7 @@ if(MSVC AND MSVC_C_ARCHITECTURE_ID MATCHES "^(x64|X86)$")
         src/simd/avx2_depthwise5x5.c
         src/simd/avx2_depthwise9x9.c
         src/simd/avx2_erf.c src/simd/avx2_matmul.c
+        src/simd/avx2_fma_packed_matmul.c
         src/simd/avx2_packed_conv1x1.c src/simd/avx2_fma_packed_conv1x1.c APPEND PROPERTY
         COMPILE_OPTIONS /arch:AVX2 /fp:strict)
     set_property(SOURCE src/simd/cpu_features.c APPEND PROPERTY
@@ -1192,6 +1194,9 @@ if(BUILD_TESTING AND NOT EMSCRIPTEN)
         "${CMAKE_CURRENT_SOURCE_DIR}/src/kernels"
         "${CMAKE_CURRENT_SOURCE_DIR}/src/simd")
     target_compile_features(packed-matmul-benchmark-driver PRIVATE c_std_11)
+    if(LW_EXPERIMENTAL_AVX2_FMA_DISPATCH)
+        target_compile_definitions(packed-matmul-benchmark-driver PRIVATE LW_EXPERIMENTAL_AVX2_FMA_DISPATCH=1)
+    endif()
     if(MSVC)
         target_compile_options(packed-matmul-benchmark-driver PRIVATE /W4 /WX /utf-8)
     else()

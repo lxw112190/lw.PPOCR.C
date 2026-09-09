@@ -38,6 +38,10 @@ void lw_avx2_packed_matmul_bias_argmax_f32(
     const float* input, const float* packed_weights, const float* bias, float* output,
     uint32_t* best_indices, uint32_t batch_count, uint32_t rows,
     uint32_t inner_dimension, uint32_t columns);
+void lw_avx2_fma_packed_matmul_bias_argmax_f32(
+    const float* input, const float* packed_weights, const float* bias, float* output,
+    uint32_t* best_indices, uint32_t batch_count, uint32_t rows,
+    uint32_t inner_dimension, uint32_t columns);
 void lw_sse2_conv1x1_unit_f32(const float* input, const float* weights, const float* bias,
                               float* output, const int32_t input_dimensions[4],
                               const int32_t output_dimensions[4], uint32_t groups,
