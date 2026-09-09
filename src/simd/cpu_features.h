@@ -41,4 +41,18 @@ static inline int lw_simd_level_has_packed_conv1x1(lw_simd_level level) {
 lw_simd_level lw_detect_simd_level(void);
 const char* lw_simd_level_name(lw_simd_level level);
 
+/*
+ * SIMD backends are mutually exclusive, while these flags describe optional
+ * capabilities layered on top of a backend. The snapshot is internal-facing;
+ * the public C ABI and model format do not expose CPU features.
+ */
+typedef struct lw_cpu_capabilities {
+    lw_simd_level simd;
+    int has_fma;
+    int has_avx2_fma;
+} lw_cpu_capabilities;
+
+/* Detects the host once during session initialization. */
+lw_cpu_capabilities lw_get_cpu_capabilities(void);
+
 #endif

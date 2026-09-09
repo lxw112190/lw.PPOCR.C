@@ -12,6 +12,8 @@ option(LW_WASM_SIMD128
     "Enable portable WebAssembly SIMD128 for the standalone OCR HTML" ON)
 option(LW_REC_RESIDENT_WIDTHS
     "Prewarm all standard REC widths for native performance experiments" OFF)
+option(LW_EXPERIMENTAL_AVX2_FMA_DISPATCH
+    "Use the experimental AVX2+FMA Conv1x1 path in native builds" OFF)
 set(LW_WASM_HOST_ABI_VERSION "1" CACHE STRING
     "WASM Host ABI version embedded in the Web adapter and Node manifest")
 set(LW_LWM_FORMAT_VERSION "0.1" CACHE STRING
@@ -221,6 +223,7 @@ set(LW_PPOCR_C_SOURCES
     src/simd/avx2_softmax.c
     src/simd/avx2_matmul.c
     src/simd/avx2_packed_conv1x1.c
+    src/simd/avx2_fma_packed_conv1x1.c
     src/simd/cpu_features.c
     src/simd/lsx_packed_conv1x1.c
     src/simd/neon_conv3x3.c
@@ -246,7 +249,7 @@ if(MSVC AND MSVC_C_ARCHITECTURE_ID MATCHES "^(x64|X86)$")
         src/simd/avx2_depthwise5x5.c
         src/simd/avx2_depthwise9x9.c
         src/simd/avx2_erf.c src/simd/avx2_matmul.c
-        src/simd/avx2_packed_conv1x1.c APPEND PROPERTY
+        src/simd/avx2_packed_conv1x1.c src/simd/avx2_fma_packed_conv1x1.c APPEND PROPERTY
         COMPILE_OPTIONS /arch:AVX2 /fp:strict)
     set_property(SOURCE src/simd/cpu_features.c APPEND PROPERTY
         COMPILE_OPTIONS /arch:AVX)
@@ -324,6 +327,9 @@ lw_configure_runtime_target(lw_ppocr_c)
 if(LW_REC_RESIDENT_WIDTHS AND NOT EMSCRIPTEN)
     target_compile_definitions(lw_ppocr_c PRIVATE LW_REC_RESIDENT_WIDTHS=1)
 endif()
+if(LW_EXPERIMENTAL_AVX2_FMA_DISPATCH AND NOT EMSCRIPTEN)
+    target_compile_definitions(lw_ppocr_c PRIVATE LW_EXPERIMENTAL_AVX2_FMA_DISPATCH=1)
+endif()
 
 if(NOT EMSCRIPTEN AND NOT LW_RUNTIME_ONLY)
 add_library(lw_ppocr_c_shared SHARED ${LW_PPOCR_C_SOURCES})
@@ -339,6 +345,9 @@ target_compile_definitions(lw_ppocr_c_shared
 lw_configure_runtime_target(lw_ppocr_c_shared)
 if(LW_REC_RESIDENT_WIDTHS)
     target_compile_definitions(lw_ppocr_c_shared PRIVATE LW_REC_RESIDENT_WIDTHS=1)
+endif()
+if(LW_EXPERIMENTAL_AVX2_FMA_DISPATCH)
+    target_compile_definitions(lw_ppocr_c_shared PRIVATE LW_EXPERIMENTAL_AVX2_FMA_DISPATCH=1)
 endif()
 endif()
 

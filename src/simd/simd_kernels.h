@@ -51,6 +51,9 @@ void lw_avx2_conv1x1_unit_f32(const float* input, const float* weights, const fl
 void lw_sse2_packed_conv1x1_f32(const float* input, const float* packed_weights, const float* bias,
                                 float* output, const int32_t input_dimensions[4],
                                 const int32_t output_dimensions[4]);
+void lw_avx2_fma_packed_conv1x1_f32(const float* input, const float* packed_weights, const float* bias,
+                                      float* output, const int32_t input_dimensions[4],
+                                      const int32_t output_dimensions[4]);
 void lw_avx2_packed_conv1x1_f32(const float* input, const float* packed_weights, const float* bias,
                                 float* output, const int32_t input_dimensions[4],
                                 const int32_t output_dimensions[4]);

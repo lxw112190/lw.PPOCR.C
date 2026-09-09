@@ -103,7 +103,15 @@ void lw_scalar_packed_conv1x1_f32(const float* input, const float* packed_weight
 void lw_packed_conv1x1_f32(const float* input, const float* packed_weights, const float* bias,
                            float* output, const int32_t input_dimensions[4],
                            const int32_t output_dimensions[4]) {
-    lw_simd_level simd_level = lw_detect_simd_level();
+    const lw_cpu_capabilities capabilities = lw_get_cpu_capabilities();
+    const lw_simd_level simd_level = capabilities.simd;
+#if defined(LW_EXPERIMENTAL_AVX2_FMA_DISPATCH)
+    if (capabilities.has_avx2_fma) {
+        lw_avx2_fma_packed_conv1x1_f32(input, packed_weights, bias, output, input_dimensions,
+                                       output_dimensions);
+        return;
+    }
+#endif
     if (lw_simd_level_is_avx2(simd_level)) {
         lw_avx2_packed_conv1x1_f32(input, packed_weights, bias, output, input_dimensions,
                                    output_dimensions);

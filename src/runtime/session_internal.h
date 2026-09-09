@@ -5,6 +5,7 @@
 
 #include "model_internal.h"
 #include "parallel_internal.h"
+#include "../simd/cpu_features.h"
 
 #include <stddef.h>
 #include <stdint.h>
@@ -46,6 +47,7 @@ typedef struct lw_runtime_tensor {
 
 struct lw_session {
     const lw_model* model;
+    lw_cpu_capabilities cpu;
     lw_runtime_tensor* tensors;
     uint8_t* workspace;
     size_t workspace_bytes;

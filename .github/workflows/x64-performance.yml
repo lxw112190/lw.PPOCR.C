@@ -140,7 +140,8 @@ jobs:
           cmake @configureArgs
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           cmake --build build-x64 --config Release --parallel 2 --target `
-            full-ocr-profile-driver full-ocr-intra-benchmark simd-backend-driver
+            full-ocr-profile-driver full-ocr-intra-benchmark simd-backend-driver `
+            packed-conv1x1-benchmark-driver
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Require AVX2 backend
         shell: pwsh
@@ -157,6 +158,50 @@ jobs:
         run: |
           ctest --test-dir build-x64 -C Release --output-on-failure -R '^simd_backend_detection$'
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Collect AVX2 FMA Conv1x1 A/B benchmark
+        shell: pwsh
+        env:
+          FMA_ITERATIONS: ${{ inputs.iterations }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          New-Item -ItemType Directory -Force -Path x64-fma-results | Out-Null
+          $features = & build-x64/Release/simd-backend-driver.exe
+          if (($features -join "`n") -notmatch "avx2_fma=1") {
+            "AVX2+FMA is unavailable on this runner; candidate benchmark skipped." |
+              Set-Content -LiteralPath x64-fma-results/SKIPPED.txt -Encoding utf8
+            "### Conv1x1 AVX2+FMA A/B" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+            "- skipped: runner does not report avx2_fma=1" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+            exit 0
+          }
+          $driver = (Resolve-Path 'build-x64/Release/packed-conv1x1-benchmark-driver.exe').Path
+          foreach ($width in @(320, 960)) {
+            $raw = & $driver $width $env:FMA_ITERATIONS
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            $json = ($raw -join "`n") | ConvertFrom-Json
+            if ($json.schema_version -ne 1) { throw "unexpected benchmark schema for width $width" }
+            if ($json.backend -ne 'avx2') { throw "FMA benchmark requires AVX2, got $($json.backend)" }
+            $fmaCases = @($json.cases | Where-Object { $_.PSObject.Properties.Name -contains 'fma_ms' })
+            if ($fmaCases.Count -ne $json.cases.Count) { throw "FMA fields missing for width $width" }
+            $ratios = @($fmaCases | ForEach-Object { [double]$_.dispatched_ms / [double]$_.fma_ms })
+            $errors = @($fmaCases | ForEach-Object { [double]$_.fma_max_abs_error })
+            $sortedRatios = @($ratios | Sort-Object)
+            $summary = [pscustomobject]@{
+              width = $width
+              iterations = [int]$json.iterations
+              cases = $fmaCases.Count
+              median_dispatch_over_fma = $sortedRatios[[int][math]::Floor(($sortedRatios.Count - 1) / 2)]
+              minimum_dispatch_over_fma = ($ratios | Measure-Object -Minimum).Minimum
+              maximum_dispatch_over_fma = ($ratios | Measure-Object -Maximum).Maximum
+              maximum_absolute_error = ($errors | Measure-Object -Maximum).Maximum
+            }
+            $json | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath "x64-fma-results/conv1x1-$width.json" -Encoding utf8
+            $summary | ConvertTo-Json | Set-Content -LiteralPath "x64-fma-results/conv1x1-$width-summary.json" -Encoding utf8
+            "### Conv1x1 AVX2+FMA A/B ($width)" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+            "- cases: $($summary.cases)" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+            "- median dispatch/FMA: $([double]$summary.median_dispatch_over_fma)" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+            "- range: $([double]$summary.minimum_dispatch_over_fma) - $([double]$summary.maximum_dispatch_over_fma)" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+            "- max absolute error: $([double]$summary.maximum_absolute_error)" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+          }
       - name: Collect native OCR profile
         shell: pwsh
         env:
@@ -199,6 +244,12 @@ jobs:
         with:
           name: lw-ppocr-x64-profile-results-${{ github.sha }}
           path: x64-profile-results/
+          if-no-files-found: error
+          retention-days: 30
+      - uses: actions/upload-artifact@v7
+        with:
+          name: lw-ppocr-x64-fma-results-${{ github.sha }}
+          path: x64-fma-results/
           if-no-files-found: error
           retention-days: 30
 

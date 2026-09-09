@@ -269,7 +269,7 @@ static const float* constant_f32_data(const lw_session* session, uint32_t tensor
 
 static lw_status prepare_constant_weights(lw_session* session, lw_error* error) {
     const lw_model* model = session->model;
-    const lw_simd_level simd_level = lw_detect_simd_level();
+    const lw_simd_level simd_level = session->cpu.simd;
     uint64_t total_bytes = 0u;
     uint32_t node_index;
     if (model->info.node_count == 0u ||
@@ -496,6 +496,7 @@ lw_status lw_session_create(const lw_model* model, const lw_tensor_desc* inputs,
     }
     session->intra_op_thread_count = 1u;
     session->model = model;
+    session->cpu = lw_get_cpu_capabilities();
     session->tensors =
         (lw_runtime_tensor*)calloc(model->info.tensor_count, sizeof(*session->tensors));
     if (session->tensors == NULL) {

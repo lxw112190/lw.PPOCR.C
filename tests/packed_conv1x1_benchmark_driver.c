@@ -1,8 +1,10 @@
 #include "cpu_features.h"
 #include "lw_infer.h"
 #include "packed_conv_internal.h"
+#include "simd_kernels.h"
 
 #include <inttypes.h>
+#include <math.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -82,6 +84,20 @@ static uint64_t checksum_bytes(const void* data, size_t bytes) {
     return hash;
 }
 
+static float max_abs_difference(const float* left, const float* right, uint64_t count) {
+    uint64_t index;
+    float maximum = 0.0f;
+    for (index = 0u; index < count; ++index) {
+        float difference = fabsf(left[(size_t)index] - right[(size_t)index]);
+        if (!isfinite(difference)) {
+            return INFINITY;
+        }
+        if (difference > maximum) {
+            maximum = difference;
+        }
+    }
+    return maximum;
+}
 static int run_case(const benchmark_case* item, uint32_t target_width, uint32_t iterations,
                     int first) {
     uint32_t spatial_width = target_width / 4u;
@@ -106,11 +122,18 @@ static int run_case(const benchmark_case* item, uint32_t target_width, uint32_t 
     double scalar_finished;
     double dispatched_started;
     double dispatched_finished;
+    double dispatched_ab_total = 0.0;
+    double fma_ab_total = 0.0;
     double scalar_ms;
     double dispatched_ms;
     uint64_t checksum;
+    uint64_t fma_checksum = 0u;
+    double fma_ms = 0.0;
+    float fma_max_abs_error = 0.0f;
+    int has_fma = 0;
     uint32_t iteration;
     int ok = 0;
+    const lw_cpu_capabilities capabilities = lw_get_cpu_capabilities();
 
     if (!lw_packed_conv1x1_weight_count(item->input_channels, item->output_channels,
                                         &packed_count) ||
@@ -159,27 +182,104 @@ static int run_case(const benchmark_case* item, uint32_t target_width, uint32_t 
                                      output_dimensions);
     }
     scalar_finished = monotonic_seconds();
-    dispatched_started = monotonic_seconds();
-    for (iteration = 0u; iteration < iterations; ++iteration) {
+    if (capabilities.has_avx2_fma) {
+        uint32_t order;
+        has_fma = 1;
+        lw_avx2_fma_packed_conv1x1_f32(input, packed, bias, output, input_dimensions,
+                                       output_dimensions);
+        fma_max_abs_error = max_abs_difference(reference, output, output_count);
+        if (!isfinite(fma_max_abs_error) || fma_max_abs_error > 1.0e-2f) {
+            fprintf(stderr, "FMA candidate correctness check failed: %s\n", item->name);
+            goto cleanup;
+        }
+        /* Alternate the order of the two candidates to reduce thermal/cache bias. */
+        for (order = 0u; order < 2u; ++order) {
+            double started;
+            double finished;
+            if (order == 0u) {
+                started = monotonic_seconds();
+                for (iteration = 0u; iteration < iterations; ++iteration) {
+                    lw_packed_conv1x1_f32(input, packed, bias, output, input_dimensions,
+                                           output_dimensions);
+                }
+                finished = monotonic_seconds();
+                if (started <= 0.0 || finished <= started) {
+                    goto cleanup;
+                }
+                dispatched_ab_total += finished - started;
+                started = monotonic_seconds();
+                for (iteration = 0u; iteration < iterations; ++iteration) {
+                    lw_avx2_fma_packed_conv1x1_f32(input, packed, bias, output, input_dimensions,
+                                                   output_dimensions);
+                }
+                finished = monotonic_seconds();
+                if (started <= 0.0 || finished <= started) {
+                    goto cleanup;
+                }
+                fma_ab_total += finished - started;
+            } else {
+                started = monotonic_seconds();
+                for (iteration = 0u; iteration < iterations; ++iteration) {
+                    lw_avx2_fma_packed_conv1x1_f32(input, packed, bias, output, input_dimensions,
+                                                   output_dimensions);
+                }
+                finished = monotonic_seconds();
+                if (started <= 0.0 || finished <= started) {
+                    goto cleanup;
+                }
+                fma_ab_total += finished - started;
+                started = monotonic_seconds();
+                for (iteration = 0u; iteration < iterations; ++iteration) {
+                    lw_packed_conv1x1_f32(input, packed, bias, output, input_dimensions,
+                                           output_dimensions);
+                }
+                finished = monotonic_seconds();
+                if (started <= 0.0 || finished <= started) {
+                    goto cleanup;
+                }
+                dispatched_ab_total += finished - started;
+            }
+        }
+        dispatched_ms = dispatched_ab_total * 1000.0 / (2.0 * iterations);
+        fma_ms = fma_ab_total * 1000.0 / (2.0 * iterations);
+        lw_avx2_fma_packed_conv1x1_f32(input, packed, bias, output, input_dimensions,
+                                       output_dimensions);
+        fma_checksum = checksum_bytes(output, output_bytes);
+        /* Restore the dispatched result before checking the existing contract. */
         lw_packed_conv1x1_f32(input, packed, bias, output, input_dimensions, output_dimensions);
+    } else {
+        dispatched_started = monotonic_seconds();
+        for (iteration = 0u; iteration < iterations; ++iteration) {
+            lw_packed_conv1x1_f32(input, packed, bias, output, input_dimensions,
+                                  output_dimensions);
+        }
+        dispatched_finished = monotonic_seconds();
+        if (dispatched_started <= 0.0 || dispatched_finished <= dispatched_started) {
+            fprintf(stderr, "packed Conv benchmark timer failed: %s\n", item->name);
+            goto cleanup;
+        }
+        dispatched_ms = (dispatched_finished - dispatched_started) * 1000.0 / iterations;
     }
-    dispatched_finished = monotonic_seconds();
     if (scalar_started <= 0.0 || scalar_finished <= scalar_started ||
-        dispatched_started <= 0.0 || dispatched_finished <= dispatched_started ||
-        memcmp(reference, output, output_bytes) != 0) {
+        dispatched_ms <= 0.0 || memcmp(reference, output, output_bytes) != 0) {
         fprintf(stderr, "packed Conv benchmark failed: %s\n", item->name);
         goto cleanup;
     }
     scalar_ms = (scalar_finished - scalar_started) * 1000.0 / iterations;
-    dispatched_ms = (dispatched_finished - dispatched_started) * 1000.0 / iterations;
     checksum = checksum_bytes(output, output_bytes);
     printf("%s{\"name\":\"%s\",\"input_channels\":%u,\"output_channels\":%u,"
            "\"height\":%u,\"width\":%u,\"scalar_ms\":%.6f,"
            "\"dispatched_ms\":%.6f,\"speedup\":%.6f,\"checksum\":\"0x%016" PRIx64
-           "\"}",
+           "\"",
            first ? "" : ",", item->name, item->input_channels, item->output_channels,
            item->height, spatial_width, scalar_ms, dispatched_ms, scalar_ms / dispatched_ms,
            checksum);
+    if (has_fma) {
+        printf(",\"fma_ms\":%.6f,\"fma_speedup\":%.6f,\"fma_max_abs_error\":%.9g,"
+               "\"fma_checksum\":\"0x%016" PRIx64 "\"", fma_ms, scalar_ms / fma_ms,
+               (double)fma_max_abs_error, fma_checksum);
+    }
+    printf("}");
     ok = 1;
 
 cleanup:

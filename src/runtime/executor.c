@@ -889,9 +889,8 @@ static lw_status execute_session_nodes_f32(lw_session* session, const float* inp
         return LW_STATUS_INVALID_ARGUMENT;
     }
     model = session->model;
-    /* One graph run can visit several SIMD-capable nodes. Detect once rather
-     * than issuing CPUID/XGETBV for every Erf operation. */
-    simd_level = lw_detect_simd_level();
+    /* The session stores one CPU capability snapshot for the complete run. */
+    simd_level = session->cpu.simd;
     if (model->info.input_count != 1u || model->info.output_count != 1u) {
         lw_set_error(error, LW_STATUS_UNSUPPORTED,
                      "private executor currently requires one input and one output");
@@ -1105,7 +1104,7 @@ static int match_packed_ctc_projection(lw_session* session, const float* graph_i
     const lw_prepared_node* prepared;
     uint32_t graph_input_index;
     if (projection == NULL || model->info.node_count < 3u ||
-        !lw_simd_level_is_avx2(lw_detect_simd_level()) || session->prepared_nodes == NULL ||
+        !lw_simd_level_is_avx2(session->cpu.simd) || session->prepared_nodes == NULL ||
         session->packed_weights == NULL) {
         return 0;
     }
