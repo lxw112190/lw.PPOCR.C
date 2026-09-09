@@ -25,6 +25,7 @@
   const overlay = document.getElementById("overlay");
   const workspace = document.getElementById("workspace");
   const previewTitle = document.getElementById("preview-title");
+  const modelInfoNode = document.getElementById("model-info");
   const toggleOverlayButton = document.getElementById("toggle-overlay");
   const showImageButton = document.getElementById("show-image");
   const showResultsButton = document.getElementById("show-results");
@@ -119,6 +120,12 @@
     else overlay.setAttribute("hidden", "");
     toggleOverlayButton.textContent = overlayVisible ? "隐藏标注" : "显示标注";
     toggleOverlayButton.setAttribute("aria-pressed", String(overlayVisible));
+  }
+
+  const modelInfo = window.LwPpocr && window.LwPpocr.modelInfo;
+  if (modelInfoNode && modelInfo && modelInfo.displayName) {
+    modelInfoNode.textContent = "· " + modelInfo.displayName;
+    modelInfoNode.title = modelInfo.family + " / " + modelInfo.variant;
   }
 
   if (!window.LwPdf) {
@@ -484,7 +491,7 @@
         throw error;
       }
     }
-    if (!window.LwPdf) {
+  if (!window.LwPdf) {
       statusNode.textContent = "当前 HTML 构建未包含 PDF 支持。";
       throw new Error("PDF support is disabled");
     }

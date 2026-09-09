@@ -20,6 +20,9 @@ def main() -> int:
     parser.add_argument("--cls", type=Path, required=True)
     parser.add_argument("--rec", type=Path, required=True)
     parser.add_argument("--dictionary", type=Path, required=True)
+    parser.add_argument("--model-family", default="PP-OCRv6")
+    parser.add_argument("--model-variant", default="tiny")
+    parser.add_argument("--model-display-name", default="PP-OCRv6 Tiny")
     parser.add_argument("--version", required=True)
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
@@ -30,6 +33,9 @@ def main() -> int:
         raise SystemExit("runtime does not contain LwPpocrModule")
     values = {
         "__LW_SDK_VERSION__": json.dumps(args.version),
+        "__LW_MODEL_FAMILY__": json.dumps(args.model_family),
+        "__LW_MODEL_VARIANT__": json.dumps(args.model_variant),
+        "__LW_MODEL_DISPLAY_NAME__": json.dumps(args.model_display_name),
         "__LW_RUNTIME_JS_JSON__": json.dumps(runtime),
         "__LW_DET_MODEL_BASE64__": encode(args.det),
         "__LW_CLS_MODEL_BASE64__": encode(args.cls),

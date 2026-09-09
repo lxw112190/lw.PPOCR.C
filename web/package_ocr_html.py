@@ -26,6 +26,7 @@ def main() -> int:
     parser.add_argument("--pdfjs-qcms", type=Path)
     parser.add_argument("--pdfjs-version")
     parser.add_argument("--no-pdf", action="store_true")
+    parser.add_argument("--title", default="lw.PPOCR.C · 离线 OCR 工作台")
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
 
@@ -77,6 +78,7 @@ def main() -> int:
 
     html = read_text(args.template)
     replacements = {
+        "__LW_HTML_TITLE__": args.title,
         "__LW_PDF_BOOTSTRAP_JS__": pdf_bootstrap,
         "__LW_SDK_JS__": read_text(args.sdk),
         "__LW_DEMO_UI_JS__": read_text(args.ui),
