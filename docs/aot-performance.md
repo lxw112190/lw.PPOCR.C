@@ -120,3 +120,31 @@ and zero reconfigurations for both one-worker and four-worker cases. The default
 Compact build keeps the original cache assertions.
 
 The manual `Native x64 OCR Performance` workflow now includes a `Native x64 Resident A/B` job. It builds both modes from the same prepared assets, runs the Resident zero-reconfiguration gate, and uploads the JSON/Markdown comparison artifact.
+
+## Terminal CTC MatMul benchmark
+
+The terminal REC projection is now covered by an isolated benchmark at its
+actual Tiny geometry: `batch=1`, `rows=40`, `inner=80`, and `columns=6906`.
+The benchmark compares the packed scalar reference (including bias and
+argmax) with the AVX2 fused `MatMul + bias + argmax` path. It is a measurement
+and result-contract test only; it does not change dispatch or the public ABI.
+
+Run it after a native build with:
+
+```powershell
+ctest --test-dir build-performance-vs -C Release -R packed_matmul_benchmark_smoke --output-on-failure
+build-performance-vs/Release/packed-matmul-benchmark-driver.exe 3
+```
+
+On the local x64 AVX2 build, three iterations measured `4.680667 ms` for the
+scalar reference and `0.794200 ms` for the fused AVX2 path, or `5.893562x`
+speedup. Both paths matched output checksum `0x0f75ad457f88c673` and argmax
+checksum `0x4facc659e45064c3`. These values are machine-specific; the CTest
+contract checks geometry, finite positive timings, and deterministic output
+checksums without imposing a latency threshold.
+
+On non-AVX2 targets the driver reports `supported=false` and exits successfully,
+so ARM, LoongArch, scalar, and WASM builds do not execute an unsafe AVX2 call.
+This benchmark is the first gate for any further terminal projection kernel
+work; a proposed change must preserve both checksums before it is compared in
+full OCR.

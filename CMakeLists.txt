@@ -1166,6 +1166,26 @@ if(BUILD_TESTING AND NOT EMSCRIPTEN)
                 --driver "$<TARGET_FILE:packed-conv1x1-benchmark-driver>")
     set_tests_properties(packed_conv1x1_benchmark_smoke PROPERTIES TIMEOUT 120)
 
+    add_executable(packed-matmul-benchmark-driver
+        tests/packed_matmul_benchmark_driver.c)
+    target_link_libraries(packed-matmul-benchmark-driver PRIVATE lw_ppocr_c)
+    target_include_directories(packed-matmul-benchmark-driver PRIVATE
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/kernels"
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/simd")
+    target_compile_features(packed-matmul-benchmark-driver PRIVATE c_std_11)
+    if(MSVC)
+        target_compile_options(packed-matmul-benchmark-driver PRIVATE /W4 /WX /utf-8)
+    else()
+        target_compile_options(packed-matmul-benchmark-driver PRIVATE
+            -Wall -Wextra -Wpedantic -Werror)
+    endif()
+    add_test(
+        NAME packed_matmul_benchmark_smoke
+        COMMAND "${Python3_EXECUTABLE}"
+                "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_packed_matmul_benchmark.py"
+                --driver "$<TARGET_FILE:packed-matmul-benchmark-driver>")
+    set_tests_properties(packed_matmul_benchmark_smoke PROPERTIES TIMEOUT 120)
+
     add_executable(conv3x3-stride2-benchmark-driver
         tests/conv3x3_stride2_benchmark_driver.c)
     target_link_libraries(conv3x3-stride2-benchmark-driver PRIVATE lw_ppocr_c)
