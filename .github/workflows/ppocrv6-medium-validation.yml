@@ -75,6 +75,16 @@ jobs:
           cache-dependency-path: requirements-converter.txt
       - name: Install converter dependencies
         run: python -m pip install -r requirements-converter.txt
+      - name: Resolve runtime model revision
+        id: runtime
+        shell: bash
+        env:
+          REQUESTED_VERSION: ${{ inputs.runtime_version }}
+        run: |
+          set -euo pipefail
+          runtime_version="${REQUESTED_VERSION}"
+          if [[ -z "${runtime_version}" ]]; then runtime_version="0.2.0-preview.1"; fi
+          echo "version=${runtime_version}" >> "${GITHUB_OUTPUT}"
       - name: Resolve Medium validation contract
         shell: bash
         env:
@@ -112,7 +122,7 @@ jobs:
           --contract ci/ppocrv6-medium-validation.json
           --build-dir build
           --output-dir build/medium-validation-report
-          --runtime-version "${{ inputs.runtime_version }}"
+          --runtime-version "${{ steps.runtime.outputs.version }}"
           --expected-full-text-sha256-override "$EXPECTED_TEXT_SHA256_OVERRIDE"
       - name: Upload Medium validation report
         if: ${{ !cancelled() }}

@@ -62,6 +62,16 @@ jobs:
           cache-dependency-path: requirements-converter.txt
       - name: Install converter dependencies
         run: python -m pip install -r requirements-converter.txt
+      - name: Resolve runtime model revision
+        id: runtime
+        shell: bash
+        env:
+          REQUESTED_VERSION: ${{ inputs.runtime_version }}
+        run: |
+          set -euo pipefail
+          runtime_version="${REQUESTED_VERSION}"
+          if [[ -z "${runtime_version}" ]]; then runtime_version="0.2.0-preview.1"; fi
+          echo "version=${runtime_version}" >> "${GITHUB_OUTPUT}"
       - name: Resolve Small validation contract
         id: contract
         shell: bash
@@ -103,7 +113,7 @@ jobs:
           --dictionary "${{ steps.contract.outputs.dictionary_path }}"
           --build-dir build
           --output-dir build/small-validation-run
-          --runtime-version "${{ inputs.runtime_version }}"
+          --runtime-version "${{ steps.runtime.outputs.version }}"
           --rec-max-width "${{ steps.contract.outputs.rec_max_width }}"
           --expected-lines "${{ steps.contract.outputs.expected_lines }}"
           --expected-full-text-sha256 "${{ steps.contract.outputs.expected_full_text_sha256 }}"

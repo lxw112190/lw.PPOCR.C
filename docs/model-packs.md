@@ -29,4 +29,23 @@ python tools/validate_runtime_model_pack.py `
 
 The input directory must contain `det.lwm`, `cls.lwm`, `rec.lwm` and `ppocr_keys.txt`. The same command works for `tiny`, `small` and `medium`. The ZIP is deterministic and stored without compression so its checksum is stable across CI runners.
 
-The first preview keeps Tiny as the default model in existing C, HTTP, Web, Android and Java packages. Small and Medium packs are opt-in native model assets until their production conversion and platform-specific validation gates are complete. On a tagged release, the Release workflow publishes `lw.PPOCR.C-<version>-ppocrv6-small-runtime.zip` and `lw.PPOCR.C-<version>-ppocrv6-medium-runtime.zip` only after the Windows and Linux validation packs have identical SHA-256 values.
+Manifest version fields are part of the pack contract:
+
+- `model_revision` must use `MAJOR.MINOR.PATCH` with an optional prerelease suffix. A leading `v` is accepted by the packager and normalized away.
+- `runtime_status` is derived from `model_revision`: revisions containing `-` are `preview`; stable revisions are `production`.
+- `minimum_runtime_version` is an independent compatibility floor and defaults to `0.2.0`.
+- `lwm_format_version` uses the `major.minor` form.
+- `recommended.rec.adaptive_width` and `recommended.rec.max_width` describe the tested REC policy.
+
+For a production revision, pass an explicit minimum runtime when needed:
+
+```powershell
+python tools/package_ppocrv6_runtime.py `
+  --input-dir build-model-pack/models `
+  --variant tiny `
+  --runtime-version 0.2.0 `
+  --minimum-runtime-version 0.2.0 `
+  --output dist/lw-ppocr-model-ppocrv6-tiny-0.2.0.zip
+```
+
+The first preview keeps Tiny as the default model in existing C, HTTP, Web, Android and Java packages. Small and Medium packs are opt-in native model assets until their production conversion and platform-specific validation gates are complete. On a tagged release, the Release workflow publishes `lw.PPOCR.C-<version>-ppocrv6-tiny-runtime.zip`, `lw.PPOCR.C-<version>-ppocrv6-small-runtime.zip` and `lw.PPOCR.C-<version>-ppocrv6-medium-runtime.zip` only after the Windows and Linux validation packs have identical SHA-256 values.

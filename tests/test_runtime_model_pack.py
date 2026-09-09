@@ -1,10 +1,14 @@
 from __future__ import annotations
+
+import json
 import tempfile
 import unittest
 import zipfile
 from pathlib import Path
-from tools.package_ppocrv6_runtime import package
+
+from tools.package_ppocrv6_runtime import build_manifest, normalize_runtime_version, package
 from tools.validate_runtime_model_pack import validate_pack
+
 
 class RuntimeModelPackTests(unittest.TestCase):
     def test_pack_is_self_contained_and_deterministic(self) -> None:
@@ -12,7 +16,12 @@ class RuntimeModelPackTests(unittest.TestCase):
             root = Path(directory)
             source = root / "models"
             source.mkdir()
-            for name, data in {"det.lwm": b"det", "cls.lwm": b"cls", "rec.lwm": b"rec", "ppocr_keys.txt": "中\n文\n".encode("utf-8")}.items():
+            for name, data in {
+                "det.lwm": b"det",
+                "cls.lwm": b"cls",
+                "rec.lwm": b"rec",
+                "ppocr_keys.txt": "中\n文\n".encode("utf-8"),
+            }.items():
                 (source / name).write_bytes(data)
             first, second = root / "first.zip", root / "second.zip"
             report = package(source, first, "small")
@@ -21,7 +30,37 @@ class RuntimeModelPackTests(unittest.TestCase):
             self.assertEqual(first.read_bytes(), second.read_bytes())
             self.assertEqual(report["variant"], "small")
             with zipfile.ZipFile(first) as archive:
-                self.assertEqual(sorted(archive.namelist()), ["SHA256SUMS", "cls.lwm", "det.lwm", "manifest.json", "ppocr_keys.txt", "rec.lwm"])
+                manifest = json.loads(archive.read("manifest.json"))
+                self.assertEqual(manifest["model_id"], "ppocrv6-small")
+                self.assertEqual(manifest["model_revision"], "0.2.0-preview.1")
+                self.assertEqual(manifest["runtime_status"], "preview")
+                self.assertEqual(manifest["minimum_runtime_version"], "0.2.0")
+                self.assertEqual(manifest["lwm_format_version"], "0.1")
+                self.assertEqual(
+                    sorted(archive.namelist()),
+                    [
+                        "SHA256SUMS",
+                        "cls.lwm",
+                        "det.lwm",
+                        "manifest.json",
+                        "ppocr_keys.txt",
+                        "rec.lwm",
+                    ],
+                )
+
+    def test_production_revision_is_marked_production(self) -> None:
+        hashes = {
+            name: "0" * 64
+            for name in ("det.lwm", "cls.lwm", "rec.lwm", "ppocr_keys.txt")
+        }
+        manifest = build_manifest("tiny", "v0.2.0", "0.1", hashes)
+        self.assertEqual(manifest["model_revision"], "0.2.0")
+        self.assertEqual(manifest["runtime_status"], "production")
+
+    def test_runtime_version_rejects_unstable_labels(self) -> None:
+        for value in ("", "latest", "main", "release", "foo", "vfoo", "1.2"):
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                normalize_runtime_version(value)
 
     def test_missing_runtime_asset_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -30,6 +69,7 @@ class RuntimeModelPackTests(unittest.TestCase):
                 (source / name).write_bytes(b"x")
             with self.assertRaises(ValueError):
                 package(source, source / "model.zip", "medium")
+
 
 if __name__ == "__main__":
     unittest.main()
