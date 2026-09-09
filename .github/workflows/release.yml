@@ -51,9 +51,17 @@ jobs:
     permissions:
       contents: read
 
+  tiny-models:
+    name: Build and validate Tiny runtime model pack
+    uses: ./.github/workflows/ppocrv6-tiny-validation.yml
+    with:
+      runtime_version: ${{ github.ref_name }}
+    permissions:
+      contents: read
+
   publish:
     name: Publish tested assets
-    needs: [native, wasm, android, java, small-models, medium-models]
+    needs: [native, wasm, android, java, tiny-models, small-models, medium-models]
     runs-on: ubuntu-22.04
     permissions:
       contents: write
@@ -95,6 +103,13 @@ jobs:
         with:
           name: lw-ppocr-android-arm64-preview
           path: release-assets/android
+
+      - name: Download tested Tiny model-pack artifacts
+        uses: actions/download-artifact@v8
+        with:
+          path: release-assets/model-packs/tiny
+          pattern: ppocrv6-tiny-validation-*
+          merge-multiple: false
 
       - name: Download tested Small model-pack artifacts
         uses: actions/download-artifact@v8
@@ -139,6 +154,7 @@ jobs:
           java_windows="lw.PPOCR.C-${VERSION}-java-jni-windows-x64.zip"
           java_linux="lw.PPOCR.C-${VERSION}-java-jni-linux-x64.tar.gz"
           models="lw.PPOCR.C-${VERSION}-ppocrv6-models.zip"
+          tiny_model="lw.PPOCR.C-${VERSION}-ppocrv6-tiny-runtime.zip"
           small_model="lw.PPOCR.C-${VERSION}-ppocrv6-small-runtime.zip"
           medium_model="lw.PPOCR.C-${VERSION}-ppocrv6-medium-runtime.zip"
 
@@ -172,27 +188,28 @@ jobs:
 
           python tools/validate_model_catalog.py models/ppocrv6-models.json
 
-          mapfile -t small_candidates < <(find release-assets/model-packs/small -type f -name 'ppocrv6-small-runtime.zip' -print | sort)
-          if [[ "${#small_candidates[@]}" -ne 2 ]]; then
-            echo "expected two validated Small model packs, found ${#small_candidates[@]}" >&2
-            printf '%s\n' "${small_candidates[@]}" >&2
-            exit 1
-          fi
-          small_hash_0="$(sha256sum "${small_candidates[0]}" | awk '{print $1}')"
-          small_hash_1="$(sha256sum "${small_candidates[1]}" | awk '{print $1}')"
-          test "${small_hash_0}" = "${small_hash_1}"
-          cp "${small_candidates[0]}" "release-assets/${small_model}"
+          select_identical_model_pack() {
+            local variant="$1"
+            local source_root="$2"
+            local output_path="$3"
+            mapfile -t candidates < <(find "$source_root" -type f -name "ppocrv6-${variant}-runtime.zip" -print | sort)
+            if [[ "${#candidates[@]}" -ne 2 ]]; then
+              echo "expected two validated ${variant} model packs, found ${#candidates[@]}" >&2
+              printf '%s\n' "${candidates[@]}" >&2
+              exit 1
+            fi
+            local hash_0="$(sha256sum "${candidates[0]}" | awk '{print $1}')"
+            local hash_1="$(sha256sum "${candidates[1]}" | awk '{print $1}')"
+            if [[ "${hash_0}" != "${hash_1}" ]]; then
+              echo "validated ${variant} model packs differ between platforms" >&2
+              exit 1
+            fi
+            cp "${candidates[0]}" "$output_path"
+          }
 
-          mapfile -t medium_candidates < <(find release-assets/model-packs/medium -type f -name 'ppocrv6-medium-runtime.zip' -print | sort)
-          if [[ "${#medium_candidates[@]}" -ne 2 ]]; then
-            echo "expected two validated Medium model packs, found ${#medium_candidates[@]}" >&2
-            printf '%s\n' "${medium_candidates[@]}" >&2
-            exit 1
-          fi
-          medium_hash_0="$(sha256sum "${medium_candidates[0]}" | awk '{print $1}')"
-          medium_hash_1="$(sha256sum "${medium_candidates[1]}" | awk '{print $1}')"
-          test "${medium_hash_0}" = "${medium_hash_1}"
-          cp "${medium_candidates[0]}" "release-assets/${medium_model}"
+          select_identical_model_pack tiny release-assets/model-packs/tiny "release-assets/${tiny_model}"
+          select_identical_model_pack small release-assets/model-packs/small "release-assets/${small_model}"
+          select_identical_model_pack medium release-assets/model-packs/medium "release-assets/${medium_model}"
 
           expected_android_aar="$(awk '$2 ~ /(^|\/)lw-ppocr-android-release\.aar$/ { print $1; exit }' "$android_source_checksums")"
           expected_android_apk="$(awk '$2 ~ /(^|\/)demo-preview\.apk$/ { print $1; exit }' "$android_source_checksums")"
@@ -233,6 +250,7 @@ jobs:
               --catalog "${GITHUB_WORKSPACE}/models/ppocrv6-models.json" \
               --output "${GITHUB_WORKSPACE}/release-assets/${models}"
             sha256sum "${models}" > "${models}.sha256"
+            sha256sum "${tiny_model}" > "${tiny_model}.sha256"
             sha256sum "${small_model}" > "${small_model}.sha256"
             sha256sum "${medium_model}" > "${medium_model}.sha256"
           )
@@ -255,8 +273,8 @@ jobs:
           fi
 
           mapfile -t assets < <(find release-assets -maxdepth 1 -type f -print | sort)
-          if [[ "${#assets[@]}" -ne 23 ]]; then
-            echo "expected twenty-three release assets, found ${#assets[@]}" >&2
+          if [[ "${#assets[@]}" -ne 25 ]]; then
+            echo "expected twenty-five release assets, found ${#assets[@]}" >&2
             printf '%s\n' "${assets[@]}" >&2
             exit 1
           fi

@@ -1,0 +1,97 @@
+name: ppocrv6-tiny-validation
+
+on:
+  workflow_call:
+    inputs:
+      runtime_version:
+        required: false
+        type: string
+        default: "0.2.0-preview.1"
+  push:
+    branches:
+      - main
+    paths:
+      - "CMakeLists.txt"
+      - "cmake/**"
+      - "src/**"
+      - "include/**"
+      - "converter/**"
+      - "tools/**"
+      - "tests/**"
+      - "models/ppocrv6-tiny/**"
+      - "requirements-converter.txt"
+      - ".github/workflows/ppocrv6-tiny-validation.yml"
+  schedule:
+    - cron: "0 3 * * 5"
+  workflow_dispatch:
+    inputs:
+      runtime_version:
+        description: "Model-pack revision recorded in manifest"
+        required: false
+        default: "0.2.0-preview.1"
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ppocrv6-tiny-validation-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    name: Tiny validation (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-2022, ubuntu-22.04]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements-converter.txt
+      - name: Install converter dependencies
+        run: python -m pip install -r requirements-converter.txt
+      - name: Resolve runtime model revision
+        id: runtime
+        shell: bash
+        env:
+          REQUESTED_VERSION: ${{ inputs.runtime_version }}
+        run: |
+          set -euo pipefail
+          runtime_version="${REQUESTED_VERSION}"
+          if [[ -z "${runtime_version}" ]]; then runtime_version="0.2.0-preview.1"; fi
+          echo "version=${runtime_version}" >> "${GITHUB_OUTPUT}"
+      - name: Configure Windows
+        if: runner.os == 'Windows'
+        shell: bash
+        run: >-
+          cmake -S . -B build -G "Visual Studio 17 2022" -A x64
+          -DBUILD_TESTING=ON
+      - name: Configure Linux
+        if: runner.os == 'Linux'
+        run: >-
+          cmake -S . -B build -G Ninja
+          -DCMAKE_BUILD_TYPE=Release
+          -DBUILD_TESTING=ON
+      - name: Build Tiny runtime target
+        run: cmake --build build --config Release --parallel 2 --target lw-ocr-ppm
+      - name: Run Tiny validation pipeline
+        shell: bash
+        run: >-
+          python tools/run_tiny_validation.py
+          --build-dir build
+          --output-dir build/tiny-validation-run
+          --runtime-version "${{ steps.runtime.outputs.version }}"
+      - name: Upload Tiny validation report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: ppocrv6-tiny-validation-${{ matrix.os }}
+          path: build/tiny-validation-run
+          if-no-files-found: error
+          retention-days: 14
