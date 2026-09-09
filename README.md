@@ -128,11 +128,12 @@ subdirectory.
 The checked PP-OCRv6 model inputs are catalogued in
 [`models/ppocrv6-models.json`](models/ppocrv6-models.json). It includes Tiny,
 Small, and Medium DET/REC assets, with one shared Tiny CLS and one shared
-Small/Medium REC dictionary. Small and Medium remain analysis-only; the
-release model archive is intended for reproducible conversion and profiling,
-not the default runtime package.
-The project-owned generated OCR corpus and Tiny/Small/Medium comparison steps
-are documented in [`docs/full-ocr-golden-corpus.md`](docs/full-ocr-golden-corpus.md).
+Small/Medium REC dictionary. Tiny remains the default in existing integrations;
+Small and Medium are opt-in preview variants distributed as separate runtime
+model packs and browser SDK/HTML artifacts. Their native and browser full-OCR
+goldens are release gates, but the C ABI and LWM format are not yet frozen.
+See the [model support and selection matrix](docs/supported-models.md) and the
+project-owned [full-OCR corpus](docs/full-ocr-golden-corpus.md).
 
 ## Standalone browser OCR
 
@@ -158,6 +159,12 @@ The build produces two self-contained browser artifacts:
   native HTTP Demo. The HTML also embeds PDF.js 6.3.289's `jbig2.wasm`,
   `openjpeg.wasm`, and `qcms_bg.wasm` helpers for supported scanned-PDF
   formats; PDF.js is not included in `lw-ppocr.js` or the C runtime.
+
+Tiny is the default browser profile. Tagged releases also provide explicitly
+named Small and Medium SDK/HTML files after variant-specific real-OCR and
+lifecycle gates. Tiny is recommended for phones; Small is opt-in after testing
+the target corpus/device, and Medium is a desktop-first preview because of its
+substantially higher latency and memory cost. All three expose the same SDK API.
 
 The HTML Demo accepts screenshots through the normal file picker, drag-and-drop,
 or `Ctrl+V`/`⌘V` image paste. Pasting only prepares a local image preview; it

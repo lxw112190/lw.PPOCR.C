@@ -169,11 +169,12 @@ Windows 上使用 MSVC + Ninja 时，请先打开“x64 Native Tools Command Pro
 
 已整理的 PP-OCRv6 模型输入由
 [`models/ppocrv6-models.json`](models/ppocrv6-models.json) 统一登记，包含
-Tiny、Small、Medium 的 DET/REC，并由三个变体共用一个 Tiny CLS，Small 和
-Medium 共用 `PP-OCRv6_small_rec_dict.txt`。Small、Medium 仍属于分析阶段；
-发布时会提供独立模型压缩包，用于可复现的转换和 profiling，不会改变默认
-运行时模型包。
-项目自有的生成式 OCR 测试语料，以及 Tiny/Small/Medium 对比步骤，见
+Tiny、Small、Medium 的 DET/REC；三个变体共用 Tiny CLS，Small 和 Medium
+共用 `PP-OCRv6_small_rec_dict.txt`。Tiny 仍是现有集成的默认模型；Small、
+Medium 已成为可选 preview 变体，通过独立 Runtime Model Pack 和浏览器
+SDK/HTML 发行。它们的 Native/Web 完整 OCR golden 已进入 Release 门禁，
+但 C ABI 和 LWM 格式尚未冻结。选择建议见
+[`docs/supported-models.md`](docs/supported-models.md)，项目自有测试语料见
 [`docs/full-ocr-golden-corpus.md`](docs/full-ocr-golden-corpus.md)。
 
 ### HTTP OCR 与 Web 页面
@@ -216,6 +217,10 @@ Windows 下可在 emsdk 目录运行 `emsdk_env.bat`，或按 emsdk 文档使用
   启动 HTTP 服务；默认还内嵌按需加载的 PDF.js，用于把本地 PDF 页面渲染为 Canvas。
   同时内嵌 PDF.js 6.3.289 的 `jbig2.wasm`、`openjpeg.wasm` 和 `qcms_bg.wasm`，
   支持离线渲染常见扫描 PDF 格式。PDF.js 不进入 `lw-ppocr.js`、纯 C Runtime 或公共 C ABI。
+
+浏览器默认使用 Tiny。Tagged Release 还会在真实 OCR 与生命周期门禁通过后提供
+独立命名的 Small、Medium SDK/HTML。手机优先选 Tiny；Small 应结合真实语料和目标设备
+验证后再启用；Medium 因耗时和内存显著增加，定位为桌面优先的 preview。三者使用同一套 SDK API。
 
 单文件页面的图片入口包括文件选择、拖拽和 `Ctrl+V`/`⌘V` 粘贴截图。粘贴只会
 准备本地预览，不会自动开始 OCR；剪贴板图片同样不会上传到网络。

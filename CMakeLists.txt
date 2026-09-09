@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.20)
 
-project(lw.PPOCR.C VERSION 0.1.0 LANGUAGES C)
+project(lw.PPOCR.C VERSION 0.2.0 LANGUAGES C)
 
 option(LW_BUILD_HTTP_DEMO
     "Build the cross-platform cpp-httplib HTTP OCR Demo" ON)
@@ -992,7 +992,8 @@ if(BUILD_TESTING AND NOT EMSCRIPTEN)
                 tests.test_experimental_ops tests.test_small_ocr_baseline
                 tests.test_runtime_model_pack
                 tests.test_release_assets
-                tests.test_web_ocr_contracts)
+                tests.test_web_ocr_contracts
+                tests.test_versioning)
     set_tests_properties(model_analysis PROPERTIES
         WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
 

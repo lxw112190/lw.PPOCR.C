@@ -24,25 +24,34 @@ LwPpocr.modelInfo;
 // { family: "PP-OCRv6", variant: "tiny", displayName: "PP-OCRv6 Tiny" }
 ~~~
 
-Small and Medium browser artifacts are opt-in because their ONNX-to-LWM
-conversion is heavier than the normal Tiny build. Configure Emscripten with
--DLW_BUILD_WEB_MODEL_VARIANTS=ON, then build lw-ocr-html-all (or the
-individual lw-ocr-js-small, lw-ocr-js-medium, lw-ocr-html-small and
-lw-ocr-html-medium targets). The output names are:
+Small and Medium browser artifacts are opt-in because their conversion,
+download, initialization, and memory costs are substantially higher than Tiny.
+Configure Emscripten with `-DLW_BUILD_WEB_MODEL_VARIANTS=ON`, then build
+`lw-ocr-html-all` (or the individual `lw-ocr-js-small`, `lw-ocr-js-medium`,
+`lw-ocr-html-small`, and `lw-ocr-html-medium` targets).
 
-~~~text
-lw-ppocr-v6-small.js     ocr-demo-small.html
-lw-ppocr-v6-medium.js    ocr-demo-medium.html
-~~~
+| Variant | Build-tree SDK / HTML | Tagged-release SDK / HTML | Recommendation |
+|---|---|---|---|
+| Tiny | `lw-ppocr.js` / `ocr-demo.html` | `lw.PPOCR.C-<version>-web-sdk.js` / `lw.PPOCR.C-<version>-ocr-demo.html` | Phone and general default |
+| Small | `lw-ppocr-v6-small.js` / `ocr-demo-small.html` | `lw.PPOCR.C-<version>-web-sdk-small.js` / `lw.PPOCR.C-<version>-ocr-demo-small.html` | Opt-in after corpus/device testing |
+| Medium | `lw-ppocr-v6-medium.js` / `ocr-demo-medium.html` | `lw.PPOCR.C-<version>-web-sdk-medium.js` / `lw.PPOCR.C-<version>-ocr-demo-medium.html` | Desktop-first preview |
 
-All variants use the same generated WASM runtime. Only the model and
-dictionary payload changes, so an application can choose a variant by loading
-the corresponding SDK file while keeping the same LwPpocr.create() and result
-contract.
+Use one SDK file as a complete unit; its WASM runtime, DET/CLS/REC models, and dictionary are
+already embedded. All variants expose the same `LwPpocr.create()` and result
+contract, while `LwPpocr.modelInfo` identifies the selected payload.
+
+Tiny is the safe starting point for phones and embedded WebViews. Small and
+especially Medium require validation on the exact browser/device. A larger
+model is not guaranteed to improve every customer document; compare quality,
+latency, and peak memory using a representative corpus. See
+[Supported models](supported-models.md) and the
+[performance baseline](performance-baseline.md).
 
 ## Quick start
 
-Place the release SDK beside the application page:
+Place the selected release SDK beside the application page. The example below
+assumes it has been renamed to **lw-ppocr.js**; keeping the versioned filename
+is also valid when the `<script src>` value matches it:
 
 ~~~html
 <input id="image" type="file" accept="image/*">
@@ -107,7 +116,7 @@ a high-water mark and are reused by later calls.
 The script defines one frozen global object:
 
 ~~~javascript
-LwPpocr.version;       // SDK package version, for example "0.1.0"
+LwPpocr.version;       // SDK package version, for example "0.2.0"
 LwPpocr.webAbiVersion; // low-level Web ABI used by this SDK; currently 1
 LwPpocr.Error;         // error class
 LwPpocr.create;        // async factory
@@ -277,16 +286,33 @@ CI runs both browser suites:
 ~~~bash
 python web/test_ocr_sdk.py \
   --sdk build-wasm/lw-ppocr.js \
-  --sample models/ppocrv6-tiny/sample.jpg
+  --sample models/ppocrv6-tiny/sample.jpg \
+  --golden ci/web-ppocrv6-tiny.json
 
 python web/test_ocr_html.py \
   --html build-wasm/ocr-demo.html \
-  --sample models/ppocrv6-tiny/sample.jpg
+  --sample models/ppocrv6-tiny/sample.jpg \
+  --golden ci/web-ppocrv6-tiny.json
 
 python web/test_pdf_html.py \
   --html build-wasm/ocr-demo.html \
   --sample models/ppocrv6-tiny/sample.jpg
 ~~~
+
+Small/Medium builds add real SDK and standalone-HTML OCR gates using
+`ci/web-ppocrv6-small.json` and `ci/web-ppocrv6-medium.json`. The SDK gate runs
+twice on one engine, destroys it, recreates an engine, and runs again. The
+Medium job records SDK/HTML bytes plus initialization and OCR timings as an
+informational artifact and Job Summary. Run the complete release-level browser
+matrix manually with:
+
+~~~bash
+gh workflow run wasm-html.yml --ref main -f build_web_variants=true
+~~~
+
+Normal pushes and pull requests keep the faster Tiny suite; tagged releases
+turn the variant matrix on automatically. PDF correctness remains a Tiny-only
+gate.
 
 The SDK test covers the public namespace, File/Blob/Canvas/ImageData input,
 structured results, busy/destroyed behavior, CLS on/off, Worker failure with

@@ -10,6 +10,20 @@ the public **LwPpocr.create()** API described in the
 [Browser JavaScript SDK guide](web-sdk.md). Do not load an HTML file as a
 script.
 
+## Choose the model file
+
+Tagged releases contain three separately named standalone pages:
+
+- `lw.PPOCR.C-<version>-ocr-demo.html`: Tiny, the phone/general default;
+- `lw.PPOCR.C-<version>-ocr-demo-small.html`: opt-in Small preview;
+- `lw.PPOCR.C-<version>-ocr-demo-medium.html`: desktop-first Medium preview.
+
+Each file is complete and offline; do not rename one variant as another or mix
+its embedded payload with a different SDK. Small and Medium pass real-image
+full-text OCR gates, but should still be measured with the customer's corpus.
+Medium has substantially higher initialization, inference, and memory costs.
+The automated PDF regression and phone recommendation remain Tiny-only.
+
 ## Use the page
 
 Download the release HTML or build the **lw-ocr-html** CMake target, then open

@@ -6,9 +6,9 @@
   "metadata": {
     "component": {
       "type": "library",
-      "bom-ref": "pkg:generic/lw.PPOCR.C@0.1.0",
+      "bom-ref": "pkg:generic/lw.PPOCR.C@0.2.0",
       "name": "lw.PPOCR.C",
-      "version": "0.1.0",
+      "version": "0.2.0",
       "licenses": [
         {
           "license": {
@@ -16,7 +16,7 @@
           }
         }
       ],
-      "purl": "pkg:generic/lw.PPOCR.C@0.1.0"
+      "purl": "pkg:generic/lw.PPOCR.C@0.2.0"
     }
   },
   "components": [
@@ -137,7 +137,7 @@
   ],
   "dependencies": [
     {
-      "ref": "pkg:generic/lw.PPOCR.C@0.1.0",
+      "ref": "pkg:generic/lw.PPOCR.C@0.2.0",
       "dependsOn": [
         "lw-model:ppocrv6-tiny-rec:lwm-v0.1",
         "lw-file:ppocrv6-tiny-dictionary",

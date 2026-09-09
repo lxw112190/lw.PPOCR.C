@@ -1,7 +1,7 @@
 # Development package
 
-The `0.1.x` archives are experimental development packages, not ABI-frozen 1.0
-releases. Windows x64 and x86 archives are separate and must not be mixed.
+The `0.x` preview archives are development packages, not ABI-frozen 1.0
+releases. Platform and architecture archives are separate and must not be mixed.
 
 ## Contents
 
@@ -250,35 +250,47 @@ hardware.
 ## Publish a tagged release
 
 Pushing a tag whose base version matches the CMake project version starts the
-release workflow. Stable and prerelease suffixes are accepted, for example:
+release workflow. Stable and prerelease suffixes are accepted. For the current
+preview line, create a new immutable tag rather than moving an older one:
 
 ```bash
-git tag -a v0.1.0-preview.1 -m "lw.PPOCR.C v0.1.0 preview 1"
-git push origin v0.1.0-preview.1
+git tag -a v0.2.0-preview.1 -m "lw.PPOCR.C v0.2.0 preview 1"
+git push origin v0.2.0-preview.1
 ```
 
-The workflow rebuilds and tests the Windows x64, Linux x64, browser WASM, and
-Desktop Java/JVM JNI packages from the tagged commit. A GitHub Release is
-created only after all four jobs succeed. The Release contains the native
-archives, reusable JavaScript SDK, offline HTML, Java/JVM JNI Windows/Linux
-archives, and a SHA-256 file for every downloadable asset.
-Tags with a `0.x` version or a prerelease suffix are automatically marked as
-GitHub prereleases.
+The tag rebuilds and tests native Windows/Linux packages, browser/Node WASM,
+Android ARM64, Desktop Java/JNI, and the Tiny/Small/Medium runtime model packs.
+The publish job runs only after all seven reusable jobs succeed. A prerelease
+suffix automatically marks the GitHub Release as a prerelease; a stable tag is
+marked latest.
 
-The tagged `release.yml` workflow also runs the reusable `Android ARM64
-Preview` job. After all native, WASM, and Android gates succeed, the GitHub
-Release includes `lw.PPOCR.C-<version>-android-arm64.aar`,
-`lw.PPOCR.C-<version>-android-arm64-demo.apk`, and
-`lw.PPOCR.C-<version>-android-arm64.SHA256SUMS.txt`. The workflow verifies the
-original Android artifact hashes before renaming and publishing the files.
-The published demo APK is signed with a temporary CI key and is intended for
-preview testing only, not Play Store distribution; uninstall an older preview
-before installing an APK from a different CI run.
+The release asset contract is machine-readable in
+[`ci/release-assets.json`](../ci/release-assets.json). It currently contains 18
+primary downloads:
 
-The browser WASM workflow also publishes
-`lw.PPOCR.C-<version>-node-wasm.zip`. This is a raw Node.js/WASM distribution,
-not an npm package: it contains `runtime.cjs`, the LWM models, dictionary,
-manifest, checksums, and license notices. Node 18/20/22 smoke jobs load the
-exact archive contents and run the PPM full-OCR regression before the Release
-job can publish it. See [Node/WASM distribution](NODE_WASM_DISTRIBUTION.md)
-for the ABI and application integration contract.
+- Windows x64 and Linux x86_64 native archives;
+- Tiny, Small, and Medium standalone HTML and browser SDK files;
+- the raw Node.js/WASM package;
+- Android ARM64 AAR and signed preview APK;
+- Windows x64, Linux x64, and macOS ARM64 Desktop Java/JNI bundles;
+- the source-model collection plus Tiny, Small, and Medium runtime model packs.
+
+Every primary file has a SHA-256 record; the Android checksum file covers both
+the AAR and APK. The final directory is checked in strict mode against the manifest,
+so a missing, empty, misnamed, corrupted, or unexpected top-level asset blocks
+publication. CI artifacts such as the Medium browser timing report are kept
+outside this public Release directory.
+
+Small and Medium are opt-in preview variants. Their runtime model packs are
+published only when Windows and Linux produce byte-identical archives. Their
+browser SDK/HTML files are published only after model identity, 16-line
+full-text golden OCR, same-engine repetition, destroy/recreate lifecycle, and
+standalone-HTML OCR gates pass. PDF regression remains Tiny-only.
+
+The Android demo APK is signed with a temporary CI key for preview testing, not
+Play Store distribution. Uninstall an older preview before installing an APK
+from a different CI run. The Node artifact is a raw package rather than an npm
+package; Node 18/20/22 load its exact archive contents and run full OCR before
+publication. See [Node/WASM distribution](NODE_WASM_DISTRIBUTION.md),
+[Browser JavaScript SDK](web-sdk.md), and [runtime model packs](model-packs.md)
+for their integration contracts.

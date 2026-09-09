@@ -61,4 +61,6 @@ python tools/package_ppocrv6_runtime.py `
   --output dist/lw-ppocr-model-ppocrv6-tiny-0.2.0.zip
 ```
 
-The first preview keeps Tiny as the default model in existing C, HTTP, Web, Android and Java packages. Small and Medium packs are opt-in native model assets until their production conversion and platform-specific validation gates are complete. On a tagged release, the Release workflow publishes `lw.PPOCR.C-<version>-ppocrv6-tiny-runtime.zip`, `lw.PPOCR.C-<version>-ppocrv6-small-runtime.zip` and `lw.PPOCR.C-<version>-ppocrv6-medium-runtime.zip` only after the Windows and Linux validation packs have identical SHA-256 values.
+Tiny remains the default model in the C/HTTP, Web, Android, Desktop Java and Node/WASM packages. Small and Medium are opt-in preview assets and do not replace those defaults. On a tagged release, the workflow publishes `lw.PPOCR.C-<version>-ppocrv6-tiny-runtime.zip`, `lw.PPOCR.C-<version>-ppocrv6-small-runtime.zip` and `lw.PPOCR.C-<version>-ppocrv6-medium-runtime.zip` only after the Windows and Linux validation packs have identical SHA-256 values.
+
+The same tagged release also publishes separately named Small and Medium browser SDK/HTML files. Those browser artifacts pass variant-specific full-text golden OCR and engine lifecycle tests before publication. They are self-contained model distributions; do not combine an SDK file from one variant with the filename or expectations of another. PDF regression and the default mobile-browser recommendation remain Tiny-only.

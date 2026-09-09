@@ -1,68 +1,72 @@
 # Supported models
 
-## Production-supported
+## Release support matrix
 
-| Family | Variant | DET | CLS | REC | Full OCR |
-|---|---|---|---|---|---|
-| PP-OCRv6 | Tiny | ✅ | ✅ | ✅ | ✅ |
+The project uses one pure-C Runtime and one LWM format for all three PP-OCRv6
+profiles. Model support and default integration support are separate claims:
 
-## Preview runtime model packs
+| Variant | Native full OCR | Browser SDK / HTML | Runtime model pack | Release status |
+|---|---|---|---|---|
+| Tiny | ✅ Windows/Linux golden | ✅ default artifact | ✅ | default |
+| Small | ✅ Windows/Linux golden | ✅ opt-in artifact | ✅ | preview |
+| Medium | ✅ Windows/Linux golden | ✅ opt-in artifact | ✅ | preview |
 
-The `v0.2.0-preview.1` model-pack format packages the exact converted LWM
-assets tested by CI. It is shared by Tiny, Small and Medium and does not
-create a separate Runtime binary per model. Each pack contains `manifest.json`,
-`SHA256SUMS`, `det.lwm`, `cls.lwm`, `rec.lwm` and its dictionary; the manifest
-includes an `asset_set_id` for cache invalidation.
+Tiny remains bundled by default in the C/HTTP, Android, Desktop Java, Node/WASM,
+and browser packages. Small and Medium do not silently replace those defaults.
+They are distributed as separate runtime model packs and as explicitly named
+browser SDK/HTML artifacts.
 
-Small and Medium remain preview/opt-in until their production conversion,
-quality, resource and platform gates are complete. Existing default C, HTTP,
-Web, Android and Java packages continue to use Tiny.
+All three profiles reuse the exact Tiny CLS model. Small and Medium share
+`PP-OCRv6_small_rec_dict.txt`; Tiny uses its own dictionary. The authoritative
+asset paths and hashes are in
+[`models/ppocrv6-models.json`](../models/ppocrv6-models.json).
 
-See [`docs/model-packs.md`](model-packs.md) for the packaging and validation
-commands.
-## Experimental model support
+## Choosing a variant
 
-| Family | Variant | ONNX analysis | Experimental LWM | Full OCR | Release |
-|---|---|---|---|---|---|
-| PP-OCRv6 | Small | ✅ | ✅ fixed + dynamic prototypes | ✅ experimental | preview runtime pack |
-| PP-OCRv6 | Medium | ✅ | ✅ fixed + dynamic analysis prototypes | ✅ analysis gate | preview runtime pack |
+| Use case | Starting point | Reason |
+|---|---|---|
+| Phone browser, embedded WebView, ordinary screenshots | Tiny | Lowest initialization, latency, and memory cost |
+| Desktop browser or native application with a measured quality need | Small | Opt-in quality/resource trade-off; validate on the real corpus |
+| Desktop/server evaluation with a large memory budget | Medium | Highest resource cost; not a mobile default |
 
-Experimental means that ONNX checker, shape inference, operator inventory,
-fixed-width and narrow dynamic LWM conversion, graph-output comparison, and
-(for Small) a dependency-free full-OCR pipeline have been validated when the
-external model assets are supplied. Medium currently has analysis-only
-fixed-shape/fixed-width and narrow dynamic conversion checkpoints, plus one
-complete sample-image composition check and a scheduled Windows/Linux analysis
-gate at REC width 960; it has no production package. This is not a
-production support claim and does not add either variant to the default model
-package, C ABI, Android, WASM, or the default runtime release. The dedicated
-model archive contains the checked ONNX inputs. The validation workflows produce preview runtime packs from the exact tested LWM assets.
+A larger graph is not an automatic quality guarantee for every document. Choose
+with the project's corpus tools or a customer-owned golden set, and compare
+exact-line rate/CER as well as latency and peak working set. The versioned
+Windows x64 960 baseline currently records Small at roughly 4.20x/4.58x Tiny
+latency and Medium at roughly 21.95x/25.28x for one/four workers. See
+[`docs/performance-baseline.md`](performance-baseline.md); those measurements are
+an engineering reference, not a portable performance promise.
 
-The authoritative asset layout and sharing rules are in
-[`models/ppocrv6-models.json`](../models/ppocrv6-models.json). Small and
-Medium use the same `PP-OCRv6_small_rec_dict.txt`, and all three variants use
-the same Tiny CLS asset. The release archive is named
-`lw.PPOCR.C-<version>-ppocrv6-models.zip` and has a matching `.sha256` file.
+For browser deployments, prefer Tiny on phones. Small may be appropriate after
+testing the exact target device. Medium's single-file HTML embeds its large
+models and should be treated as a desktop-first preview; browser process limits,
+initialization time, and memory pressure vary by device.
 
-See the [PP-OCRv6 Small analysis snapshot](ppocrv6-small-analysis.md) for the
-current graph-size and operator Go/No-Go findings.
-The generated [PP-OCRv6 Medium analysis report](ppocrv6-medium-analysis.md)
-records its DET/REC graph, current operator surface, and fixed-width REC
-conversion checkpoint. Its versioned CI policy is
-[`ci/ppocrv6-medium-validation.json`](../ci/ppocrv6-medium-validation.json).
+## Preview model-pack and browser gates
 
-The exact Tiny REC, fixed-batch CLS, and DET models are exposed through the
-production public C APIs. Small REC and DET are currently exposed only through
-experimental conversion and validation tools; the Small full-OCR experiment
-uses the exact shared Tiny CLS asset. Its SHA-256 is part of the Small
-validation contract. Encoded
-image-file decoding stays outside the core API.
+`v0.2.0-preview.1` introduces namespaced runtime model packs containing
+`manifest.json`, `SHA256SUMS`, `det.lwm`, `cls.lwm`, `rec.lwm`, and the matching
+dictionary. The manifest includes an `asset_set_id` for cache invalidation. On a
+tagged release, each Tiny/Small/Medium pack is published only after Windows and
+Linux produce byte-identical ZIP files.
+
+The tagged-release browser workflow additionally builds Small and Medium SDK
+and standalone HTML artifacts. Each SDK performs real OCR twice on one engine,
+destroys it, creates a new engine, and repeats OCR. Both the SDK and standalone
+HTML must match the variant-specific 16-line full-text SHA-256 contract in
+`ci/web-ppocrv6-*.json`. PDF regression remains a Tiny-only gate. Medium browser
+size and timing values are informational CI output, not hard performance limits.
+
+These checks make Small and Medium usable preview variants; they do not freeze
+the C ABI or LWM format and do not constitute broad physical-device support.
+See [`docs/model-packs.md`](model-packs.md) for packaging details and the Small
+and Medium analysis snapshots for graph/converter evidence.
 
 ### Small and Medium model assets
 
-These hashes identify the checked model assets. Small and Medium are still
-analysis-only, but the ONNX files are included in the source tree and in the
-dedicated model archive.
+These hashes identify the checked model assets used by the opt-in preview
+variants. The ONNX inputs are included in the source tree and in the dedicated
+model archive.
 
 | Asset | Role | SHA-256 |
 |---|---|---|
