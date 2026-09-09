@@ -8,6 +8,7 @@ import hashlib
 import json
 import re
 import subprocess
+import shutil
 import sys
 import tempfile
 from pathlib import Path
@@ -269,6 +270,16 @@ def main() -> int:
             root,
             output / "full-ocr.txt",
         )
+
+        pack_dir = output / "runtime-model"
+        pack_dir.mkdir(exist_ok=True)
+        shutil.copyfile(det_lwm, pack_dir / "det.lwm")
+        shutil.copyfile(cls_lwm, pack_dir / "cls.lwm")
+        shutil.copyfile(rec_lwm, pack_dir / "rec.lwm")
+        shutil.copyfile(dictionary, pack_dir / "ppocr_keys.txt")
+        pack = output / "ppocrv6-medium-runtime.zip"
+        run("runtime model pack", [sys.executable, "tools/package_ppocrv6_runtime.py", "--input-dir", str(pack_dir), "--variant", "medium", "--output", str(pack)], root)
+        run("runtime model pack validation", [sys.executable, "tools/validate_runtime_model_pack.py", str(pack)], root)
 
     match = re.search(r"(?m)^lines=(\d+)\s", stdout)
     if match is None or int(match.group(1)) != resolved["expected_lines"]:

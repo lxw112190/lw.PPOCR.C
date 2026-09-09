@@ -8,6 +8,7 @@ import json
 import re
 import subprocess
 import hashlib
+import shutil
 import sys
 from pathlib import Path
 
@@ -185,6 +186,16 @@ def main() -> int:
             f"{text_sha256} != {args.expected_full_text_sha256}"
         )
     (output / "full-ocr.txt").write_text(stdout, encoding="utf-8", newline="\n")
+
+    pack_dir = output / "runtime-model"
+    pack_dir.mkdir(exist_ok=True)
+    shutil.copyfile(det_lwm, pack_dir / "det.lwm")
+    shutil.copyfile(build / "models" / "cls.lwm", pack_dir / "cls.lwm")
+    shutil.copyfile(rec_lwm, pack_dir / "rec.lwm")
+    shutil.copyfile(output / "model" / "ppocr_keys.txt", pack_dir / "ppocr_keys.txt")
+    pack = output / "ppocrv6-small-runtime.zip"
+    run("runtime model pack", [sys.executable, "tools/package_ppocrv6_runtime.py", "--input-dir", str(pack_dir), "--variant", "small", "--output", str(pack)], root)
+    run("runtime model pack validation", [sys.executable, "tools/validate_runtime_model_pack.py", str(pack)], root)
     summary = {
         "status": "ok",
         "rec_widths": list(widths),

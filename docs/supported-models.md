@@ -6,6 +6,20 @@
 |---|---|---|---|---|---|
 | PP-OCRv6 | Tiny | ✅ | ✅ | ✅ | ✅ |
 
+## Preview runtime model packs
+
+The `v0.2.0-preview.1` model-pack format packages the exact converted LWM
+assets tested by CI. It is shared by Tiny, Small and Medium and does not
+create a separate Runtime binary per model. Each pack contains `manifest.json`,
+`SHA256SUMS`, `det.lwm`, `cls.lwm`, `rec.lwm` and its dictionary; the manifest
+includes an `asset_set_id` for cache invalidation.
+
+Small and Medium remain preview/opt-in until their production conversion,
+quality, resource and platform gates are complete. Existing default C, HTTP,
+Web, Android and Java packages continue to use Tiny.
+
+See [`docs/model-packs.md`](model-packs.md) for the packaging and validation
+commands.
 ## Experimental model support
 
 | Family | Variant | ONNX analysis | Experimental LWM | Full OCR | Release |

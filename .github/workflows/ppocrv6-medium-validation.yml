@@ -17,6 +17,8 @@ on:
       - "tools/convert_medium_rec_experimental.py"
       - "tools/resolve_medium_validation_contract.py"
       - "tools/run_medium_validation.py"
+      - "tools/package_ppocrv6_runtime.py"
+      - "tools/validate_runtime_model_pack.py"
       - "tools/validate_model_catalog.py"
       - "tests/test_medium_contracts.py"
       - "tests/test_model_catalog.py"
