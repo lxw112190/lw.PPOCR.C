@@ -20,6 +20,8 @@ jobs:
   wasm:
     name: Build and test standalone WASM
     uses: ./.github/workflows/wasm-html.yml
+    with:
+      build_web_variants: true
     permissions:
       contents: read
 
@@ -147,6 +149,10 @@ jobs:
           linux="lw.PPOCR.C-${VERSION}-linux-x86_64.tar.gz"
           wasm="lw.PPOCR.C-${VERSION}-ocr-demo.html"
           websdk="lw.PPOCR.C-${VERSION}-web-sdk.js"
+          wasm_small="lw.PPOCR.C-${VERSION}-ocr-demo-small.html"
+          websdk_small="lw.PPOCR.C-${VERSION}-web-sdk-small.js"
+          wasm_medium="lw.PPOCR.C-${VERSION}-ocr-demo-medium.html"
+          websdk_medium="lw.PPOCR.C-${VERSION}-web-sdk-medium.js"
           nodewasm="lw.PPOCR.C-${VERSION}-node-wasm.zip"
           android_aar="lw.PPOCR.C-${VERSION}-android-arm64.aar"
           android_apk="lw.PPOCR.C-${VERSION}-android-arm64-demo.apk"
@@ -164,6 +170,10 @@ jobs:
           test -s "release-assets/${linux}.sha256"
           test -s "release-assets/ocr-demo.html"
           test -s "release-assets/lw-ppocr.js"
+          test -s "release-assets/ocr-demo-small.html"
+          test -s "release-assets/lw-ppocr-v6-small.js"
+          test -s "release-assets/ocr-demo-medium.html"
+          test -s "release-assets/lw-ppocr-v6-medium.js"
           test -s "release-assets/${nodewasm}"
           test -s "release-assets/${nodewasm}.sha256"
 
@@ -230,8 +240,16 @@ jobs:
             sha256sum -c "${linux}.sha256"
             mv ocr-demo.html "${wasm}"
             mv lw-ppocr.js "${websdk}"
+            mv ocr-demo-small.html "${wasm_small}"
+            mv lw-ppocr-v6-small.js "${websdk_small}"
+            mv ocr-demo-medium.html "${wasm_medium}"
+            mv lw-ppocr-v6-medium.js "${websdk_medium}"
             sha256sum "${wasm}" > "${wasm}.sha256"
             sha256sum "${websdk}" > "${websdk}.sha256"
+            sha256sum "${wasm_small}" > "${wasm_small}.sha256"
+            sha256sum "${websdk_small}" > "${websdk_small}.sha256"
+            sha256sum "${wasm_medium}" > "${wasm_medium}.sha256"
+            sha256sum "${websdk_medium}" > "${websdk_medium}.sha256"
             sha256sum -c "${nodewasm}.sha256"
             sha256sum "${android_aar}" "${android_apk}" > "${android_checksums}"
             (
@@ -273,8 +291,8 @@ jobs:
           fi
 
           mapfile -t assets < <(find release-assets -maxdepth 1 -type f -print | sort)
-          if [[ "${#assets[@]}" -ne 25 ]]; then
-            echo "expected twenty-five release assets, found ${#assets[@]}" >&2
+          if [[ "${#assets[@]}" -ne 33 ]]; then
+            echo "expected thirty-three release assets, found ${#assets[@]}" >&2
             printf '%s\n' "${assets[@]}" >&2
             exit 1
           fi

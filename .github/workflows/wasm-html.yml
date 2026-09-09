@@ -5,7 +5,19 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  workflow_dispatch:
+    inputs:
+      build_web_variants:
+        description: "Build PP-OCRv6 Small and Medium standalone Web artifacts"
+        required: false
+        default: false
+        type: boolean
   workflow_call:
+    inputs:
+      build_web_variants:
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -53,11 +65,19 @@ jobs:
           -DLW_BUILD_HTTP_DEMO=OFF
           -DLW_BUILD_CSHARP_DEMOS=OFF
           -DBUILD_TESTING=OFF
+          -DLW_BUILD_WEB_MODEL_VARIANTS=${{ inputs.build_web_variants || false }}
 
       - name: Build browser and Node WASM distributions
         run: >-
           cmake --build build-wasm
           --target lw-ocr-js lw-ocr-html lw-node-wasm-package det_demo_fixture
+          --parallel
+
+      - name: Build optional PP-OCRv6 Small and Medium Web variants
+        if: inputs.build_web_variants == true
+        run: >-
+          cmake --build build-wasm
+          --target lw-ocr-html-all
           --parallel
 
       - name: Verify browser and Node artifacts
@@ -88,6 +108,19 @@ jobs:
             sha256sum -c "$(basename "${node_archive}").sha256"
           )
 
+      - name: Verify optional PP-OCRv6 Web variants
+        if: inputs.build_web_variants == true
+        shell: bash
+        run: |
+          set -euo pipefail
+          for variant in small medium; do
+            test -s "build-wasm/lw-ppocr-v6-${variant}.js"
+            test -s "build-wasm/ocr-demo-${variant}.html"
+            grep -a -q 'variant: "'${variant}'"' build-wasm/lw-ppocr-v6-${variant}.js
+            ! grep -a -q '__LW_' "build-wasm/lw-ppocr-v6-${variant}.js"
+            ! grep -a -q '__LW_' "build-wasm/ocr-demo-${variant}.html"
+          done
+
       - name: Run browser SDK contract and memory test
         run: >-
           python web/test_ocr_sdk.py
@@ -113,6 +146,10 @@ jobs:
           path: |
             build-wasm/lw-ppocr.js
             build-wasm/ocr-demo.html
+            build-wasm/lw-ppocr-v6-small.js
+            build-wasm/lw-ppocr-v6-medium.js
+            build-wasm/ocr-demo-small.html
+            build-wasm/ocr-demo-medium.html
             build-wasm/lw.PPOCR.C-*-node-wasm.zip
             build-wasm/lw.PPOCR.C-*-node-wasm.zip.sha256
           if-no-files-found: error
