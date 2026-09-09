@@ -13,6 +13,14 @@ from pathlib import Path
 LINE_RE = re.compile(r"^\d+ text=(?P<text>.*?) rec=")
 
 
+def configure_utf8_output() -> None:
+    """Keep Windows CI logs from failing on UTF-8 OCR text."""
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure is not None:
+            reconfigure(encoding="utf-8", errors="backslashreplace")
+
+
 def run(label: str, command: list[str], cwd: Path) -> str:
     print(f"[tiny] {label}: {' '.join(command)}")
     completed = subprocess.run(
@@ -47,6 +55,7 @@ def executable(build_dir: Path, name: str) -> Path:
 
 
 def main(argv: list[str] | None = None) -> int:
+    configure_utf8_output()
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--build-dir", type=Path, required=True)
     parser.add_argument("--output-dir", type=Path, required=True)
