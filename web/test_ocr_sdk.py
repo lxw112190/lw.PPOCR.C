@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import tempfile
 from html import escape
@@ -12,6 +13,12 @@ from playwright.sync_api import ConsoleMessage, Page, sync_playwright
 
 
 EXPECTED_FIRST_LINE = "纯臻营养护发素"
+DEFAULT_TEXT_SHA256 = "6ff42b9ea692cc19988c06af05ad7ac2542e2ff6f111202e73a0c900af988284"
+
+
+def text_sha256(lines: list[dict]) -> str:
+    text = "\n".join(line["text"] for line in lines)
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
 def run_sample(page: Page) -> dict:
@@ -28,6 +35,17 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--sdk", type=Path, required=True)
     parser.add_argument("--sample", type=Path, required=True)
+    parser.add_argument("--golden", type=Path)
+    parser.add_argument("--expected-variant", default="tiny")
+    parser.add_argument("--expected-line-count", type=int, default=16)
+    parser.add_argument("--expected-text-sha256", default=DEFAULT_TEXT_SHA256)
+    parser.add_argument(
+        "--variant-contract-only",
+        action="store_true",
+        help="run the bounded real-OCR and lifecycle contract used by larger variants",
+    )
+    parser.add_argument("--report", type=Path)
+    parser.add_argument("--html-size-source", type=Path)
     parser.add_argument(
         "--browser-executable",
         type=Path,
@@ -37,6 +55,17 @@ def main() -> int:
 
     sdk = arguments.sdk.resolve()
     sample = arguments.sample.resolve()
+    if arguments.golden:
+        contract = json.loads(arguments.golden.read_text(encoding="utf-8"))
+        assert contract["schema_version"] == 1
+        assert contract["family"] == "PP-OCRv6"
+        assert Path(contract["sample"]).resolve() == sample
+        arguments.expected_variant = contract["variant"]
+        arguments.expected_line_count = int(contract["expected_line_count"])
+        arguments.expected_text_sha256 = contract["expected_text_sha256"]
+    assert arguments.expected_variant in ("tiny", "small", "medium")
+    assert arguments.expected_line_count > 0
+    assert len(arguments.expected_text_sha256) == 64
     if not sdk.is_file() or not sample.is_file():
         raise SystemExit("browser SDK or sample image is missing")
 
@@ -83,6 +112,7 @@ def main() -> int:
                   } catch (error) {
                     invalidOptionsCode = error.code;
                   }
+                  const initStarted = performance.now();
                   window.__sdkEngine = await LwPpocr.create({
                     useCls: true,
                     maxImageSide: 1600
@@ -93,7 +123,8 @@ def main() -> int:
                     modelInfo: LwPpocr.modelInfo,
                     frozen: Object.isFrozen(LwPpocr),
                     invalidOptionsCode,
-                    status: window.__sdkEngine.getStatus()
+                    status: window.__sdkEngine.getStatus(),
+                    initMs: performance.now() - initStarted
                   };
                 }"""
             )
@@ -101,8 +132,8 @@ def main() -> int:
             assert public_contract["webAbiVersion"] == 1
             assert public_contract["modelInfo"] == {
                 "family": "PP-OCRv6",
-                "variant": "tiny",
-                "displayName": "PP-OCRv6 Tiny",
+                "variant": arguments.expected_variant,
+                "displayName": f"PP-OCRv6 {arguments.expected_variant.title()}",
             }
             assert public_contract["frozen"]
             assert public_contract["invalidOptionsCode"] == "LW_OCR_OPTIONS"
@@ -141,8 +172,10 @@ def main() -> int:
             assert result["timing"]["decode_ms"] >= 0
             assert result["timing"]["inference_ms"] > 0
             assert result["timing"]["total_ms"] >= result["timing"]["inference_ms"]
-            assert len(result["lines"]) == 16
-            assert result["lines"][0]["text"] == EXPECTED_FIRST_LINE
+            assert len(result["lines"]) == arguments.expected_line_count
+            assert text_sha256(result["lines"]) == arguments.expected_text_sha256
+            if arguments.expected_variant == "tiny":
+                assert result["lines"][0]["text"] == EXPECTED_FIRST_LINE
             expected_text = [line["text"] for line in result["lines"]]
             expected_boxes = [line["box"] for line in result["lines"]]
             for line in result["lines"]:
@@ -152,6 +185,69 @@ def main() -> int:
                 assert 0 <= line["cls_score"] <= 1
                 assert line["cls_label"] in (0, 1)
                 assert line["rotation_degrees"] in (0, 180)
+
+            if arguments.variant_contract_only:
+                lifecycle = page.evaluate(
+                    """async () => {
+                      const file = document.querySelector("#sample").files[0];
+                      const second = await window.__sdkEngine.recognize(file);
+                      const firstDestroyedEngine = window.__sdkEngine;
+                      firstDestroyedEngine.destroy();
+                      const destroyedStatus = firstDestroyedEngine.getStatus();
+                      const initStarted = performance.now();
+                      const recreated = await LwPpocr.create({
+                        useCls: true,
+                        maxImageSide: 1600
+                      });
+                      const reinitMs = performance.now() - initStarted;
+                      const third = await recreated.recognize(file);
+                      const readyStatus = recreated.getStatus();
+                      recreated.destroy();
+                      return {
+                        second,
+                        third,
+                        destroyedStatus,
+                        readyStatus,
+                        finalStatus: recreated.getStatus(),
+                        reinitMs
+                      };
+                    }"""
+                )
+                for repeated in (lifecycle["second"], lifecycle["third"]):
+                    assert len(repeated["lines"]) == arguments.expected_line_count
+                    assert text_sha256(repeated["lines"]) == arguments.expected_text_sha256
+                assert lifecycle["destroyedStatus"]["state"] == "DESTROYED"
+                assert lifecycle["readyStatus"]["state"] == "READY"
+                assert lifecycle["finalStatus"]["state"] == "DESTROYED"
+
+                report = {
+                    "schema_version": 1,
+                    "variant": arguments.expected_variant,
+                    "sdk_bytes": sdk.stat().st_size,
+                    "html_bytes": (
+                        arguments.html_size_source.resolve().stat().st_size
+                        if arguments.html_size_source
+                        else None
+                    ),
+                    "init_ms": round(float(public_contract["initMs"]), 3),
+                    "reinit_ms": round(float(lifecycle["reinitMs"]), 3),
+                    "ocr_ms": round(float(result["timing"]["total_ms"]), 3),
+                    "result_lines": len(result["lines"]),
+                    "text_sha256": text_sha256(result["lines"]),
+                }
+                if arguments.report:
+                    arguments.report.parent.mkdir(parents=True, exist_ok=True)
+                    arguments.report.write_text(
+                        json.dumps(report, ensure_ascii=False, indent=2) + "\n",
+                        encoding="utf-8",
+                    )
+                browser.close()
+                if browser_messages:
+                    raise AssertionError(
+                        "browser console diagnostics:\n" + "\n".join(browser_messages)
+                    )
+                print(json.dumps(report, ensure_ascii=False, sort_keys=True))
+                return 0
 
             order_results = page.evaluate(
                 """async () => {

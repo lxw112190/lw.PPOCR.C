@@ -126,12 +126,61 @@ jobs:
           python web/test_ocr_sdk.py
           --sdk build-wasm/lw-ppocr.js
           --sample models/ppocrv6-tiny/sample.jpg
+          --golden ci/web-ppocrv6-tiny.json
 
       - name: Run standalone HTML UI test
         run: >-
           python web/test_ocr_html.py
           --html build-wasm/ocr-demo.html
           --sample models/ppocrv6-tiny/sample.jpg
+          --golden ci/web-ppocrv6-tiny.json
+
+      - name: Run Small browser SDK OCR and lifecycle contract
+        if: inputs.build_web_variants == true
+        run: >-
+          python web/test_ocr_sdk.py
+          --sdk build-wasm/lw-ppocr-v6-small.js
+          --sample models/ppocrv6-tiny/sample.jpg
+          --golden ci/web-ppocrv6-small.json
+          --variant-contract-only
+
+      - name: Run Small standalone HTML OCR contract
+        if: inputs.build_web_variants == true
+        run: >-
+          python web/test_ocr_html.py
+          --html build-wasm/ocr-demo-small.html
+          --sample models/ppocrv6-tiny/sample.jpg
+          --golden ci/web-ppocrv6-small.json
+          --variant-contract-only
+
+      - name: Run Medium browser SDK OCR and lifecycle contract
+        if: inputs.build_web_variants == true
+        run: >-
+          python web/test_ocr_sdk.py
+          --sdk build-wasm/lw-ppocr-v6-medium.js
+          --sample models/ppocrv6-tiny/sample.jpg
+          --golden ci/web-ppocrv6-medium.json
+          --variant-contract-only
+          --html-size-source build-wasm/ocr-demo-medium.html
+          --report build-wasm/web-medium-report.json
+
+      - name: Run Medium standalone HTML OCR contract
+        if: inputs.build_web_variants == true
+        run: >-
+          python web/test_ocr_html.py
+          --html build-wasm/ocr-demo-medium.html
+          --sample models/ppocrv6-tiny/sample.jpg
+          --golden ci/web-ppocrv6-medium.json
+          --variant-contract-only
+
+      - name: Summarize Medium browser measurements
+        if: inputs.build_web_variants == true
+        shell: bash
+        run: |
+          echo "## PP-OCRv6 Medium browser measurements" >> "$GITHUB_STEP_SUMMARY"
+          echo '```json' >> "$GITHUB_STEP_SUMMARY"
+          cat build-wasm/web-medium-report.json >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
 
       - name: Run standalone PDF OCR test
         run: >-
@@ -152,6 +201,15 @@ jobs:
             build-wasm/ocr-demo-medium.html
             build-wasm/lw.PPOCR.C-*-node-wasm.zip
             build-wasm/lw.PPOCR.C-*-node-wasm.zip.sha256
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload Medium browser measurement report
+        if: inputs.build_web_variants == true
+        uses: actions/upload-artifact@v7
+        with:
+          name: web-medium-report-${{ github.sha }}
+          path: build-wasm/web-medium-report.json
           if-no-files-found: error
           retention-days: 14
 

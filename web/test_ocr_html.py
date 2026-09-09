@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 from pathlib import Path
 
@@ -10,12 +11,27 @@ from playwright.sync_api import ConsoleMessage, sync_playwright
 
 
 EXPECTED_FIRST_LINE = "纯臻营养护发素"
+DEFAULT_TEXT_SHA256 = "6ff42b9ea692cc19988c06af05ad7ac2542e2ff6f111202e73a0c900af988284"
+
+
+def text_sha256(lines: list[dict]) -> str:
+    text = "\n".join(line["text"] for line in lines)
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--html", type=Path, required=True)
     parser.add_argument("--sample", type=Path, required=True)
+    parser.add_argument("--golden", type=Path)
+    parser.add_argument("--expected-variant", default="tiny")
+    parser.add_argument("--expected-line-count", type=int, default=16)
+    parser.add_argument("--expected-text-sha256", default=DEFAULT_TEXT_SHA256)
+    parser.add_argument(
+        "--variant-contract-only",
+        action="store_true",
+        help="run only the real-OCR standalone artifact contract",
+    )
     parser.add_argument(
         "--browser-executable",
         type=Path,
@@ -25,6 +41,17 @@ def main() -> int:
 
     html = arguments.html.resolve()
     sample = arguments.sample.resolve()
+    if arguments.golden:
+        contract = json.loads(arguments.golden.read_text(encoding="utf-8"))
+        assert contract["schema_version"] == 1
+        assert contract["family"] == "PP-OCRv6"
+        assert Path(contract["sample"]).resolve() == sample
+        arguments.expected_variant = contract["variant"]
+        arguments.expected_line_count = int(contract["expected_line_count"])
+        arguments.expected_text_sha256 = contract["expected_text_sha256"]
+    assert arguments.expected_variant in ("tiny", "small", "medium")
+    assert arguments.expected_line_count > 0
+    assert len(arguments.expected_text_sha256) == 64
     if not html.is_file() or not sample.is_file():
         raise SystemExit("standalone HTML or sample image is missing")
     html_text = html.read_text(encoding="utf-8")
@@ -69,6 +96,12 @@ def main() -> int:
 
         assert page.evaluate("typeof window.LwPpocr.create") == "function"
         assert page.evaluate("window.LwPpocr.webAbiVersion") == 1
+        model_info = page.evaluate("window.LwPpocr.modelInfo")
+        assert model_info == {
+            "family": "PP-OCRv6",
+            "variant": arguments.expected_variant,
+            "displayName": f"PP-OCRv6 {arguments.expected_variant.title()}",
+        }
         assert page.evaluate("typeof window.lwPpocrDemo.recognize") == "function"
         assert page.evaluate(
             "window.lwPpocrDemo.ready().then(() => window.lwPpocrDemo.getStatus().ready)"
@@ -139,7 +172,7 @@ def main() -> int:
         }
         assert result["image"]["width"] > 0 and result["image"]["height"] > 0
         assert result["elapsed_ms"] > 0
-        assert len(result["lines"]) == 16
+        assert len(result["lines"]) == arguments.expected_line_count
         timing = page.evaluate("window.__lwOcrTest.timingBreakdown()")
         assert timing["prepareMilliseconds"] > 0
         assert timing["sdkTotalMilliseconds"] > 0
@@ -154,6 +187,24 @@ def main() -> int:
             "result": result["elapsed_ms"],
             "breakdown": timing,
         }
+        assert text_sha256(result["lines"]) == arguments.expected_text_sha256
+
+        if arguments.variant_contract_only:
+            report = {
+                "schema_version": 1,
+                "variant": arguments.expected_variant,
+                "html_bytes": html.stat().st_size,
+                "ocr_ms": round(float(result["elapsed_ms"]), 3),
+                "result_lines": len(result["lines"]),
+                "text_sha256": text_sha256(result["lines"]),
+            }
+            browser.close()
+            if browser_messages:
+                raise AssertionError(
+                    "browser console diagnostics:\n" + "\n".join(browser_messages)
+                )
+            print(json.dumps(report, ensure_ascii=False, sort_keys=True))
+            return 0
 
         lines = page.locator("#results .line")
         assert lines.count() == 16
