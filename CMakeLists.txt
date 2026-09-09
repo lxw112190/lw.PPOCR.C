@@ -903,6 +903,13 @@ if(BUILD_TESTING AND NOT EMSCRIPTEN)
         WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
 
     add_test(
+        NAME ocr_dispatch_profile_comparison
+        COMMAND "${Python3_EXECUTABLE}" -m unittest -v
+                tests.test_compare_ocr_dispatch_profiles)
+    set_tests_properties(ocr_dispatch_profile_comparison PROPERTIES
+        WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
+
+    add_test(
         NAME rec_runtime_profile_comparison
         COMMAND "${Python3_EXECUTABLE}" -m unittest -v
                 tests.test_compare_rec_runtime_profiles)

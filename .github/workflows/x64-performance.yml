@@ -202,6 +202,71 @@ jobs:
             "- range: $([double]$summary.minimum_dispatch_over_fma) - $([double]$summary.maximum_dispatch_over_fma)" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
             "- max absolute error: $([double]$summary.maximum_absolute_error)" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
           }
+      - name: Build experimental FMA OCR driver
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          New-Item -ItemType Directory -Force -Path x64-fma-ocr-results | Out-Null
+          $features = & build-x64/Release/simd-backend-driver.exe
+          if (($features -join "`n") -notmatch "avx2_fma=1") {
+            'AVX2+FMA is unavailable on this runner; end-to-end experiment skipped.' |
+              Set-Content -LiteralPath x64-fma-ocr-results/SKIPPED.txt -Encoding utf8
+            exit 0
+          }
+          $configureArgs = @(
+            '-S', '.', '-B', 'build-x64-fma',
+            '-G', 'Visual Studio 17 2022', '-A', 'x64',
+            '-DBUILD_TESTING=ON',
+            '-DLW_BUILD_HTTP_DEMO=OFF',
+            '-DLW_BUILD_CSHARP_DEMOS=OFF',
+            '-DLW_EXPERIMENTAL_AVX2_FMA_DISPATCH=ON',
+            "-DLW_PRECONVERTED_ASSETS_DIR=$env:GITHUB_WORKSPACE/.ci/preconverted"
+          )
+          cmake @configureArgs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cmake --build build-x64-fma --config Release --parallel 2 --target full-ocr-intra-benchmark
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Compare default and experimental FMA OCR
+        shell: pwsh
+        env:
+          FMA_WARMUP: ${{ inputs.warmup }}
+          FMA_ITERATIONS: ${{ inputs.iterations }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if (Test-Path -LiteralPath x64-fma-ocr-results/SKIPPED.txt) {
+            Get-Content -LiteralPath x64-fma-ocr-results/SKIPPED.txt |
+              Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+            exit 0
+          }
+          $baseline = (Resolve-Path 'build-x64/Release/full-ocr-intra-benchmark.exe').Path
+          $candidate = (Resolve-Path 'build-x64-fma/Release/full-ocr-intra-benchmark.exe').Path
+          $cases = @(
+            @{ Name = 'workers1-det1'; Workers = 1; DetThreads = 1 },
+            @{ Name = 'workers4-det4'; Workers = 4; DetThreads = 4 }
+          )
+          foreach ($case in $cases) {
+            $jsonOutput = "x64-fma-ocr-results/$($case.Name).json"
+            $markdownOutput = "x64-fma-ocr-results/$($case.Name).md"
+            python tools/compare_ocr_dispatch_profiles.py `
+              --baseline-driver $baseline `
+              --candidate-driver $candidate `
+              --det .ci/preconverted/det.lwm `
+              --cls .ci/preconverted/cls.lwm `
+              --rec .ci/preconverted/rec.lwm `
+              --dictionary .ci/preconverted/ppocr_keys.txt `
+              --image .ci/preconverted/sample.ppm `
+              --warmup $env:FMA_WARMUP `
+              --iterations $env:FMA_ITERATIONS `
+              --repeats 2 `
+              --workers $case.Workers `
+              --target-width 960 `
+              --det-threads $case.DetThreads `
+              --json-output $jsonOutput `
+              --markdown-output $markdownOutput
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            Get-Content -LiteralPath $markdownOutput |
+              Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+          }
       - name: Collect native OCR profile
         shell: pwsh
         env:
@@ -250,6 +315,12 @@ jobs:
         with:
           name: lw-ppocr-x64-fma-results-${{ github.sha }}
           path: x64-fma-results/
+          if-no-files-found: error
+          retention-days: 30
+      - uses: actions/upload-artifact@v7
+        with:
+          name: lw-ppocr-x64-fma-ocr-results-${{ github.sha }}
+          path: x64-fma-ocr-results/
           if-no-files-found: error
           retention-days: 30
 

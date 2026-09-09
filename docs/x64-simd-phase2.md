@@ -55,13 +55,17 @@ Run locally after configuring a Release build:
 The candidate can be evaluated in a separate native build without changing the
 normal dispatch. Configure that build with:
 
-    cmake -S . -B build-fma -G "Visual Studio 17 2022" -A x64 `
-      -DLW_EXPERIMENTAL_AVX2_FMA_DISPATCH=ON
+    cmake -S . -B build-fma -G "Visual Studio 17 2022" -A x64 -DLW_EXPERIMENTAL_AVX2_FMA_DISPATCH=ON
 
 Then run the same `full-ocr-intra-benchmark` command against the default and
 `build-fma` binaries. The experimental option is native-only, defaults to OFF,
 and does not change the public ABI or model files. It is intended for paired
 latency, checksum, and RSS measurements only.
+
+The Native x64 OCR Performance workflow runs this experiment at 1 worker/1 DET
+thread and 4 workers/4 DET threads. The JSON and Markdown outputs are uploaded
+as the `lw-ppocr-x64-fma-ocr-results-*` artifact.
+
 ## Promotion gate
 
 Before enabling FMA in the production dispatch, collect paired measurements on
