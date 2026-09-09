@@ -171,7 +171,12 @@ static int run_case(const benchmark_case* item, uint32_t target_width, uint32_t 
     lw_scalar_packed_conv1x1_f32(input, packed, bias, reference, input_dimensions,
                                  output_dimensions);
     lw_packed_conv1x1_f32(input, packed, bias, output, input_dimensions, output_dimensions);
+#if defined(LW_EXPERIMENTAL_AVX2_FMA_DISPATCH)
+    if (!isfinite(max_abs_difference(reference, output, output_count)) ||
+        max_abs_difference(reference, output, output_count) > 1.0e-2f) {
+#else
     if (memcmp(reference, output, output_bytes) != 0) {
+#endif
         fprintf(stderr, "packed Conv result mismatch: %s\n", item->name);
         goto cleanup;
     }
@@ -261,7 +266,13 @@ static int run_case(const benchmark_case* item, uint32_t target_width, uint32_t 
         dispatched_ms = (dispatched_finished - dispatched_started) * 1000.0 / iterations;
     }
     if (scalar_started <= 0.0 || scalar_finished <= scalar_started ||
-        dispatched_ms <= 0.0 || memcmp(reference, output, output_bytes) != 0) {
+        dispatched_ms <= 0.0 ||
+#if defined(LW_EXPERIMENTAL_AVX2_FMA_DISPATCH)
+        !isfinite(max_abs_difference(reference, output, output_count)) ||
+        max_abs_difference(reference, output, output_count) > 1.0e-2f) {
+#else
+        memcmp(reference, output, output_bytes) != 0) {
+#endif
         fprintf(stderr, "packed Conv benchmark failed: %s\n", item->name);
         goto cleanup;
     }

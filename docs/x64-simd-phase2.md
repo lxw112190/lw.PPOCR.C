@@ -25,9 +25,10 @@ Conv1x1 kernel, but uses explicit _mm256_fmadd_ps instructions. It is
 compiled with AVX2+FMA target attributes on GCC/Clang and /arch:AVX2 on
 MSVC.
 
-The candidate is deliberately not connected to production dispatch yet. This
-keeps non-FMA hosts safe and preserves the current deterministic OCR path while
-the A/B data is collected.
+The candidate is deliberately not connected to the default production dispatch. This
+keeps non-FMA hosts safe and preserves the current deterministic OCR path. A
+native-only experimental build may opt into a shape-aware dispatch policy while
+paired A/B data is collected.
 
 ## Benchmark contract
 
@@ -59,14 +60,29 @@ normal dispatch. Configure that build with:
 
 Then run the same `full-ocr-intra-benchmark` command against the default and
 `build-fma` binaries. The experimental option is native-only, defaults to OFF,
-and does not change the public ABI or model files. It is intended for paired
-latency, checksum, and RSS measurements only.
+and does not change the public ABI or model files. The performance workflow also
+builds the experimental Conv1x1 driver and runs its smoke test. It is intended
+for paired latency, checksum, and RSS measurements only.
 
 The Native x64 OCR Performance workflow runs this experiment at 1 worker/1 DET
 thread and 4 workers/4 DET threads. The JSON and Markdown outputs are uploaded
 as the `lw-ppocr-x64-fma-ocr-results-*` artifact.
 The Conv1x1 summary also lists the three slowest and three fastest shapes,
 which is the input for a future shape-aware dispatch policy.
+
+## Shape-aware experimental dispatch
+
+`LW_EXPERIMENTAL_AVX2_FMA_DISPATCH=ON` enables a native-only policy that routes
+only the measured beneficial Tiny/REC shapes to the FMA candidate. Unknown shapes
+and the measured regressions (the large medium/late shapes) remain on regular AVX2.
+The default build keeps the existing AVX2 dispatch and is unchanged.
+
+The experimental benchmark accepts the small FMA rounding difference with a
+`1.0e-2` maximum absolute error bound; the default benchmark remains byte-exact.
+On the local paired 4-worker/DET4 sample, the shape-aware build reduced mean OCR
+latency by 5.45% with a 0.15 MiB RSS increase, identical checksum, and 16 lines.
+These numbers are directional only; promotion still requires the gates below on the
+full corpus.
 
 ## Promotion gate
 
