@@ -24,12 +24,15 @@ def sha256(path: Path) -> str:
 def sha256_bytes(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
+def normalize_runtime_version(value: str) -> str:
+    return value[1:] if value.startswith("v") else value
 def asset_set_id(variant: str, runtime_version: str, hashes: dict[str, str]) -> str:
     payload = {"variant": variant, "runtime_version": runtime_version, "assets": {name: hashes[name] for name in ASSET_NAMES}}
     encoded = json.dumps(payload, ensure_ascii=False, separators=(",", ":"), sort_keys=True).encode()
     return hashlib.sha256(encoded).hexdigest()[:16]
 
 def build_manifest(variant: str, runtime_version: str, lwm_version: str, hashes: dict[str, str]) -> dict[str, Any]:
+    runtime_version = normalize_runtime_version(runtime_version)
     return {
         "schema_version": SCHEMA_VERSION,
         "family": "PP-OCRv6",

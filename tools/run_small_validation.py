@@ -70,6 +70,7 @@ def main() -> int:
     parser.add_argument("--dictionary", type=Path, required=True)
     parser.add_argument("--build-dir", type=Path, required=True)
     parser.add_argument("--output-dir", type=Path, required=True)
+    parser.add_argument("--runtime-version", default="0.2.0-preview.1")
     parser.add_argument(
         "--rec-max-width",
         type=int,
@@ -194,7 +195,7 @@ def main() -> int:
     shutil.copyfile(rec_lwm, pack_dir / "rec.lwm")
     shutil.copyfile(output / "model" / "ppocr_keys.txt", pack_dir / "ppocr_keys.txt")
     pack = output / "ppocrv6-small-runtime.zip"
-    run("runtime model pack", [sys.executable, "tools/package_ppocrv6_runtime.py", "--input-dir", str(pack_dir), "--variant", "small", "--output", str(pack)], root)
+    run("runtime model pack", [sys.executable, "tools/package_ppocrv6_runtime.py", "--input-dir", str(pack_dir), "--variant", "small", "--runtime-version", args.runtime_version, "--output", str(pack)], root)
     run("runtime model pack validation", [sys.executable, "tools/validate_runtime_model_pack.py", str(pack)], root)
     summary = {
         "status": "ok",

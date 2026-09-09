@@ -1,6 +1,16 @@
 name: ppocrv6-medium-validation
 
 on:
+  workflow_call:
+    inputs:
+      expected_full_text_sha256_override:
+        required: false
+        type: string
+        default: ""
+      runtime_version:
+        required: false
+        type: string
+        default: "0.2.0-preview.1"
   push:
     branches:
       - main
@@ -33,6 +43,11 @@ on:
         description: "Optional Medium full OCR text SHA-256 override"
         required: false
         default: ""
+        type: string
+      runtime_version:
+        description: "Model-pack revision recorded in manifest"
+        required: false
+        default: "0.2.0-preview.1"
         type: string
 
 permissions:
@@ -97,6 +112,7 @@ jobs:
           --contract ci/ppocrv6-medium-validation.json
           --build-dir build
           --output-dir build/medium-validation-report
+          --runtime-version "${{ inputs.runtime_version }}"
           --expected-full-text-sha256-override "$EXPECTED_TEXT_SHA256_OVERRIDE"
       - name: Upload Medium validation report
         if: ${{ !cancelled() }}

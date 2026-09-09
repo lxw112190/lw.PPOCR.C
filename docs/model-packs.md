@@ -29,4 +29,4 @@ python tools/validate_runtime_model_pack.py `
 
 The input directory must contain `det.lwm`, `cls.lwm`, `rec.lwm` and `ppocr_keys.txt`. The same command works for `tiny`, `small` and `medium`. The ZIP is deterministic and stored without compression so its checksum is stable across CI runners.
 
-The first preview keeps Tiny as the default model in existing C, HTTP, Web, Android and Java packages. Small and Medium packs are opt-in native model assets until their production conversion and platform-specific validation gates are complete.
+The first preview keeps Tiny as the default model in existing C, HTTP, Web, Android and Java packages. Small and Medium packs are opt-in native model assets until their production conversion and platform-specific validation gates are complete. On a tagged release, the Release workflow publishes `lw.PPOCR.C-<version>-ppocrv6-small-runtime.zip` and `lw.PPOCR.C-<version>-ppocrv6-medium-runtime.zip` only after the Windows and Linux validation packs have identical SHA-256 values.

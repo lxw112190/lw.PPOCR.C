@@ -1,6 +1,16 @@
 name: ppocrv6-small-validation
 
 on:
+  workflow_call:
+    inputs:
+      expected_full_text_sha256_override:
+        required: false
+        type: string
+        default: ""
+      runtime_version:
+        required: false
+        type: string
+        default: "0.2.0-preview.1"
   push:
     branches:
       - main
@@ -24,6 +34,11 @@ on:
         description: "Optional full OCR text SHA-256 override"
         required: false
         default: ""
+        type: string
+      runtime_version:
+        description: "Model-pack revision recorded in manifest"
+        required: false
+        default: "0.2.0-preview.1"
         type: string
 
 permissions:
@@ -88,6 +103,7 @@ jobs:
           --dictionary "${{ steps.contract.outputs.dictionary_path }}"
           --build-dir build
           --output-dir build/small-validation-run
+          --runtime-version "${{ inputs.runtime_version }}"
           --rec-max-width "${{ steps.contract.outputs.rec_max_width }}"
           --expected-lines "${{ steps.contract.outputs.expected_lines }}"
           --expected-full-text-sha256 "${{ steps.contract.outputs.expected_full_text_sha256 }}"

@@ -24,8 +24,8 @@ commands.
 
 | Family | Variant | ONNX analysis | Experimental LWM | Full OCR | Release |
 |---|---|---|---|---|---|
-| PP-OCRv6 | Small | ✅ | ✅ fixed + dynamic prototypes | ✅ experimental | model archive only |
-| PP-OCRv6 | Medium | ✅ | ✅ fixed + dynamic analysis prototypes | ✅ analysis gate | model archive only |
+| PP-OCRv6 | Small | ✅ | ✅ fixed + dynamic prototypes | ✅ experimental | preview runtime pack |
+| PP-OCRv6 | Medium | ✅ | ✅ fixed + dynamic analysis prototypes | ✅ analysis gate | preview runtime pack |
 
 Experimental means that ONNX checker, shape inference, operator inventory,
 fixed-width and narrow dynamic LWM conversion, graph-output comparison, and
@@ -36,7 +36,7 @@ complete sample-image composition check and a scheduled Windows/Linux analysis
 gate at REC width 960; it has no production package. This is not a
 production support claim and does not add either variant to the default model
 package, C ABI, Android, WASM, or the default runtime release. The dedicated
-model archive contains the checked ONNX inputs for reproducible analysis only.
+model archive contains the checked ONNX inputs. The validation workflows produce preview runtime packs from the exact tested LWM assets.
 
 The authoritative asset layout and sharing rules are in
 [`models/ppocrv6-models.json`](../models/ppocrv6-models.json). Small and

@@ -121,6 +121,7 @@ def main() -> int:
     parser.add_argument("--contract", type=Path, required=True)
     parser.add_argument("--build-dir", type=Path, required=True)
     parser.add_argument("--output-dir", type=Path, required=True)
+    parser.add_argument("--runtime-version", default="0.2.0-preview.1")
     parser.add_argument("--expected-full-text-sha256-override")
     args = parser.parse_args()
 
@@ -278,7 +279,7 @@ def main() -> int:
         shutil.copyfile(rec_lwm, pack_dir / "rec.lwm")
         shutil.copyfile(dictionary, pack_dir / "ppocr_keys.txt")
         pack = output / "ppocrv6-medium-runtime.zip"
-        run("runtime model pack", [sys.executable, "tools/package_ppocrv6_runtime.py", "--input-dir", str(pack_dir), "--variant", "medium", "--output", str(pack)], root)
+        run("runtime model pack", [sys.executable, "tools/package_ppocrv6_runtime.py", "--input-dir", str(pack_dir), "--variant", "medium", "--runtime-version", args.runtime_version, "--output", str(pack)], root)
         run("runtime model pack validation", [sys.executable, "tools/validate_runtime_model_pack.py", str(pack)], root)
 
     match = re.search(r"(?m)^lines=(\d+)\s", stdout)
