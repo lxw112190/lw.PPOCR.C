@@ -90,6 +90,7 @@ def main() -> int:
                   return {
                     version: LwPpocr.version,
                     webAbiVersion: LwPpocr.webAbiVersion,
+                    modelInfo: LwPpocr.modelInfo,
                     frozen: Object.isFrozen(LwPpocr),
                     invalidOptionsCode,
                     status: window.__sdkEngine.getStatus()
@@ -98,6 +99,11 @@ def main() -> int:
             )
             assert public_contract["version"]
             assert public_contract["webAbiVersion"] == 1
+            assert public_contract["modelInfo"] == {
+                "family": "PP-OCRv6",
+                "variant": "tiny",
+                "displayName": "PP-OCRv6 Tiny",
+            }
             assert public_contract["frozen"]
             assert public_contract["invalidOptionsCode"] == "LW_OCR_OPTIONS"
             assert public_contract["status"]["state"] == "READY"

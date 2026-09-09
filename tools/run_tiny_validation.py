@@ -5,7 +5,6 @@ from __future__ import annotations
 import argparse
 import json
 import re
-import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -114,9 +113,16 @@ def main(argv: list[str] | None = None) -> int:
     (output / "full-ocr.txt").write_text(stdout, encoding="utf-8", newline="\n")
 
     pack_dir = output / "runtime-model"
-    pack_dir.mkdir(parents=True, exist_ok=True)
-    for name in ("det.lwm", "cls.lwm", "rec.lwm", "ppocr_keys.txt"):
-        shutil.copyfile(required[name], pack_dir / name)
+    run("canonical runtime staging", [
+        sys.executable,
+        "tools/prepare_ppocrv6_runtime_variant.py",
+        "--variant",
+        "tiny",
+        "--build-dir",
+        str(build),
+        "--output-dir",
+        str(pack_dir),
+    ], root)
     pack = output / "ppocrv6-tiny-runtime.zip"
     run(
         "runtime model pack",

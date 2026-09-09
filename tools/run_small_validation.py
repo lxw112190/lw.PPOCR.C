@@ -188,12 +188,14 @@ def main() -> int:
         )
     (output / "full-ocr.txt").write_text(stdout, encoding="utf-8", newline="\n")
 
+    converted_dir = output / "converted-runtime"
+    converted_dir.mkdir(exist_ok=True)
+    shutil.copyfile(det_lwm, converted_dir / "det.lwm")
+    shutil.copyfile(build / "models" / "cls.lwm", converted_dir / "cls.lwm")
+    shutil.copyfile(rec_lwm, converted_dir / "rec.lwm")
+    shutil.copyfile(output / "model" / "ppocr_keys.txt", converted_dir / "ppocr_keys.txt")
     pack_dir = output / "runtime-model"
-    pack_dir.mkdir(exist_ok=True)
-    shutil.copyfile(det_lwm, pack_dir / "det.lwm")
-    shutil.copyfile(build / "models" / "cls.lwm", pack_dir / "cls.lwm")
-    shutil.copyfile(rec_lwm, pack_dir / "rec.lwm")
-    shutil.copyfile(output / "model" / "ppocr_keys.txt", pack_dir / "ppocr_keys.txt")
+    run("canonical runtime staging", [sys.executable, "tools/prepare_ppocrv6_runtime_variant.py", "--variant", "small", "--build-dir", str(build), "--output-dir", str(pack_dir), "--converted-dir", str(converted_dir)], root)
     pack = output / "ppocrv6-small-runtime.zip"
     run("runtime model pack", [sys.executable, "tools/package_ppocrv6_runtime.py", "--input-dir", str(pack_dir), "--variant", "small", "--runtime-version", args.runtime_version, "--output", str(pack)], root)
     run("runtime model pack validation", [sys.executable, "tools/validate_runtime_model_pack.py", str(pack)], root)

@@ -393,6 +393,9 @@ if(EMSCRIPTEN)
             --det "${LW_PPOCR_C_DET_LWM}" --cls "${LW_PPOCR_C_CLS_LWM}"
             --rec "${LW_PPOCR_C_REC_LWM}"
             --dictionary "${CMAKE_CURRENT_SOURCE_DIR}/models/ppocrv6-tiny/ppocr_keys.txt"
+            --model-family "PP-OCRv6"
+            --model-variant "tiny"
+            --model-display-name "PP-OCRv6 Tiny"
             --version "${PROJECT_VERSION}"
             --output "${LW_PPOCR_C_WEB_SDK}"
         DEPENDS
@@ -443,6 +446,7 @@ if(EMSCRIPTEN)
             --sdk "${LW_PPOCR_C_WEB_SDK}"
             --ui "${CMAKE_CURRENT_SOURCE_DIR}/web/ocr-demo-ui.js"
             --sponsor "${CMAKE_CURRENT_SOURCE_DIR}/docs/assets/sponsor.jpg"
+            --title "lw.PPOCR.C · PP-OCRv6 Tiny · 离线 OCR 工作台"
             ${LW_PPOCR_C_WEB_HTML_PDF_ARGS}
             --output "${LW_PPOCR_C_WEB_HTML}"
         DEPENDS

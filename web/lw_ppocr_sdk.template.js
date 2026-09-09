@@ -2,6 +2,11 @@
   "use strict";
 
   const SDK_VERSION = __LW_SDK_VERSION__;
+  const MODEL_INFO = Object.freeze({
+    family: __LW_MODEL_FAMILY__,
+    variant: __LW_MODEL_VARIANT__,
+    displayName: __LW_MODEL_DISPLAY_NAME__
+  });
   const WEB_ABI_VERSION = 1;
   const MODEL_B64 = {
     det: "__LW_DET_MODEL_BASE64__",
