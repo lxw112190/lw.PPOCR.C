@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import NoReturn
 
 
-PLATFORMS = {"windows-x64", "linux-x64"}
+PLATFORMS = {"windows-x64", "linux-x64", "macos-x64", "macos-arm64"}
 MODEL_FILES = ("det.lwm", "cls.lwm", "rec.lwm", "ppocr_keys.txt", "sample.jpg")
 JAVA_FILES = ("NativeOcr.java", "OcrLine.java", "OcrResult.java", "OcrDemo.java")
 
@@ -45,6 +45,12 @@ def copy_native(native_dir: Path, destination: Path, platform: str) -> None:
     if platform == "windows-x64":
         entries = sorted(native_dir.glob("*.dll"))
         required = ("lw_ppocr_java.dll", "lw_ppocr_c.dll")
+    elif platform.startswith("macos-"):
+        entries = sorted(native_dir.glob("liblw_ppocr_java.dylib*"))
+        # The core dylib carries a versioned name (liblw_ppocr_c.<major>.dylib
+        # with SOVERSION), so match any of its dylib spellings.
+        entries += sorted(native_dir.glob("liblw_ppocr_c*.dylib"))
+        required = ("liblw_ppocr_java.dylib",)
     else:
         entries = sorted(native_dir.glob("liblw_ppocr_java.so*"))
         entries += sorted(native_dir.glob("liblw_ppocr_c.so*"))
@@ -55,6 +61,10 @@ def copy_native(native_dir: Path, destination: Path, platform: str) -> None:
             fail(f"native directory does not contain {name}: {native_dir}")
     if platform == "linux-x64" and not any(name.startswith("liblw_ppocr_c.so") for name in names):
         fail(f"native directory does not contain liblw_ppocr_c.so*: {native_dir}")
+    if platform.startswith("macos-") and not any(
+        name.startswith("liblw_ppocr_c") and name.endswith(".dylib") for name in names
+    ):
+        fail(f"native directory does not contain liblw_ppocr_c*.dylib: {native_dir}")
     for entry in entries:
         target = entry.resolve() if entry.is_symlink() else entry
         if not target.is_file():

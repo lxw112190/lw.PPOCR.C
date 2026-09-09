@@ -32,13 +32,25 @@ permissions:
 
 jobs:
   smoke:
-    name: ${{ matrix.os }} Java 8 JNI smoke
+    name: ${{ matrix.platform }} Java 8 JNI smoke
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-2022, ubuntu-22.04]
+        os: [windows-2022, ubuntu-22.04, macos-15]
+        include:
+          - os: windows-2022
+            platform: windows-x64
+            distribution: temurin
+          - os: ubuntu-22.04
+            platform: linux-x64
+            distribution: temurin
+          # macos-15 is the current Apple Silicon runner. Temurin does not
+          # ship Java 8 for macOS arm64, so Zulu is used there.
+          - os: macos-15
+            platform: macos-arm64
+            distribution: zulu
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 45
+    timeout-minutes: 60
 
     steps:
       - name: Check out repository
@@ -47,7 +59,7 @@ jobs:
       - name: Set up Java 8
         uses: actions/setup-java@v4
         with:
-          distribution: temurin
+          distribution: ${{ matrix.distribution }}
           java-version: "8"
 
       - name: Set up Python
@@ -67,8 +79,8 @@ jobs:
           -DLW_BUILD_CSHARP_DEMOS=OFF
           -DBUILD_TESTING=OFF
 
-      - name: Configure core on Linux
-        if: runner.os == 'Linux'
+      - name: Configure core on Linux and macOS
+        if: runner.os != 'Windows'
         run: >-
           cmake -S . -B build-java-core -G Ninja
           -DCMAKE_BUILD_TYPE=Release
@@ -91,8 +103,8 @@ jobs:
           -G "Visual Studio 17 2022" -A x64
           -DCMAKE_PREFIX_PATH="$env:GITHUB_WORKSPACE/stage-java"
 
-      - name: Configure JNI consumer on Linux
-        if: runner.os == 'Linux'
+      - name: Configure JNI consumer on Linux and macOS
+        if: runner.os != 'Windows'
         run: >-
           cmake -S stage-java/examples/java-jni -B build-java-jni -G Ninja
           -DCMAKE_BUILD_TYPE=Release
@@ -101,28 +113,20 @@ jobs:
       - name: Build JNI consumer
         run: cmake --build build-java-jni --config Release
 
-      - name: Package Windows Java JNI bundle
-        if: runner.os == 'Windows'
+      - name: Package Java JNI bundle
         shell: bash
         run: |
           set -euo pipefail
+          if [[ "$RUNNER_OS" == "Windows" ]]; then
+            native_dir="$GITHUB_WORKSPACE/build-java-jni/Release"
+          else
+            native_dir="$GITHUB_WORKSPACE/build-java-jni"
+          fi
           python tools/package_java_jni.py \
-            --platform windows-x64 \
-            --native-dir "$GITHUB_WORKSPACE/build-java-jni/Release" \
+            --platform "${{ matrix.platform }}" \
+            --native-dir "$native_dir" \
             --stage-dir "$GITHUB_WORKSPACE/stage-java" \
-            --output-dir "$GITHUB_WORKSPACE/dist/lw-ppocr-java-jni-windows-x64" \
-            --commit "$GITHUB_SHA"
-
-      - name: Package Linux Java JNI bundle
-        if: runner.os == 'Linux'
-        shell: bash
-        run: |
-          set -euo pipefail
-          python tools/package_java_jni.py \
-            --platform linux-x64 \
-            --native-dir "$GITHUB_WORKSPACE/build-java-jni" \
-            --stage-dir "$GITHUB_WORKSPACE/stage-java" \
-            --output-dir "$GITHUB_WORKSPACE/dist/lw-ppocr-java-jni-linux-x64" \
+            --output-dir "$GITHUB_WORKSPACE/dist/lw-ppocr-java-jni-${{ matrix.platform }}" \
             --commit "$GITHUB_SHA"
 
       - name: Validate Windows Java JNI bundle
@@ -187,17 +191,41 @@ jobs:
             fi
           done
 
+      - name: Validate macOS Java JNI bundle
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          set -euo pipefail
+          bundle="$GITHUB_WORKSPACE/dist/lw-ppocr-java-jni-${{ matrix.platform }}"
+          test -s "$bundle/native/liblw_ppocr_java.dylib"
+          compgen -G "$bundle/native/liblw_ppocr_c*.dylib" >/dev/null
+          test -s "$bundle/SHA256SUMS.txt"
+          (cd "$bundle" && shasum -a 256 -c SHA256SUMS.txt)
+          case "${{ matrix.platform }}" in
+            macos-arm64) file_expr='Mach-O 64-bit.*arm64' ;;
+            macos-x64)   file_expr='Mach-O 64-bit.*x86_64' ;;
+          esac
+          file "$bundle/native"/*.dylib | grep -Eiq "$file_expr"
+          otool -L "$bundle/native/liblw_ppocr_java.dylib" | grep -Eq 'liblw_ppocr_c[^ ]*\.dylib'
+          otool -l "$bundle/native/liblw_ppocr_java.dylib" | grep -A2 'LC_RPATH' | grep -Fq '@loader_path'
+          if find "$bundle/native" -maxdepth 1 -type f | grep -Eiq 'opencv|onnxruntime|paddle|python'; then
+            echo "forbidden dependency in macOS bundle" >&2
+            exit 1
+          fi
+          for library in "$bundle"/native/*.dylib; do
+            if otool -L "$library" | grep -Eiq 'opencv|onnxruntime|paddle|python'; then
+              echo "forbidden linked dependency in $library" >&2
+              exit 1
+            fi
+          done
+
       - name: Compile Java example from final bundle
         shell: bash
         run: |
           set -euo pipefail
           rm -rf build-java-bundle-classes
           mkdir -p build-java-bundle-classes
-          if [[ "$RUNNER_OS" == "Windows" ]]; then
-            java_dir="$GITHUB_WORKSPACE/dist/lw-ppocr-java-jni-windows-x64/java"
-          else
-            java_dir="$GITHUB_WORKSPACE/dist/lw-ppocr-java-jni-linux-x64/java"
-          fi
+          java_dir="$GITHUB_WORKSPACE/dist/lw-ppocr-java-jni-${{ matrix.platform }}/java"
           javac -encoding UTF-8 -d build-java-bundle-classes \
             "$java_dir/NativeOcr.java" "$java_dir/OcrLine.java" \
             "$java_dir/OcrResult.java" "$java_dir/OcrDemo.java"
@@ -243,20 +271,28 @@ jobs:
           grep -Fq 'lines: 16' java-ocr.txt
           grep -Fq '纯臻营养护发素' java-ocr.txt
 
-      - name: Upload Windows Java JNI bundle
-        if: runner.os == 'Windows'
-        uses: actions/upload-artifact@v4
-        with:
-          name: lw-ppocr-java-jni-windows-x64
-          path: dist/lw-ppocr-java-jni-windows-x64
-          if-no-files-found: error
-          retention-days: 14
+      - name: Run Java OCR smoke on macOS
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          set -euo pipefail
+          bundle="$GITHUB_WORKSPACE/dist/lw-ppocr-java-jni-${{ matrix.platform }}"
+          native="$bundle/native"
+          classes="$GITHUB_WORKSPACE/build-java-bundle-classes"
+          models="$bundle/models"
+          # dyld resolves the core dylib through the @loader_path RPATH, so the
+          # native directory only needs to be on the JVM library path.
+          LC_ALL=en_US.UTF-8 java -Dfile.encoding=UTF-8 \
+            -Djava.library.path="$native" \
+            -cp "$classes" OcrDemo "$models" "$models/sample.jpg" 1 false \
+            | tee java-ocr.txt
+          grep -Fq 'lines: 16' java-ocr.txt
+          grep -Fq '纯臻营养护发素' java-ocr.txt
 
-      - name: Upload Linux Java JNI bundle
-        if: runner.os == 'Linux'
+      - name: Upload Java JNI bundle
         uses: actions/upload-artifact@v4
         with:
-          name: lw-ppocr-java-jni-linux-x64
-          path: dist/lw-ppocr-java-jni-linux-x64
+          name: lw-ppocr-java-jni-${{ matrix.platform }}
+          path: dist/lw-ppocr-java-jni-${{ matrix.platform }}
           if-no-files-found: error
           retention-days: 14
