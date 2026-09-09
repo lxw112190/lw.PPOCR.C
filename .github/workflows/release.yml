@@ -137,6 +137,12 @@ jobs:
           name: lw-ppocr-java-jni-linux-x64
           path: release-assets/java/linux-bundle
 
+      - name: Download tested macOS Java JNI bundle
+        uses: actions/download-artifact@v8
+        with:
+          name: lw-ppocr-java-jni-macos-arm64
+          path: release-assets/java/macos-bundle
+
       - name: Verify and prepare release assets
         shell: bash
         env:
@@ -153,6 +159,7 @@ jobs:
           android_checksums="lw.PPOCR.C-${VERSION}-android-arm64.SHA256SUMS.txt"
           java_windows="lw.PPOCR.C-${VERSION}-java-jni-windows-x64.zip"
           java_linux="lw.PPOCR.C-${VERSION}-java-jni-linux-x64.tar.gz"
+          java_macos="lw.PPOCR.C-${VERSION}-java-jni-macos-arm64.tar.gz"
           models="lw.PPOCR.C-${VERSION}-ppocrv6-models.zip"
           tiny_model="lw.PPOCR.C-${VERSION}-ppocrv6-tiny-runtime.zip"
           small_model="lw.PPOCR.C-${VERSION}-ppocrv6-small-runtime.zip"
@@ -177,6 +184,7 @@ jobs:
 
           java_windows_root="release-assets/java/windows-bundle"
           java_linux_root="release-assets/java/linux-bundle"
+          java_macos_root="release-assets/java/macos-bundle"
           test -s "$java_windows_root/native/lw_ppocr_java.dll"
           test -s "$java_windows_root/native/lw_ppocr_c.dll"
           test -s "$java_windows_root/models/det.lwm"
@@ -185,6 +193,10 @@ jobs:
           test -n "$(find "$java_linux_root/native" -maxdepth 1 -type f -name 'liblw_ppocr_c.so*' -print -quit)"
           test -s "$java_linux_root/models/det.lwm"
           test -s "$java_linux_root/SHA256SUMS.txt"
+          test -s "$java_macos_root/native/liblw_ppocr_java.dylib"
+          test -s "$java_macos_root/native/liblw_ppocr_c.dylib"
+          test -s "$java_macos_root/models/det.lwm"
+          test -s "$java_macos_root/SHA256SUMS.txt"
 
           python tools/validate_model_catalog.py models/ppocrv6-models.json
 
@@ -244,8 +256,14 @@ jobs:
               sha256sum -c SHA256SUMS.txt
               tar -czf "${GITHUB_WORKSPACE}/release-assets/${java_linux}" .
             )
+            (
+              cd java/macos-bundle
+              shasum -a 256 -c SHA256SUMS.txt
+              tar -czf "${GITHUB_WORKSPACE}/release-assets/${java_macos}" .
+            )
             sha256sum "${java_windows}" > "${java_windows}.sha256"
             sha256sum "${java_linux}" > "${java_linux}.sha256"
+            sha256sum "${java_macos}" > "${java_macos}.sha256"
             python "${GITHUB_WORKSPACE}/tools/package_ppocrv6_models.py" \
               --catalog "${GITHUB_WORKSPACE}/models/ppocrv6-models.json" \
               --output "${GITHUB_WORKSPACE}/release-assets/${models}"
@@ -273,8 +291,8 @@ jobs:
           fi
 
           mapfile -t assets < <(find release-assets -maxdepth 1 -type f -print | sort)
-          if [[ "${#assets[@]}" -ne 25 ]]; then
-            echo "expected twenty-five release assets, found ${#assets[@]}" >&2
+          if [[ "${#assets[@]}" -ne 27 ]]; then
+            echo "expected twenty-seven release assets, found ${#assets[@]}" >&2
             printf '%s\n' "${assets[@]}" >&2
             exit 1
           fi

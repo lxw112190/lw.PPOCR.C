@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import NoReturn
 
 
-PLATFORMS = {"windows-x64", "linux-x64"}
+PLATFORMS = {"windows-x64", "linux-x64", "macos-x64", "macos-arm64"}
 MODEL_FILES = ("det.lwm", "cls.lwm", "rec.lwm", "ppocr_keys.txt", "sample.jpg")
 JAVA_FILES = ("NativeOcr.java", "OcrLine.java", "OcrResult.java", "OcrDemo.java")
 
@@ -45,6 +45,10 @@ def copy_native(native_dir: Path, destination: Path, platform: str) -> None:
     if platform == "windows-x64":
         entries = sorted(native_dir.glob("*.dll"))
         required = ("lw_ppocr_java.dll", "lw_ppocr_c.dll")
+    elif platform.startswith("macos-"):
+        entries = sorted(native_dir.glob("liblw_ppocr_java.dylib*"))
+        entries += sorted(native_dir.glob("liblw_ppocr_c.dylib*"))
+        required = ("liblw_ppocr_java.dylib", "liblw_ppocr_c.dylib")
     else:
         entries = sorted(native_dir.glob("liblw_ppocr_java.so*"))
         entries += sorted(native_dir.glob("liblw_ppocr_c.so*"))
