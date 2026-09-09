@@ -47,8 +47,10 @@ def copy_native(native_dir: Path, destination: Path, platform: str) -> None:
         required = ("lw_ppocr_java.dll", "lw_ppocr_c.dll")
     elif platform.startswith("macos-"):
         entries = sorted(native_dir.glob("liblw_ppocr_java.dylib*"))
-        entries += sorted(native_dir.glob("liblw_ppocr_c.dylib*"))
-        required = ("liblw_ppocr_java.dylib", "liblw_ppocr_c.dylib")
+        # The core dylib carries a versioned name (liblw_ppocr_c.<major>.dylib
+        # with SOVERSION), so match any of its dylib spellings.
+        entries += sorted(native_dir.glob("liblw_ppocr_c*.dylib"))
+        required = ("liblw_ppocr_java.dylib",)
     else:
         entries = sorted(native_dir.glob("liblw_ppocr_java.so*"))
         entries += sorted(native_dir.glob("liblw_ppocr_c.so*"))
@@ -59,6 +61,10 @@ def copy_native(native_dir: Path, destination: Path, platform: str) -> None:
             fail(f"native directory does not contain {name}: {native_dir}")
     if platform == "linux-x64" and not any(name.startswith("liblw_ppocr_c.so") for name in names):
         fail(f"native directory does not contain liblw_ppocr_c.so*: {native_dir}")
+    if platform.startswith("macos-") and not any(
+        name.startswith("liblw_ppocr_c") and name.endswith(".dylib") for name in names
+    ):
+        fail(f"native directory does not contain liblw_ppocr_c*.dylib: {native_dir}")
     for entry in entries:
         target = entry.resolve() if entry.is_symlink() else entry
         if not target.is_file():

@@ -198,7 +198,7 @@ jobs:
           set -euo pipefail
           bundle="$GITHUB_WORKSPACE/dist/lw-ppocr-java-jni-${{ matrix.platform }}"
           test -s "$bundle/native/liblw_ppocr_java.dylib"
-          test -s "$bundle/native/liblw_ppocr_c.dylib"
+          compgen -G "$bundle/native/liblw_ppocr_c*.dylib" >/dev/null
           test -s "$bundle/SHA256SUMS.txt"
           (cd "$bundle" && shasum -a 256 -c SHA256SUMS.txt)
           case "${{ matrix.platform }}" in
@@ -206,7 +206,7 @@ jobs:
             macos-x64)   file_expr='Mach-O 64-bit.*x86_64' ;;
           esac
           file "$bundle/native"/*.dylib | grep -Eiq "$file_expr"
-          otool -L "$bundle/native/liblw_ppocr_java.dylib" | grep -Fq 'liblw_ppocr_c.dylib'
+          otool -L "$bundle/native/liblw_ppocr_java.dylib" | grep -Eq 'liblw_ppocr_c[^ ]*\.dylib'
           otool -l "$bundle/native/liblw_ppocr_java.dylib" | grep -A2 'LC_RPATH' | grep -Fq '@loader_path'
           if find "$bundle/native" -maxdepth 1 -type f | grep -Eiq 'opencv|onnxruntime|paddle|python'; then
             echo "forbidden dependency in macOS bundle" >&2

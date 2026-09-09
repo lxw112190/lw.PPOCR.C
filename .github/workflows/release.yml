@@ -194,7 +194,7 @@ jobs:
           test -s "$java_linux_root/models/det.lwm"
           test -s "$java_linux_root/SHA256SUMS.txt"
           test -s "$java_macos_root/native/liblw_ppocr_java.dylib"
-          test -s "$java_macos_root/native/liblw_ppocr_c.dylib"
+          test -n "$(find "$java_macos_root/native" -maxdepth 1 -type f -name 'liblw_ppocr_c*.dylib' -print -quit)"
           test -s "$java_macos_root/models/det.lwm"
           test -s "$java_macos_root/SHA256SUMS.txt"
 
