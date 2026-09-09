@@ -13,6 +13,33 @@ The SDK itself accepts decoded image sources, not PDF documents. The standalone
 HTML has a separate, optional PDF.js frontend which renders one PDF page to a
 Canvas and passes that Canvas to this unchanged SDK.
 
+## PP-OCRv6 model variants
+
+The default lw-ppocr.js and ocr-demo.html artifacts remain the Tiny
+compatibility variant. The SDK exposes the embedded model identity without
+requiring applications to infer it from a filename:
+
+~~~javascript
+LwPpocr.modelInfo;
+// { family: "PP-OCRv6", variant: "tiny", displayName: "PP-OCRv6 Tiny" }
+~~~
+
+Small and Medium browser artifacts are opt-in because their ONNX-to-LWM
+conversion is heavier than the normal Tiny build. Configure Emscripten with
+-DLW_BUILD_WEB_MODEL_VARIANTS=ON, then build lw-ocr-html-all (or the
+individual lw-ocr-js-small, lw-ocr-js-medium, lw-ocr-html-small and
+lw-ocr-html-medium targets). The output names are:
+
+~~~text
+lw-ppocr-v6-small.js     ocr-demo-small.html
+lw-ppocr-v6-medium.js    ocr-demo-medium.html
+~~~
+
+All variants use the same generated WASM runtime. Only the model and
+dictionary payload changes, so an application can choose a variant by loading
+the corresponding SDK file while keeping the same LwPpocr.create() and result
+contract.
+
 ## Quick start
 
 Place the release SDK beside the application page:

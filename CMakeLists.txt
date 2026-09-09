@@ -20,6 +20,8 @@ set(LW_LWM_FORMAT_VERSION "0.1" CACHE STRING
     "LWM model format version recorded in distribution manifests")
 option(LW_WEB_PDF
     "Embed offline PDF.js support in the standalone OCR HTML" ON)
+option(LW_BUILD_WEB_MODEL_VARIANTS
+    "Build standalone PP-OCRv6 Small and Medium browser SDK/HTML variants" OFF)
 set(LW_PRECONVERTED_ASSETS_DIR "" CACHE PATH
     "Directory containing preconverted LWM models and PPM fixtures")
 set(LW_BUILD_ENVIRONMENT_FILE "" CACHE FILEPATH
@@ -459,6 +461,103 @@ if(EMSCRIPTEN)
         COMMENT "Packaging the standalone offline OCR HTML demo"
         VERBATIM)
     add_custom_target(lw-ocr-html DEPENDS "${LW_PPOCR_C_WEB_HTML}")
+
+    # Tiny remains the compatibility/default browser artifact above.  Small
+    # and Medium reuse the same generated WASM runtime and only add their
+    # model staging plus SDK/HTML wrappers when explicitly requested.  This
+    # keeps the normal browser build fast while providing deterministic,
+    # independently downloadable model variants for release jobs.
+    if(LW_BUILD_WEB_MODEL_VARIANTS)
+        set(LW_WEB_VARIANT_ROOT
+            "${CMAKE_CURRENT_BINARY_DIR}/runtime-models")
+        set(LW_WEB_VARIANT_COMMON_DEPS
+            "${CMAKE_CURRENT_SOURCE_DIR}/tools/prepare_ppocrv6_runtime_variant.py"
+            "${CMAKE_CURRENT_SOURCE_DIR}/models/ppocrv6-models.json"
+            "${CMAKE_CURRENT_SOURCE_DIR}/models/ppocrv6-small/det.onnx"
+            "${CMAKE_CURRENT_SOURCE_DIR}/models/ppocrv6-small/rec.onnx"
+            "${CMAKE_CURRENT_SOURCE_DIR}/models/ppocrv6-medium/det.onnx"
+            "${CMAKE_CURRENT_SOURCE_DIR}/models/ppocrv6-medium/rec.onnx"
+            "${CMAKE_CURRENT_SOURCE_DIR}/models/ppocrv6-shared/PP-OCRv6_small_rec_dict.txt"
+            "${CMAKE_CURRENT_SOURCE_DIR}/tools/convert_small_det_experimental.py"
+            "${CMAKE_CURRENT_SOURCE_DIR}/tools/convert_small_rec_experimental.py"
+            "${CMAKE_CURRENT_SOURCE_DIR}/tools/convert_medium_det_experimental.py"
+            "${CMAKE_CURRENT_SOURCE_DIR}/tools/convert_medium_rec_experimental.py"
+            "${CMAKE_CURRENT_SOURCE_DIR}/tools/validate_model_catalog.py")
+
+        function(lw_add_web_model_variant variant display_name)
+            set(_variant_root
+                "${LW_WEB_VARIANT_ROOT}/ppocrv6-${variant}")
+            set(_variant_stage_stamp
+                "${_variant_root}/runtime-assets.json")
+            add_custom_command(
+                OUTPUT "${_variant_stage_stamp}"
+                COMMAND "${Python3_EXECUTABLE}"
+                        "${CMAKE_CURRENT_SOURCE_DIR}/tools/prepare_ppocrv6_runtime_variant.py"
+                        --variant "${variant}"
+                        --build-dir "${CMAKE_CURRENT_BINARY_DIR}"
+                        --output-dir "${_variant_root}"
+                DEPENDS convert_cls_model
+                        ${LW_WEB_VARIANT_COMMON_DEPS}
+                WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+                COMMENT "Staging PP-OCRv6 ${display_name} browser model"
+                VERBATIM)
+
+            set(_variant_sdk
+                "${CMAKE_CURRENT_BINARY_DIR}/lw-ppocr-v6-${variant}.js")
+            add_custom_command(
+                OUTPUT "${_variant_sdk}"
+                COMMAND "${Python3_EXECUTABLE}"
+                        "${CMAKE_CURRENT_SOURCE_DIR}/web/package_ocr_sdk.py"
+                        --template "${CMAKE_CURRENT_SOURCE_DIR}/web/lw_ppocr_sdk.template.js"
+                        --runtime "$<TARGET_FILE_DIR:lw_ppocr_web>/lw_ppocr_web.js"
+                        --det "${_variant_root}/det.lwm"
+                        --cls "${_variant_root}/cls.lwm"
+                        --rec "${_variant_root}/rec.lwm"
+                        --dictionary "${_variant_root}/ppocr_keys.txt"
+                        --model-family "PP-OCRv6"
+                        --model-variant "${variant}"
+                        --model-display-name "${display_name}"
+                        --version "${PROJECT_VERSION}"
+                        --output "${_variant_sdk}"
+                DEPENDS lw_ppocr_web
+                        "${_variant_stage_stamp}"
+                        "${CMAKE_CURRENT_SOURCE_DIR}/web/lw_ppocr_sdk.template.js"
+                        "${CMAKE_CURRENT_SOURCE_DIR}/web/package_ocr_sdk.py"
+                COMMENT "Packaging the PP-OCRv6 ${display_name} browser SDK"
+                VERBATIM)
+            add_custom_target(lw-ocr-js-${variant} DEPENDS "${_variant_sdk}")
+
+            set(_variant_html
+                "${CMAKE_CURRENT_BINARY_DIR}/ocr-demo-${variant}.html")
+            add_custom_command(
+                OUTPUT "${_variant_html}"
+                COMMAND "${Python3_EXECUTABLE}"
+                        "${CMAKE_CURRENT_SOURCE_DIR}/web/package_ocr_html.py"
+                        --template "${CMAKE_CURRENT_SOURCE_DIR}/web/ocr-demo.template.html"
+                        --sdk "${_variant_sdk}"
+                        --ui "${CMAKE_CURRENT_SOURCE_DIR}/web/ocr-demo-ui.js"
+                        --sponsor "${CMAKE_CURRENT_SOURCE_DIR}/docs/assets/sponsor.jpg"
+                        --title "lw.PPOCR.C · ${display_name} · 离线 OCR 工作台"
+                        ${LW_PPOCR_C_WEB_HTML_PDF_ARGS}
+                        --output "${_variant_html}"
+                DEPENDS lw-ocr-js-${variant}
+                        "${CMAKE_CURRENT_SOURCE_DIR}/web/ocr-demo.template.html"
+                        "${CMAKE_CURRENT_SOURCE_DIR}/web/ocr-demo-ui.js"
+                        "${CMAKE_CURRENT_SOURCE_DIR}/web/package_ocr_html.py"
+                        "${CMAKE_CURRENT_SOURCE_DIR}/docs/assets/sponsor.jpg"
+                        ${LW_PPOCR_C_WEB_HTML_PDF_DEPENDS}
+                COMMENT "Packaging the PP-OCRv6 ${display_name} offline OCR HTML"
+                VERBATIM)
+            add_custom_target(lw-ocr-html-${variant} DEPENDS "${_variant_html}")
+        endfunction()
+
+        lw_add_web_model_variant(small "PP-OCRv6 Small")
+        lw_add_web_model_variant(medium "PP-OCRv6 Medium")
+        add_custom_target(lw-ocr-js-all
+            DEPENDS lw-ocr-js lw-ocr-js-small lw-ocr-js-medium)
+        add_custom_target(lw-ocr-html-all
+            DEPENDS lw-ocr-html lw-ocr-html-small lw-ocr-html-medium)
+    endif()
 
     # Node consumes the same WASM Host ABI as the browser. Keep this target
     # separate from the browser SDK so the Node release never needs to parse

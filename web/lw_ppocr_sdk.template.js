@@ -642,6 +642,7 @@
   global.LwPpocr = Object.freeze({
     version: SDK_VERSION,
     webAbiVersion: WEB_ABI_VERSION,
+    modelInfo: MODEL_INFO,
     Error: LwPpocrError,
     create
   });
