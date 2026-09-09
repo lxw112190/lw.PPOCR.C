@@ -1185,6 +1185,25 @@ if(BUILD_TESTING AND NOT EMSCRIPTEN)
                 "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_packed_matmul_benchmark.py"
                 --driver "$<TARGET_FILE:packed-matmul-benchmark-driver>")
     set_tests_properties(packed_matmul_benchmark_smoke PROPERTIES TIMEOUT 120)
+    add_executable(erf-benchmark-driver
+        tests/erf_benchmark_driver.c)
+    target_link_libraries(erf-benchmark-driver PRIVATE lw_ppocr_c)
+    target_include_directories(erf-benchmark-driver PRIVATE
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/kernels"
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/simd")
+    target_compile_features(erf-benchmark-driver PRIVATE c_std_11)
+    if(MSVC)
+        target_compile_options(erf-benchmark-driver PRIVATE /W4 /WX /utf-8)
+    else()
+        target_compile_options(erf-benchmark-driver PRIVATE
+            -Wall -Wextra -Wpedantic -Werror)
+    endif()
+    add_test(
+        NAME erf_benchmark_smoke
+        COMMAND "${Python3_EXECUTABLE}"
+                "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_erf_benchmark.py"
+                --driver "$<TARGET_FILE:erf-benchmark-driver>")
+    set_tests_properties(erf_benchmark_smoke PROPERTIES TIMEOUT 120)
 
     add_executable(conv3x3-stride2-benchmark-driver
         tests/conv3x3_stride2_benchmark_driver.c)

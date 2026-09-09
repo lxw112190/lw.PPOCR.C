@@ -164,3 +164,30 @@ and `0.625333 ms` for the packed path (`1.270x` packed improvement). At width
 preserved their scalar-reference checksums. The gain is real but modest, so
 this node is now covered by a stable A/B baseline before any further
 specialization is considered.
+
+## REC Erf measurement
+
+REC profile attribution shows Erf as the next large operator family. The new
+`erf-benchmark-driver` uses the actual dynamic shapes at target widths 320 and
+960 and checks the existing maximum absolute error contract of `5e-7` against
+`erff`.
+
+At target width 960, the AVX2 approximation measured approximately `18.0x` to
+`19.2x` faster than scalar `erff` across the six REC shapes. The largest case,
+`[1,320,3,240]` (230,400 elements), measured `3.790333 ms` scalar versus
+`0.204400 ms` AVX2, with maximum absolute error `2.98023224e-7`. This makes
+Erf an important accumulated operator in the graph, but not a promising first
+kernel rewrite target: the existing AVX2 path is already efficient and within
+its accuracy contract.
+
+## REC pointwise Conv measurement
+
+The repeated REC pointwise families are also covered at their exact graph
+shapes: `48↔96` at height 12, `96↔192` at height 6, and `160↔320` at height
+3. At target width 960, the current packed AVX2 path measured `24.3x` to
+`34.4x` faster than the scalar reference across these six cases; the
+`160→320` case measured `24.955667 ms` scalar versus `0.785900 ms` packed.
+All outputs preserved their checksums. These results make the existing packed
+pointwise kernel another low-priority rewrite target; future work should focus
+on graph scheduling, workspace reuse, or end-to-end overhead rather than
+replacing this inner loop without new evidence.

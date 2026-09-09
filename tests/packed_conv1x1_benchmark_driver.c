@@ -195,6 +195,12 @@ cleanup:
 int main(int argc, char** argv) {
     static const benchmark_case cases[] = {
         {"early-96x192", 96u, 192u, 12u},
+        {"rec-48x96-h12", 48u, 96u, 12u},
+        {"rec-96x48-h12", 96u, 48u, 12u},
+        {"rec-96x192-h6", 96u, 192u, 6u},
+        {"rec-192x96-h6", 192u, 96u, 6u},
+        {"rec-160x320-h3", 160u, 320u, 3u},
+        {"rec-320x160-h3", 320u, 160u, 3u},
         {"middle-192x384", 192u, 384u, 6u},
         {"late-384x768", 384u, 768u, 3u},
         {"late-768x384", 768u, 384u, 3u},

@@ -8,9 +8,9 @@ import subprocess
 import unittest
 
 
-class PackedConv1x1BenchmarkTest(unittest.TestCase):
-    def test_rec_and_medium_geometries_are_correct_and_machine_readable(self) -> None:
-        for target_width, expected_width in ((320, 80), (960, 240)):
+class ErfBenchmarkTest(unittest.TestCase):
+    def test_rec_geometries_and_error_contract(self) -> None:
+        for target_width, width_by_stage in ((320, (160, 80)), (960, (480, 240))):
             completed = subprocess.run(
                 [ARGS.driver, str(target_width), "1"],
                 check=False,
@@ -26,30 +26,25 @@ class PackedConv1x1BenchmarkTest(unittest.TestCase):
             self.assertEqual(report["target_width"], target_width)
             self.assertEqual(report["iterations"], 1)
             self.assertTrue(report["backend"])
+            if not report["supported"]:
+                continue
             cases = report["cases"]
             self.assertEqual(
-                [(item["input_channels"], item["output_channels"], item["height"], item["width"])
-                 for item in cases],
+                [(item["channels"], item["height"], item["width"]) for item in cases],
                 [
-                    (96, 192, 12, expected_width),
-                    (48, 96, 12, expected_width),
-                    (96, 48, 12, expected_width),
-                    (96, 192, 6, expected_width),
-                    (192, 96, 6, expected_width),
-                    (160, 320, 3, expected_width),
-                    (320, 160, 3, expected_width),
-                    (192, 384, 6, expected_width),
-                    (384, 768, 3, expected_width),
-                    (768, 384, 3, expected_width),
-                    (512, 1024, 6, expected_width),
-                    (1024, 512, 6, expected_width),
-                    (1536, 768, 3, expected_width),
+                    (24, 24, width_by_stage[0]),
+                    (96, 12, width_by_stage[1]),
+                    (96, 6, width_by_stage[1]),
+                    (192, 6, width_by_stage[1]),
+                    (192, 3, width_by_stage[1]),
+                    (320, 3, width_by_stage[1]),
                 ],
             )
             for item in cases:
-                for field in ("scalar_ms", "dispatched_ms", "speedup"):
+                for field in ("scalar_ms", "avx2_ms", "speedup"):
                     self.assertTrue(math.isfinite(item[field]), (field, item))
                     self.assertGreater(item[field], 0.0, (field, item))
+                self.assertLessEqual(item["max_abs_error"], 5.0e-7, item)
                 self.assertRegex(item["checksum"], re.compile(r"^0x[0-9a-f]{16}$"))
 
 
