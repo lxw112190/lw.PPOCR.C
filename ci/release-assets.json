@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "required_assets": [
+    {"name": "lw.PPOCR.C-{version}-windows-x64-msvc.zip", "checksum": "sidecar"},
+    {"name": "lw.PPOCR.C-{version}-linux-x86_64.tar.gz", "checksum": "sidecar"},
+    {"name": "lw.PPOCR.C-{version}-ocr-demo.html", "checksum": "sidecar"},
+    {"name": "lw.PPOCR.C-{version}-web-sdk.js", "checksum": "sidecar"},
+    {"name": "lw.PPOCR.C-{version}-ocr-demo-small.html", "checksum": "sidecar"},
+    {"name": "lw.PPOCR.C-{version}-web-sdk-small.js", "checksum": "sidecar"},
+    {"name": "lw.PPOCR.C-{version}-ocr-demo-medium.html", "checksum": "sidecar"},
+    {"name": "lw.PPOCR.C-{version}-web-sdk-medium.js", "checksum": "sidecar"},
+    {"name": "lw.PPOCR.C-{version}-node-wasm.zip", "checksum": "sidecar"},
+    {
+      "name": "lw.PPOCR.C-{version}-android-arm64.aar",
+      "checksum": {"file": "lw.PPOCR.C-{version}-android-arm64.SHA256SUMS.txt"}
+    },
+    {
+      "name": "lw.PPOCR.C-{version}-android-arm64-demo.apk",
+      "checksum": {"file": "lw.PPOCR.C-{version}-android-arm64.SHA256SUMS.txt"}
+    },
+    {"name": "lw.PPOCR.C-{version}-java-jni-windows-x64.zip", "checksum": "sidecar"},
+    {"name": "lw.PPOCR.C-{version}-java-jni-linux-x64.tar.gz", "checksum": "sidecar"},
+    {"name": "lw.PPOCR.C-{version}-java-jni-macos-arm64.tar.gz", "checksum": "sidecar"},
+    {"name": "lw.PPOCR.C-{version}-ppocrv6-models.zip", "checksum": "sidecar"},
+    {"name": "lw.PPOCR.C-{version}-ppocrv6-tiny-runtime.zip", "checksum": "sidecar"},
+    {"name": "lw.PPOCR.C-{version}-ppocrv6-small-runtime.zip", "checksum": "sidecar"},
+    {"name": "lw.PPOCR.C-{version}-ppocrv6-medium-runtime.zip", "checksum": "sidecar"}
+  ]
+}

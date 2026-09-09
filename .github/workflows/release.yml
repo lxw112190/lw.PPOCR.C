@@ -148,10 +148,13 @@ jobs:
       - name: Verify and prepare release assets
         shell: bash
         env:
-          VERSION: ${{ steps.version.outputs.base_version }}
+          BUILD_VERSION: ${{ steps.version.outputs.base_version }}
+          VERSION: ${{ steps.version.outputs.version }}
         run: |
           set -euo pipefail
+          windows_source="lw.PPOCR.C-${BUILD_VERSION}-windows-x64-msvc.zip"
           windows="lw.PPOCR.C-${VERSION}-windows-x64-msvc.zip"
+          linux_source="lw.PPOCR.C-${BUILD_VERSION}-linux-x86_64.tar.gz"
           linux="lw.PPOCR.C-${VERSION}-linux-x86_64.tar.gz"
           wasm="lw.PPOCR.C-${VERSION}-ocr-demo.html"
           websdk="lw.PPOCR.C-${VERSION}-web-sdk.js"
@@ -159,6 +162,7 @@ jobs:
           websdk_small="lw.PPOCR.C-${VERSION}-web-sdk-small.js"
           wasm_medium="lw.PPOCR.C-${VERSION}-ocr-demo-medium.html"
           websdk_medium="lw.PPOCR.C-${VERSION}-web-sdk-medium.js"
+          nodewasm_source="lw.PPOCR.C-${BUILD_VERSION}-node-wasm.zip"
           nodewasm="lw.PPOCR.C-${VERSION}-node-wasm.zip"
           android_aar="lw.PPOCR.C-${VERSION}-android-arm64.aar"
           android_apk="lw.PPOCR.C-${VERSION}-android-arm64-demo.apk"
@@ -171,18 +175,18 @@ jobs:
           small_model="lw.PPOCR.C-${VERSION}-ppocrv6-small-runtime.zip"
           medium_model="lw.PPOCR.C-${VERSION}-ppocrv6-medium-runtime.zip"
 
-          test -s "release-assets/${windows}"
-          test -s "release-assets/${windows}.sha256"
-          test -s "release-assets/${linux}"
-          test -s "release-assets/${linux}.sha256"
+          test -s "release-assets/${windows_source}"
+          test -s "release-assets/${windows_source}.sha256"
+          test -s "release-assets/${linux_source}"
+          test -s "release-assets/${linux_source}.sha256"
           test -s "release-assets/ocr-demo.html"
           test -s "release-assets/lw-ppocr.js"
           test -s "release-assets/ocr-demo-small.html"
           test -s "release-assets/lw-ppocr-v6-small.js"
           test -s "release-assets/ocr-demo-medium.html"
           test -s "release-assets/lw-ppocr-v6-medium.js"
-          test -s "release-assets/${nodewasm}"
-          test -s "release-assets/${nodewasm}.sha256"
+          test -s "release-assets/${nodewasm_source}"
+          test -s "release-assets/${nodewasm_source}.sha256"
 
           android_root="release-assets/android"
           android_aar_source="$(find "$android_root" -type f -name 'lw-ppocr-android-release.aar' -print -quit)"
@@ -247,9 +251,18 @@ jobs:
             # CPack writes the checksum beside the archive on its build host.
             # Normalize only the text file line endings so GNU sha256sum does
             # not treat a Windows CR as part of the archived file name.
-            sed -i 's/\r$//' "${windows}.sha256" "${linux}.sha256"
-            sha256sum -c "${windows}.sha256"
-            sha256sum -c "${linux}.sha256"
+            sed -i 's/\r$//' "${windows_source}.sha256" "${linux_source}.sha256"
+            sha256sum -c "${windows_source}.sha256"
+            sha256sum -c "${linux_source}.sha256"
+            rm "${windows_source}.sha256" "${linux_source}.sha256"
+            if [[ "${windows_source}" != "${windows}" ]]; then
+              mv "${windows_source}" "${windows}"
+            fi
+            if [[ "${linux_source}" != "${linux}" ]]; then
+              mv "${linux_source}" "${linux}"
+            fi
+            sha256sum "${windows}" > "${windows}.sha256"
+            sha256sum "${linux}" > "${linux}.sha256"
             mv ocr-demo.html "${wasm}"
             mv lw-ppocr.js "${websdk}"
             mv ocr-demo-small.html "${wasm_small}"
@@ -262,7 +275,12 @@ jobs:
             sha256sum "${websdk_small}" > "${websdk_small}.sha256"
             sha256sum "${wasm_medium}" > "${wasm_medium}.sha256"
             sha256sum "${websdk_medium}" > "${websdk_medium}.sha256"
-            sha256sum -c "${nodewasm}.sha256"
+            sha256sum -c "${nodewasm_source}.sha256"
+            rm "${nodewasm_source}.sha256"
+            if [[ "${nodewasm_source}" != "${nodewasm}" ]]; then
+              mv "${nodewasm_source}" "${nodewasm}"
+            fi
+            sha256sum "${nodewasm}" > "${nodewasm}.sha256"
             sha256sum "${android_aar}" "${android_apk}" > "${android_checksums}"
             (
               cd java/windows-bundle
@@ -302,18 +320,19 @@ jobs:
         run: |
           set -euo pipefail
           publish_flags=(--draft=false)
-          if [[ "${VERSION}" == 0.* || "${VERSION}" == *-* ]]; then
+          if [[ "${VERSION}" == *-* ]]; then
             publish_flags+=(--prerelease)
           else
             publish_flags+=(--latest)
           fi
 
+          python tools/verify_release_assets.py \
+            --manifest ci/release-assets.json \
+            --directory release-assets \
+            --version "${VERSION}" \
+            --strict
+
           mapfile -t assets < <(find release-assets -maxdepth 1 -type f -print | sort)
-          if [[ "${#assets[@]}" -ne 35 ]]; then
-            echo "expected thirty-five release assets, found ${#assets[@]}" >&2
-            printf '%s\n' "${assets[@]}" >&2
-            exit 1
-          fi
 
           if existing_draft="$(gh release view "${TAG}" --repo "${GITHUB_REPOSITORY}" \
               --json isDraft --jq .isDraft 2>/dev/null)"; then
