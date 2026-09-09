@@ -19,6 +19,7 @@ RUNTIME_VERSION_RE = re.compile(
     r"^[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z][0-9A-Za-z.-]*)?$"
 )
 LWM_VERSION_RE = re.compile(r"^[0-9]+\.[0-9]+$")
+SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 ZIP_EPOCH = (1980, 1, 1, 0, 0, 0)
 
 
@@ -49,7 +50,18 @@ def runtime_status(runtime_version: str) -> str:
     return "preview" if "-" in normalize_runtime_version(runtime_version) else "production"
 
 
+def package_root(variant: str) -> str:
+    if variant not in {"tiny", "small", "medium"}:
+        raise ValueError(f"unsupported PP-OCRv6 variant: {variant}")
+    return f"ppocrv6-{variant}"
+
+
 def asset_set_id(variant: str, runtime_version: str, hashes: dict[str, str]) -> str:
+    runtime_version = normalize_runtime_version(runtime_version)
+    if set(hashes) != set(ASSET_NAMES):
+        raise ValueError("asset hashes must cover exactly the runtime assets")
+    if any(not isinstance(value, str) or not SHA256_RE.fullmatch(value) for value in hashes.values()):
+        raise ValueError("asset hashes must be lowercase SHA-256 values")
     payload = {
         "variant": variant,
         "runtime_version": runtime_version,
@@ -127,7 +139,12 @@ def package(
     checksum_lines.append(f"{sha256_bytes(manifest_bytes)}  manifest.json")
     checksums_bytes = ("\n".join(checksum_lines) + "\n").encode("ascii")
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    members = {**assets, "manifest.json": manifest_bytes, "SHA256SUMS": checksums_bytes}
+    root = package_root(variant)
+    members = {
+        **{f"{root}/{name}": data for name, data in assets.items()},
+        f"{root}/manifest.json": manifest_bytes,
+        f"{root}/SHA256SUMS": checksums_bytes,
+    }
     with zipfile.ZipFile(output_path, "w", compression=zipfile.ZIP_STORED) as archive:
         for name in sorted(members):
             archive.writestr(_zip_member(name), members[name])

@@ -6,7 +6,11 @@ import unittest
 import zipfile
 from pathlib import Path
 
-from tools.package_ppocrv6_runtime import build_manifest, normalize_runtime_version, package
+from tools.package_ppocrv6_runtime import (
+    build_manifest,
+    normalize_runtime_version,
+    package,
+)
 from tools.validate_runtime_model_pack import validate_pack
 
 
@@ -30,7 +34,7 @@ class RuntimeModelPackTests(unittest.TestCase):
             self.assertEqual(first.read_bytes(), second.read_bytes())
             self.assertEqual(report["variant"], "small")
             with zipfile.ZipFile(first) as archive:
-                manifest = json.loads(archive.read("manifest.json"))
+                manifest = json.loads(archive.read("ppocrv6-small/manifest.json"))
                 self.assertEqual(manifest["model_id"], "ppocrv6-small")
                 self.assertEqual(manifest["model_revision"], "0.2.0-preview.1")
                 self.assertEqual(manifest["runtime_status"], "preview")
@@ -39,13 +43,18 @@ class RuntimeModelPackTests(unittest.TestCase):
                 self.assertEqual(
                     sorted(archive.namelist()),
                     [
-                        "SHA256SUMS",
-                        "cls.lwm",
-                        "det.lwm",
-                        "manifest.json",
-                        "ppocr_keys.txt",
-                        "rec.lwm",
+                        "ppocrv6-small/SHA256SUMS",
+                        "ppocrv6-small/cls.lwm",
+                        "ppocrv6-small/det.lwm",
+                        "ppocrv6-small/manifest.json",
+                        "ppocrv6-small/ppocr_keys.txt",
+                        "ppocrv6-small/rec.lwm",
                     ],
+                )
+                self.assertTrue(
+                    archive.read("ppocrv6-small/SHA256SUMS")
+                    .decode("ascii")
+                    .endswith("  manifest.json\n")
                 )
 
     def test_production_revision_is_marked_production(self) -> None:
@@ -56,6 +65,17 @@ class RuntimeModelPackTests(unittest.TestCase):
         manifest = build_manifest("tiny", "v0.2.0", "0.1", hashes)
         self.assertEqual(manifest["model_revision"], "0.2.0")
         self.assertEqual(manifest["runtime_status"], "production")
+
+    def test_asset_set_id_normalizes_revision_and_rejects_bad_hashes(self) -> None:
+        hashes = {
+            name: "a" * 64
+            for name in ("det.lwm", "cls.lwm", "rec.lwm", "ppocr_keys.txt")
+        }
+        from tools.package_ppocrv6_runtime import asset_set_id
+
+        self.assertEqual(asset_set_id("tiny", "v0.2.0", hashes), asset_set_id("tiny", "0.2.0", hashes))
+        with self.assertRaises(ValueError):
+            asset_set_id("tiny", "0.2.0", {**hashes, "det.lwm": "bad"})
 
     def test_runtime_version_rejects_unstable_labels(self) -> None:
         for value in ("", "latest", "main", "release", "foo", "vfoo", "1.2"):
