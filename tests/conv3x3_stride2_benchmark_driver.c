@@ -251,6 +251,7 @@ cleanup:
 int main(int argc, char** argv) {
     static const benchmark_case cases[] = {
         {"stem-3x48", 3u, 48u, 48u, 1u, 0u},
+        {"rec-node6-24x48", 24u, 48u, 24u, 2u, 0u},
         {"early-96x48", 96u, 48u, 24u, 2u, 0u},
         {"medium-det-64x128", 64u, 64u, 128u, 1u, 0u},
         {"medium-det-64x64", 64u, 64u, 64u, 1u, 0u},

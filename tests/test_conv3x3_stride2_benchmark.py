@@ -31,6 +31,7 @@ class Conv3x3Stride2BenchmarkTest(unittest.TestCase):
                 [(item["input"], item["output"]) for item in cases],
                 [
                     ([1, 3, 48, first_width], [1, 48, 24, second_width]),
+                    ([1, 24, 24, second_width], [1, 48, 12, second_width // 2]),
                     ([1, 96, 24, second_width], [1, 48, 12, second_width // 2]),
                     ([1, 64, 128, first_width], [1, 64, 64, second_width]),
                     ([1, 64, 64, first_width], [1, 64, 32, second_width]),

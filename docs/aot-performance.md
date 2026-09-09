@@ -148,3 +148,19 @@ so ARM, LoongArch, scalar, and WASM builds do not execute an unsafe AVX2 call.
 This benchmark is the first gate for any further terminal projection kernel
 work; a proposed change must preserve both checksums before it is compared in
 full OCR.
+
+## REC node 6 Conv3x3 stride-2 measurement
+
+The full profile maps its largest REC Conv node (`LWM node 6`) to the second
+3x3 stride-2 convolution, `24 -> 48` channels. The existing Conv3x3 benchmark
+now includes this exact geometry at both REC widths:
+
+- REC width 320: input `[1,24,24,160]`, output `[1,48,12,80]`;
+- REC width 960: input `[1,24,24,480]`, output `[1,48,12,240]`.
+
+The local AVX2 run at width 320 measured `0.794367 ms` for the dispatched path
+and `0.625333 ms` for the packed path (`1.270x` packed improvement). At width
+960 it measured `1.968733 ms` versus `1.799200 ms` (`1.094x`). Both cases
+preserved their scalar-reference checksums. The gain is real but modest, so
+this node is now covered by a stable A/B baseline before any further
+specialization is considered.
