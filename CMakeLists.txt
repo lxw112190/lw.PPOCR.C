@@ -227,6 +227,7 @@ set(LW_PPOCR_C_SOURCES
     src/simd/avx2_fma_packed_matmul.c
     src/simd/avx2_packed_conv1x1.c
     src/simd/avx2_fma_packed_conv1x1.c
+    src/simd/avx2_fma_packed_conv1x1_8x8.c
     src/simd/cpu_features.c
     src/simd/lsx_packed_conv1x1.c
     src/simd/neon_conv3x3.c
@@ -253,7 +254,8 @@ if(MSVC AND MSVC_C_ARCHITECTURE_ID MATCHES "^(x64|X86)$")
         src/simd/avx2_depthwise9x9.c
         src/simd/avx2_erf.c src/simd/avx2_matmul.c
         src/simd/avx2_fma_packed_matmul.c
-        src/simd/avx2_packed_conv1x1.c src/simd/avx2_fma_packed_conv1x1.c APPEND PROPERTY
+        src/simd/avx2_packed_conv1x1.c src/simd/avx2_fma_packed_conv1x1.c
+        src/simd/avx2_fma_packed_conv1x1_8x8.c APPEND PROPERTY
         COMPILE_OPTIONS /arch:AVX2 /fp:strict)
     set_property(SOURCE src/simd/cpu_features.c APPEND PROPERTY
         COMPILE_OPTIONS /arch:AVX)

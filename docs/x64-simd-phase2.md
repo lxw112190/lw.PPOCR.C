@@ -37,13 +37,16 @@ while paired A/B data is collected.
 The packed Conv1x1 benchmark invokes the regular AVX2 and FMA entry points directly; it does not use the dispatch wrapper as the AVX2 baseline. Each case records the requested batch (currently 1), input geometry including width, and seven interleaved ABBA rounds. The report exposes median, minimum, maximum, and p90 timings for both kernels, plus AVX2/FMA ratio and absolute/relative FMA error.
 
 The packed Conv1x1 benchmark reports optional fields when the host supports
-AVX2+FMA. The packed MatMul benchmark separately measures the terminal
+AVX2+FMA. On x64 it also measures the isolated 8-output × 8-spatial
+lw_avx2_fma_packed_conv1x1_8x8_f32 candidate with a second interleaved
+ABBA sequence. The packed MatMul benchmark separately measures the terminal
 projection shape and checks its argmax contract:
 
 - fma_ms;
 - fma_speedup;
 - fma_max_abs_error;
 - fma_checksum;
+- fma8_ms, fma8_vs_fma, fma8_max_abs_error, and fma8_checksum (x64 only);
 - avx2_ms, avx2_min_ms, avx2_max_ms, avx2_p90_ms, and fma_vs_avx2.
 
 The candidates must remain finite and within the current exploratory absolute
@@ -123,5 +126,6 @@ the real Tiny, Small, and Medium REC shapes at widths 320 and 960. Require:
 6. no peak working-set increase.
 
 If the candidate does not meet these gates, remove it and retain the current
-non-FMA AVX2 path. AVX512 and small-plane 8x8 kernels remain later,
-profile-driven experiments.
+non-FMA AVX2 path. The new 8x8 kernel remains an x64 benchmark candidate only
+until the same shape-aware and end-to-end gates are met; it is not part of the
+production dispatcher. AVX512 remains a later, profile-driven experiment.

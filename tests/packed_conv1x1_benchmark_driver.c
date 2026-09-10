@@ -192,13 +192,18 @@ static int run_case(const benchmark_case* item, uint32_t target_width, uint32_t 
     double fma_min = 0.0;
     double fma_max = 0.0;
     double fma_p90 = 0.0;
+    double fma8_samples[ABBA_ROUNDS];
+    double fma8_ms = 0.0;
     uint64_t checksum;
     uint64_t fma_checksum = 0u;
+    uint64_t fma8_checksum = 0u;
     float avx2_max_abs_error;
     float fma_max_abs_error = 0.0f;
     float fma_max_relative_error = 0.0f;
+    float fma8_max_abs_error = 0.0f;
     uint32_t round;
     int has_fma = 0;
+    int has_fma8 = 0;
     int ok = 0;
     const lw_cpu_capabilities capabilities = lw_get_cpu_capabilities();
 
@@ -261,6 +266,9 @@ static int run_case(const benchmark_case* item, uint32_t target_width, uint32_t 
     scalar_ms = (scalar_finished - scalar_started) * 1000.0 / (double)iterations;
 
     has_fma = capabilities.has_avx2_fma != 0;
+#if defined(_M_X64) || defined(__x86_64__)
+    has_fma8 = has_fma;
+#endif
     if (has_fma) {
         for (round = 0u; round < ABBA_ROUNDS; ++round) {
             double avx2_first;
@@ -309,6 +317,60 @@ static int run_case(const benchmark_case* item, uint32_t target_width, uint32_t 
         fma_checksum = checksum_bytes(output, output_bytes);
         lw_avx2_packed_conv1x1_f32(input, packed, bias, output,
                                    input_dimensions, output_dimensions);
+        if (has_fma8) {
+            for (round = 0u; round < ABBA_ROUNDS; ++round) {
+                double fma_first;
+                double fma_second;
+                double fma8_first;
+                double fma8_second;
+                if ((round & 1u) == 0u) {
+                    if (!measure_kernel(lw_avx2_fma_packed_conv1x1_f32, input, packed, bias,
+                                        output, input_dimensions, output_dimensions, iterations,
+                                        &fma_first) ||
+                        !measure_kernel(lw_avx2_fma_packed_conv1x1_8x8_f32, input, packed, bias,
+                                        output, input_dimensions, output_dimensions, iterations,
+                                        &fma8_first) ||
+                        !measure_kernel(lw_avx2_fma_packed_conv1x1_8x8_f32, input, packed, bias,
+                                        output, input_dimensions, output_dimensions, iterations,
+                                        &fma8_second) ||
+                        !measure_kernel(lw_avx2_fma_packed_conv1x1_f32, input, packed, bias,
+                                        output, input_dimensions, output_dimensions, iterations,
+                                        &fma_second)) {
+                        fprintf(stderr, "direct FMA/8x8 timer failed: %s\n", item->name);
+                        goto cleanup;
+                    }
+                } else {
+                    if (!measure_kernel(lw_avx2_fma_packed_conv1x1_8x8_f32, input, packed, bias,
+                                        output, input_dimensions, output_dimensions, iterations,
+                                        &fma8_first) ||
+                        !measure_kernel(lw_avx2_fma_packed_conv1x1_f32, input, packed, bias,
+                                        output, input_dimensions, output_dimensions, iterations,
+                                        &fma_first) ||
+                        !measure_kernel(lw_avx2_fma_packed_conv1x1_f32, input, packed, bias,
+                                        output, input_dimensions, output_dimensions, iterations,
+                                        &fma_second) ||
+                        !measure_kernel(lw_avx2_fma_packed_conv1x1_8x8_f32, input, packed, bias,
+                                        output, input_dimensions, output_dimensions, iterations,
+                                        &fma8_second)) {
+                        fprintf(stderr, "direct 8x8/FMA timer failed: %s\n", item->name);
+                        goto cleanup;
+                    }
+                }
+                fma8_samples[round] = (fma8_first + fma8_second) * 0.5;
+            }
+            fma8_ms = sample_median(fma8_samples, ABBA_ROUNDS);
+            lw_avx2_fma_packed_conv1x1_8x8_f32(input, packed, bias, output,
+                                                input_dimensions, output_dimensions);
+            fma8_max_abs_error = max_abs_difference(reference, output, output_count);
+            fma8_checksum = checksum_bytes(output, output_bytes);
+            if (!isfinite(fma8_max_abs_error) || fma8_max_abs_error > 1.0e-2f ||
+                fma8_ms <= 0.0 || fma8_checksum != fma_checksum) {
+                fprintf(stderr, "8x8 FMA candidate correctness check failed: %s\n", item->name);
+                goto cleanup;
+            }
+            lw_avx2_packed_conv1x1_f32(input, packed, bias, output,
+                                       input_dimensions, output_dimensions);
+        }
     } else {
         if (!measure_kernel(lw_avx2_packed_conv1x1_f32, input, packed, bias, output,
                             input_dimensions, output_dimensions, iterations, &avx2_ms)) {
@@ -372,6 +434,11 @@ static int run_case(const benchmark_case* item, uint32_t target_width, uint32_t 
                fma_ms, fma_min, fma_max, fma_p90, scalar_ms / fma_ms,
                avx2_ms / fma_ms, (double)fma_max_abs_error,
                (double)fma_max_relative_error, fma_checksum);
+        if (has_fma8) {
+            printf(",\"fma8_ms\":%.6f,\"fma8_vs_fma\":%.6f,"
+                   "\"fma8_max_abs_error\":%.9g,\"fma8_checksum\":\"0x%016" PRIx64 "\"",
+                   fma8_ms, fma_ms / fma8_ms, (double)fma8_max_abs_error, fma8_checksum);
+        }
     }
     printf("}");
     ok = 1;

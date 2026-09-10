@@ -59,6 +59,14 @@ class PackedConv1x1BenchmarkTest(unittest.TestCase):
                     self.assertGreater(item["fma_vs_avx2"], 0.0, item)
                     self.assertLessEqual(item["fma_max_abs_error"], 1.0e-2, item)
                     self.assertRegex(item["fma_checksum"], re.compile(r"^0x[0-9a-f]{16}$"))
+                    if "fma8_ms" in item:
+                        for field in ("fma8_ms", "fma8_vs_fma", "fma8_max_abs_error"):
+                            self.assertTrue(math.isfinite(item[field]), (field, item))
+                        self.assertGreater(item["fma8_ms"], 0.0, item)
+                        self.assertGreater(item["fma8_vs_fma"], 0.0, item)
+                        self.assertLessEqual(item["fma8_max_abs_error"], 1.0e-2, item)
+                        self.assertRegex(item["fma8_checksum"], re.compile(r"^0x[0-9a-f]{16}$"))
+                        self.assertEqual(item["fma8_checksum"], item["fma_checksum"], item)
 
 
 def parse_args() -> argparse.Namespace:
