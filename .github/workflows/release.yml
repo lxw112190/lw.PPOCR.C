@@ -67,6 +67,8 @@ jobs:
     runs-on: ubuntu-22.04
     permissions:
       contents: write
+      id-token: write
+      attestations: write
     steps:
       - uses: actions/checkout@v7
 
@@ -310,6 +312,29 @@ jobs:
           )
 
           find release-assets -maxdepth 1 -type f -printf '%f\n' | sort
+
+      - name: Verify final release asset contract
+        shell: bash
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          python tools/verify_release_assets.py \
+            --manifest ci/release-assets.json \
+            --directory release-assets \
+            --version "${VERSION}" \
+            --strict
+
+      - name: Attest release artifacts
+        uses: actions/attest@a1948c3f048ba23858d222213b7c278aabede763 # v4.1.1
+        with:
+          subject-path: |
+            ${{ github.workspace }}/release-assets/*.zip
+            ${{ github.workspace }}/release-assets/*.tar.gz
+            ${{ github.workspace }}/release-assets/*.html
+            ${{ github.workspace }}/release-assets/*.js
+            ${{ github.workspace }}/release-assets/*.aar
+            ${{ github.workspace }}/release-assets/*.apk
 
       - name: Publish GitHub Release
         shell: bash

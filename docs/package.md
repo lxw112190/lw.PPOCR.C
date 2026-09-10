@@ -251,13 +251,21 @@ hardware.
 ## Publish a tagged release
 
 Pushing a tag whose base version matches the CMake project version starts the
-release workflow. Stable and prerelease suffixes are accepted. For the current
-preview line, create a new immutable tag rather than moving an older one:
+release workflow. Stable and prerelease suffixes are accepted.
+`v0.2.0-preview.1` has already been published and must not be recreated or
+moved. Before creating another preview, update every product-version metadata
+location and run `python -m unittest tests.test_versioning`. Then configure a
+GPG, SSH, or S/MIME signing key recognized by GitHub and create the new version
+as a signed tag. For example, after preparing `preview.2`:
 
 ```bash
-git tag -a v0.2.0-preview.1 -m "lw.PPOCR.C v0.2.0 preview 1"
-git push origin v0.2.0-preview.1
+git tag -s v0.2.0-preview.2 -m "lw.PPOCR.C v0.2.0 preview 2"
+git verify-tag v0.2.0-preview.2
+git push origin v0.2.0-preview.2
 ```
+
+Do not fall back to replacing an existing public tag when signing is not
+configured correctly. Fix the local signing setup and create the next version.
 
 The tag rebuilds and tests native Windows/Linux packages, browser/Node WASM,
 Android ARM64, Desktop Java/JNI, and the Tiny/Small/Medium runtime model packs.
@@ -281,6 +289,21 @@ the AAR and APK. The final directory is checked in strict mode against the manif
 so a missing, empty, misnamed, corrupted, or unexpected top-level asset blocks
 publication. CI artifacts such as the Medium browser timing report are kept
 outside this public Release directory.
+
+For tags created from a commit containing the attestation-enabled workflow,
+the publish job also creates signed GitHub build-provenance attestations for
+all 18 primary downloads after strict manifest verification and before upload.
+Verify a downloaded asset with GitHub CLI:
+
+```bash
+gh attestation verify PATH/TO/DOWNLOADED-ASSET \
+  --repo lxw112190/lw.PPOCR.C
+```
+
+The published `v0.2.0-preview.1` tag predates this workflow enhancement and
+continues to rely on its SHA-256 records and existing CI build history. An
+attestation proves repository/workflow provenance; it does not replace the
+checksum, SBOM review, malware scanning, or target-machine validation.
 
 Small and Medium are opt-in preview variants. Their runtime model packs are
 published only when Windows and Linux produce byte-identical archives. Their

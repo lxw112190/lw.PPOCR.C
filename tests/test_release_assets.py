@@ -141,6 +141,31 @@ class ReleaseAssetContractTests(unittest.TestCase):
         self.assertIn("--strict", workflow)
         self.assertIn("BUILD_VERSION: ${{ steps.version.outputs.base_version }}", workflow)
         self.assertIn("VERSION: ${{ steps.version.outputs.version }}", workflow)
+        self.assertIn("id-token: write", workflow)
+        self.assertIn("attestations: write", workflow)
+        self.assertIn(
+            "uses: actions/attest@a1948c3f048ba23858d222213b7c278aabede763 "
+            "# v4.1.1",
+            workflow,
+        )
+        patterns = ("*.zip", "*.tar.gz", "*.html", "*.js", "*.aar", "*.apk")
+        for pattern in patterns:
+            self.assertIn(f"release-assets/{pattern}", workflow)
+        assets, _ = release_plan(
+            repository / "ci/release-assets.json", "0.2.0-preview.1"
+        )
+        suffixes = tuple(pattern[1:] for pattern in patterns)
+        self.assertEqual(len(assets), 18)
+        self.assertEqual(
+            sorted(name for name in assets if not name.endswith(suffixes)), []
+        )
+        prepare = workflow.index("- name: Verify and prepare release assets")
+        verify = workflow.index("- name: Verify final release asset contract")
+        attest = workflow.index("- name: Attest release artifacts")
+        publish = workflow.index("- name: Publish GitHub Release")
+        self.assertLess(prepare, verify)
+        self.assertLess(verify, attest)
+        self.assertLess(attest, publish)
         self.assertNotIn(
             'if [[ "${VERSION}" == 0.* || "${VERSION}" == *-* ]]', workflow
         )

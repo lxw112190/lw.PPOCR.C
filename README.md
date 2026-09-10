@@ -9,9 +9,9 @@ TensorRT, protobuf, or any other deployment-time runtime dependency.
 
 > This is not a general-purpose ONNX Runtime.
 
-## v0.2.0-preview.1 release candidate
+## Current preview: v0.2.0-preview.1
 
-This preview makes PP-OCRv6 Tiny, Small, and Medium available through one
+This preview release makes PP-OCRv6 Tiny, Small, and Medium available through one
 pure-C Runtime. Tiny remains the default. Small and Medium are opt-in preview
 variants with separate runtime model packs and self-contained browser files.
 The C ABI and LWM v0.1 format are still not frozen.

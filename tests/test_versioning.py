@@ -55,10 +55,13 @@ class VersionConsistencyTest(unittest.TestCase):
         web_doc = (ROOT / "docs" / "web-sdk.md").read_text(encoding="utf-8")
         self.assertIn(f'DEFAULT_RUNTIME_VERSION = "{version}-preview.1"', packager)
         self.assertIn(f'DEFAULT_MINIMUM_RUNTIME_VERSION = "{version}"', packager)
-        self.assertIn(f"git tag -a v{version}-preview.1", package_doc)
+        self.assertIn(f"`v{version}-preview.1` has already been published", package_doc)
+        self.assertIn(f"git tag -s v{version}-preview.2", package_doc)
+        self.assertIn(f"git verify-tag v{version}-preview.2", package_doc)
+        self.assertIn("gh attestation verify", package_doc)
         self.assertIn(f'for example "{version}"', web_doc)
 
-    def test_release_candidate_documentation_matches_supported_outputs(self) -> None:
+    def test_preview_release_documentation_matches_supported_outputs(self) -> None:
         version = self.project_version()
         preview = f"{version}-preview.1"
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
@@ -73,8 +76,8 @@ class VersionConsistencyTest(unittest.TestCase):
             ROOT / "examples" / "java-jni" / "README.zh-CN.md"
         ).read_text(encoding="utf-8")
 
-        self.assertIn(f"## v{preview} release candidate", readme)
-        self.assertIn(f"## v{preview} 发布候选", readme_zh)
+        self.assertIn(f"## Current preview: v{preview}", readme)
+        self.assertIn(f"## 当前预览版：v{preview}", readme_zh)
         for token in ("Tiny", "Small", "Medium", "android-arm64.aar"):
             self.assertIn(token, readme)
         for token in ("Tiny", "Small", "Medium", "android-arm64.aar"):

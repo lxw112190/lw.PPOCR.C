@@ -9,9 +9,9 @@ Python、OpenCV、ONNX Runtime、OpenVINO、TensorRT 或 protobuf，适合将文
 > 本项目不是通用 ONNX 推理框架。当前目标是可靠、高效地运行已经转换为 LWM 格式的
 > PP-OCRv6 Tiny、Small 和 Medium；Tiny 为默认模型，Small/Medium 为可选 preview。
 
-## v0.2.0-preview.1 发布候选
+## 当前预览版：v0.2.0-preview.1
 
-这一版通过同一套纯 C Runtime 提供 PP-OCRv6 Tiny、Small、Medium。Tiny 继续作为默认，
+本预览版通过同一套纯 C Runtime 提供 PP-OCRv6 Tiny、Small、Medium。Tiny 继续作为默认，
 Small 和 Medium 通过独立 Runtime Model Pack 与自包含浏览器文件提供。公共 C ABI 和
 LWM v0.1 格式仍未冻结。
 
