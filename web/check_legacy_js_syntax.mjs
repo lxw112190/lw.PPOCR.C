@@ -80,7 +80,11 @@ function rejectUnsupportedChrome70Syntax(ast, label) {
       node.property && node.property.name === "meta"
     ) {
       unsupported = "import.meta";
-    } else if (node.type === "Literal" && typeof node.raw === "string" && /_/.test(node.raw)) {
+    } else if (
+      node.type === "Literal" &&
+      (typeof node.value === "number" || typeof node.value === "bigint") &&
+      typeof node.raw === "string" && /_/.test(node.raw)
+    ) {
       unsupported = "numeric separator syntax";
     } else if (node.type === "PrivateIdentifier" || node.type === "PropertyDefinition") {
       unsupported = "private/class-field syntax";
