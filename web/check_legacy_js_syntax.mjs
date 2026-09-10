@@ -26,18 +26,97 @@ function scriptText(node) {
     .join("");
 }
 
+function formatParseError(source, label, error) {
+  const location = error.loc
+    ? " line " + error.loc.line + ", column " + error.loc.column
+    : "";
+  if (!error.loc) return new Error(label + ":" + location + ": " + error.message);
+
+  const lines = source.split(/\r?\n/);
+  const line = lines[error.loc.line - 1] || "";
+  const start = Math.max(0, error.loc.column - 80);
+  const excerpt = line.slice(start, error.loc.column + 80);
+  const caret = " ".repeat(Math.max(0, error.loc.column - start)) + "^";
+  return new Error(
+    label + ":" + location + ": " + error.message + "\n" + excerpt + "\n" + caret
+  );
+}
+
+function parseWithVersion(source, ecmaVersion) {
+  return parse(source, {
+    ecmaVersion,
+    sourceType: "script",
+    allowHashBang: true
+  });
+}
+
+function walkAst(node, callback) {
+  if (!node || typeof node !== "object") return;
+  callback(node);
+  for (const value of Object.values(node)) {
+    if (Array.isArray(value)) {
+      for (const child of value) walkAst(child, callback);
+    } else if (value && typeof value === "object" && value.type) {
+      walkAst(value, callback);
+    }
+  }
+}
+
+function rejectUnsupportedChrome70Syntax(ast, label) {
+  let unsupported = null;
+  walkAst(ast, (node) => {
+    if (unsupported) return;
+    if (node.type === "ChainExpression") {
+      unsupported = "optional chaining";
+    } else if (
+      (node.type === "LogicalExpression" && node.operator === "??") ||
+      (node.type === "AssignmentExpression" &&
+        ["??=", "&&=", "||="].includes(node.operator))
+    ) {
+      unsupported = "nullish/logical assignment syntax";
+    } else if (
+      node.type === "MetaProperty" &&
+      node.meta && node.meta.name === "import" &&
+      node.property && node.property.name === "meta"
+    ) {
+      unsupported = "import.meta";
+    } else if (node.type === "Literal" && typeof node.raw === "string" && /_/.test(node.raw)) {
+      unsupported = "numeric separator syntax";
+    } else if (node.type === "PrivateIdentifier" || node.type === "PropertyDefinition") {
+      unsupported = "private/class-field syntax";
+    } else if (node.type === "StaticBlock") {
+      unsupported = "class static block syntax";
+    }
+  });
+  if (unsupported) {
+    throw new Error(label + ": unsupported by Chrome 70: " + unsupported);
+  }
+}
+
 function parseJavaScript(source, label, ecmaVersion) {
+  const requestedVersion = Number(ecmaVersion);
   try {
-    parse(source, {
-      ecmaVersion: Number(ecmaVersion),
-      sourceType: "script",
-      allowHashBang: true
-    });
+    const ast = parseWithVersion(source, requestedVersion);
+    if (requestedVersion >= 2020) {
+      rejectUnsupportedChrome70Syntax(ast, label);
+    }
+    return;
   } catch (error) {
-    const location = error.loc
-      ? " line " + error.loc.line + ", column " + error.loc.column
-      : "";
-    throw new Error(label + ":" + location + ": " + error.message);
+    // Emscripten may emit BigInt literals for a 32-bit WASM build. They are
+    // valid on Chrome 70, but Acorn's ES2018 grammar rejects them. Retry with
+    // the ES2020 parser and then apply the explicit Chrome 70 feature gate.
+    if (requestedVersion === 2018) {
+      try {
+        const ast = parseWithVersion(source, 2020);
+        rejectUnsupportedChrome70Syntax(ast, label);
+        return;
+      } catch (compatibilityError) {
+        if (compatibilityError.message.includes("unsupported by Chrome 70")) {
+          throw compatibilityError;
+        }
+      }
+    }
+    throw formatParseError(source, label, error);
   }
 }
 
@@ -68,4 +147,4 @@ walk(document, (node) => {
   inlineScripts += 1;
 });
 if (!inlineScripts) throw new Error(args.html + ": no inline JavaScript found");
-console.log("legacy whole-artifact ES" + ecmaVersion + " syntax gate: ok");
+console.log("legacy whole-artifact Chrome 70 syntax gate: ok");

@@ -309,7 +309,7 @@ jobs:
           ! grep -a -q '6.3.289' build-wasm-legacy/ocr-demo-legacy.html
           ! grep -a -q 'openjpeg.wasm' build-wasm-legacy/ocr-demo-legacy.html
 
-      - name: Run Legacy whole-artifact ES2018 syntax gate
+      - name: Run Legacy whole-artifact Chrome 70 syntax gate
         run: >-
           node web/check_legacy_js_syntax.mjs
           --sdk build-wasm-legacy/lw-ppocr-legacy.js

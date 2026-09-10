@@ -69,7 +69,7 @@ must be deterministic across two runs, retain all 16 lines and the expected firs
 line, and exactly match the Golden text SHA-256. Per-line and character differences
 remain in the report for diagnosis, but do not weaken the correctness gate.
 
-The Legacy SDK runtime is lowered with the pinned esbuild toolchain before packaging. CI parses the complete SDK and every inline script in the final HTML as ES2018; the older Python test checks packaging metadata. The raw and lowered runtime files are debug-only artifacts and are not part of the customer download.
+The Legacy SDK runtime is lowered with the pinned esbuild toolchain before packaging. CI parses the complete SDK and every inline script in the final HTML with the Chrome 70 syntax gate. The gate accepts the BigInt grammar already supported by Chrome 70, while rejecting optional chaining, nullish coalescing, class fields, and other newer syntax; the older Python test checks packaging metadata. The raw and lowered runtime files are debug-only artifacts and are not part of the customer download.
 
 The CI workflow builds and tests this artifact in an independent legacy job
 and uploads it as lw.PPOCR.C-browser-legacy-<commit>. It is upload-only for
