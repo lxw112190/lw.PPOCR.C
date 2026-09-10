@@ -55,8 +55,12 @@ containing the build flavor, user agent, capabilities, bootstrap state, and
 last error. It never includes image bytes, OCR text, or local file paths.
 
 Legacy supports image OCR only. PDF controls are not included in this
-distribution. The same Tiny golden text checksum is used by CI for the first
-and second OCR runs; no separate Legacy model or golden corpus is created.
+distribution. CI first verifies the paired Modern Tiny HTML against the exact
+Tiny golden checksum, then compares the scalar Legacy result with that Modern
+result on the same runner and browser. The Legacy result must be deterministic
+across two runs, retain all 16 lines and the expected first line, keep at least
+75% exact lines, and remain below 5% character error rate. This allows bounded
+floating-point backend differences without reducing the test to a smoke check.
 
 The CI workflow builds and tests this artifact in an independent legacy job
 and uploads it as lw.PPOCR.C-browser-legacy-<commit>. It is upload-only for

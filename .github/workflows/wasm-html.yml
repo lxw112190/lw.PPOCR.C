@@ -229,9 +229,16 @@ jobs:
 
   legacy:
     name: Build Tiny legacy scalar HTML
+    needs: build
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
+
+      - name: Download modern browser reference
+        uses: actions/download-artifact@v8
+        with:
+          name: lw.PPOCR.C-browser-${{ github.sha }}
+          path: modern-web
 
       - uses: actions/setup-python@v7
         with:
@@ -299,11 +306,13 @@ jobs:
         run: >-
           python web/test_legacy_ocr_html.py
           --html build-wasm-legacy/ocr-demo-legacy.html
+          --reference-html modern-web/ocr-demo.html
           --sample models/ppocrv6-tiny/sample.jpg
           --golden ci/web-ppocrv6-tiny.json
           --report build-wasm-legacy/legacy-web-report.json
 
       - name: Upload Tiny Legacy Web artifact
+        if: always()
         uses: actions/upload-artifact@v7
         with:
           name: lw.PPOCR.C-browser-legacy-${{ github.sha }}
