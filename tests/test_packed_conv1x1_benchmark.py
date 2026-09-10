@@ -47,15 +47,16 @@ class PackedConv1x1BenchmarkTest(unittest.TestCase):
                 ],
             )
             for item in cases:
-                for field in ("scalar_ms", "dispatched_ms", "speedup"):
+                for field in ("scalar_ms", "avx2_ms", "avx2_min_ms", "avx2_max_ms", "avx2_p90_ms", "avx2_speedup", "dispatched_ms", "speedup"):
                     self.assertTrue(math.isfinite(item[field]), (field, item))
                     self.assertGreater(item[field], 0.0, (field, item))
                 self.assertRegex(item["checksum"], re.compile(r"^0x[0-9a-f]{16}$"))
                 if "fma_ms" in item:
-                    for field in ("fma_ms", "fma_speedup", "fma_max_abs_error"):
+                    for field in ("fma_ms", "fma_min_ms", "fma_max_ms", "fma_p90_ms", "fma_speedup", "fma_vs_avx2", "fma_max_abs_error", "fma_max_relative_error"):
                         self.assertTrue(math.isfinite(item[field]), (field, item))
                     self.assertGreater(item["fma_ms"], 0.0, item)
                     self.assertGreater(item["fma_speedup"], 0.0, item)
+                    self.assertGreater(item["fma_vs_avx2"], 0.0, item)
                     self.assertLessEqual(item["fma_max_abs_error"], 1.0e-2, item)
                     self.assertRegex(item["fma_checksum"], re.compile(r"^0x[0-9a-f]{16}$"))
 

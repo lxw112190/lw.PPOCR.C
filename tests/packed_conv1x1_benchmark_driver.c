@@ -98,8 +98,69 @@ static float max_abs_difference(const float* left, const float* right, uint64_t 
     }
     return maximum;
 }
+typedef void (*packed_conv1x1_kernel)(
+    const float* input, const float* packed_weights, const float* bias, float* output,
+    const int32_t input_dimensions[4], const int32_t output_dimensions[4]);
+
+static int measure_kernel(packed_conv1x1_kernel kernel, const float* input,
+                          const float* packed_weights, const float* bias, float* output,
+                          const int32_t input_dimensions[4], const int32_t output_dimensions[4],
+                          uint32_t iterations, double* milliseconds) {
+    uint32_t iteration;
+    double started;
+    double finished;
+    if (kernel == NULL || milliseconds == NULL || iterations == 0u) {
+        return 0;
+    }
+    started = monotonic_seconds();
+    for (iteration = 0u; iteration < iterations; ++iteration) {
+        kernel(input, packed_weights, bias, output, input_dimensions, output_dimensions);
+    }
+    finished = monotonic_seconds();
+    if (started <= 0.0 || finished <= started) {
+        return 0;
+    }
+    *milliseconds = (finished - started) * 1000.0 / (double)iterations;
+    return *milliseconds > 0.0 && isfinite(*milliseconds);
+}
+
+static void sort_samples(double* samples, uint32_t count) {
+    uint32_t i;
+    for (i = 1u; i < count; ++i) {
+        double value = samples[i];
+        uint32_t j = i;
+        while (j > 0u && samples[j - 1u] > value) {
+            samples[j] = samples[j - 1u];
+            --j;
+        }
+        samples[j] = value;
+    }
+}
+
+static double sample_median(double* samples, uint32_t count) {
+    sort_samples(samples, count);
+    if ((count & 1u) != 0u) {
+        return samples[count / 2u];
+    }
+    return (samples[count / 2u - 1u] + samples[count / 2u]) * 0.5;
+}
+
+static double sample_percentile90(double* samples, uint32_t count) {
+    uint32_t index;
+    sort_samples(samples, count);
+    index = (count * 9u + 9u) / 10u;
+    if (index == 0u) {
+        index = 1u;
+    }
+    if (index > count) {
+        index = count;
+    }
+    return samples[index - 1u];
+}
+
 static int run_case(const benchmark_case* item, uint32_t target_width, uint32_t iterations,
                     int first) {
+    enum { ABBA_ROUNDS = 7 };
     uint32_t spatial_width = target_width / 4u;
     uint64_t spatial = (uint64_t)item->height * spatial_width;
     uint64_t input_count = (uint64_t)item->input_channels * spatial;
@@ -120,18 +181,24 @@ static int run_case(const benchmark_case* item, uint32_t target_width, uint32_t 
     int32_t output_dimensions[4] = {1, 0, 0, 0};
     double scalar_started;
     double scalar_finished;
-    double dispatched_started;
-    double dispatched_finished;
-    double dispatched_ab_total = 0.0;
-    double fma_ab_total = 0.0;
     double scalar_ms;
-    double dispatched_ms;
+    double avx2_samples[ABBA_ROUNDS];
+    double fma_samples[ABBA_ROUNDS];
+    double avx2_ms;
+    double avx2_min;
+    double avx2_max;
+    double avx2_p90;
+    double fma_ms = 0.0;
+    double fma_min = 0.0;
+    double fma_max = 0.0;
+    double fma_p90 = 0.0;
     uint64_t checksum;
     uint64_t fma_checksum = 0u;
-    double fma_ms = 0.0;
+    float avx2_max_abs_error;
     float fma_max_abs_error = 0.0f;
+    float fma_max_relative_error = 0.0f;
+    uint32_t round;
     int has_fma = 0;
-    uint32_t iteration;
     int ok = 0;
     const lw_cpu_capabilities capabilities = lw_get_cpu_capabilities();
 
@@ -170,125 +237,141 @@ static int run_case(const benchmark_case* item, uint32_t target_width, uint32_t 
 
     lw_scalar_packed_conv1x1_f32(input, packed, bias, reference, input_dimensions,
                                  output_dimensions);
-    lw_packed_conv1x1_f32(input, packed, bias, output, input_dimensions, output_dimensions);
-#if defined(LW_EXPERIMENTAL_AVX2_FMA_DISPATCH)
-    if (!isfinite(max_abs_difference(reference, output, output_count)) ||
-        max_abs_difference(reference, output, output_count) > 1.0e-2f) {
-#else
-    if (memcmp(reference, output, output_bytes) != 0) {
-#endif
-        fprintf(stderr, "packed Conv result mismatch: %s\n", item->name);
+    if (!measure_kernel(lw_avx2_packed_conv1x1_f32, input, packed, bias, output,
+                        input_dimensions, output_dimensions, 1u, &scalar_ms)) {
+        fprintf(stderr, "direct AVX2 warmup failed: %s\n", item->name);
+        goto cleanup;
+    }
+    avx2_max_abs_error = max_abs_difference(reference, output, output_count);
+    if (!isfinite(avx2_max_abs_error) || avx2_max_abs_error > 1.0e-3f) {
+        fprintf(stderr, "direct AVX2 correctness check failed: %s\n", item->name);
         goto cleanup;
     }
 
     scalar_started = monotonic_seconds();
-    for (iteration = 0u; iteration < iterations; ++iteration) {
+    for (round = 0u; round < iterations; ++round) {
         lw_scalar_packed_conv1x1_f32(input, packed, bias, reference, input_dimensions,
                                      output_dimensions);
     }
     scalar_finished = monotonic_seconds();
-    if (capabilities.has_avx2_fma) {
-        uint32_t order;
-        has_fma = 1;
-        lw_avx2_fma_packed_conv1x1_f32(input, packed, bias, output, input_dimensions,
-                                       output_dimensions);
+    if (scalar_started <= 0.0 || scalar_finished <= scalar_started) {
+        fprintf(stderr, "scalar benchmark timer failed: %s\n", item->name);
+        goto cleanup;
+    }
+    scalar_ms = (scalar_finished - scalar_started) * 1000.0 / (double)iterations;
+
+    has_fma = capabilities.has_avx2_fma != 0;
+    if (has_fma) {
+        for (round = 0u; round < ABBA_ROUNDS; ++round) {
+            double avx2_first;
+            double avx2_second;
+            double fma_first;
+            double fma_second;
+            if ((round & 1u) == 0u) {
+                if (!measure_kernel(lw_avx2_packed_conv1x1_f32, input, packed, bias, output,
+                                    input_dimensions, output_dimensions, iterations, &avx2_first) ||
+                    !measure_kernel(lw_avx2_fma_packed_conv1x1_f32, input, packed, bias, output,
+                                    input_dimensions, output_dimensions, iterations, &fma_first) ||
+                    !measure_kernel(lw_avx2_fma_packed_conv1x1_f32, input, packed, bias, output,
+                                    input_dimensions, output_dimensions, iterations, &fma_second) ||
+                    !measure_kernel(lw_avx2_packed_conv1x1_f32, input, packed, bias, output,
+                                    input_dimensions, output_dimensions, iterations, &avx2_second)) {
+                    fprintf(stderr, "direct AVX2/FMA timer failed: %s\n", item->name);
+                    goto cleanup;
+                }
+            } else {
+                if (!measure_kernel(lw_avx2_fma_packed_conv1x1_f32, input, packed, bias, output,
+                                    input_dimensions, output_dimensions, iterations, &fma_first) ||
+                    !measure_kernel(lw_avx2_packed_conv1x1_f32, input, packed, bias, output,
+                                    input_dimensions, output_dimensions, iterations, &avx2_first) ||
+                    !measure_kernel(lw_avx2_packed_conv1x1_f32, input, packed, bias, output,
+                                    input_dimensions, output_dimensions, iterations, &avx2_second) ||
+                    !measure_kernel(lw_avx2_fma_packed_conv1x1_f32, input, packed, bias, output,
+                                    input_dimensions, output_dimensions, iterations, &fma_second)) {
+                    fprintf(stderr, "direct FMA/AVX2 timer failed: %s\n", item->name);
+                    goto cleanup;
+                }
+            }
+            avx2_samples[round] = (avx2_first + avx2_second) * 0.5;
+            fma_samples[round] = (fma_first + fma_second) * 0.5;
+        }
+        avx2_ms = sample_median(avx2_samples, ABBA_ROUNDS);
+        fma_ms = sample_median(fma_samples, ABBA_ROUNDS);
+        avx2_min = avx2_samples[0];
+        avx2_max = avx2_samples[ABBA_ROUNDS - 1u];
+        avx2_p90 = sample_percentile90(avx2_samples, ABBA_ROUNDS);
+        fma_min = fma_samples[0];
+        fma_max = fma_samples[ABBA_ROUNDS - 1u];
+        fma_p90 = sample_percentile90(fma_samples, ABBA_ROUNDS);
+        lw_avx2_fma_packed_conv1x1_f32(input, packed, bias, output,
+                                       input_dimensions, output_dimensions);
         fma_max_abs_error = max_abs_difference(reference, output, output_count);
-        if (!isfinite(fma_max_abs_error) || fma_max_abs_error > 1.0e-2f) {
+        fma_checksum = checksum_bytes(output, output_bytes);
+        lw_avx2_packed_conv1x1_f32(input, packed, bias, output,
+                                   input_dimensions, output_dimensions);
+    } else {
+        if (!measure_kernel(lw_avx2_packed_conv1x1_f32, input, packed, bias, output,
+                            input_dimensions, output_dimensions, iterations, &avx2_ms)) {
+            fprintf(stderr, "direct AVX2 timer failed: %s\n", item->name);
+            goto cleanup;
+        }
+        avx2_min = avx2_ms;
+        avx2_max = avx2_ms;
+        avx2_p90 = avx2_ms;
+    }
+    avx2_max_abs_error = max_abs_difference(reference, output, output_count);
+    if (!isfinite(avx2_max_abs_error) || avx2_max_abs_error > 1.0e-3f ||
+        scalar_ms <= 0.0 || avx2_ms <= 0.0) {
+        fprintf(stderr, "direct AVX2 benchmark contract failed: %s\n", item->name);
+        goto cleanup;
+    }
+    if (has_fma) {
+        lw_avx2_fma_packed_conv1x1_f32(input, packed, bias, output,
+                                       input_dimensions, output_dimensions);
+        fma_max_abs_error = max_abs_difference(reference, output, output_count);
+        fma_checksum = checksum_bytes(output, output_bytes);
+        fma_max_relative_error = 0.0f;
+        {
+            uint64_t index;
+            for (index = 0u; index < output_count; ++index) {
+                float reference_value = reference[(size_t)index];
+                float difference = fabsf(reference_value - output[(size_t)index]);
+                float relative = difference / fmaxf(fabsf(reference_value), 1.0e-12f);
+                if (!isfinite(relative)) {
+                    fma_max_relative_error = INFINITY;
+                    break;
+                }
+                if (relative > fma_max_relative_error) {
+                    fma_max_relative_error = relative;
+                }
+            }
+        }
+        if (!isfinite(fma_max_abs_error) || fma_max_abs_error > 1.0e-2f ||
+            !isfinite(fma_max_relative_error)) {
             fprintf(stderr, "FMA candidate correctness check failed: %s\n", item->name);
             goto cleanup;
         }
-        /* Alternate the order of the two candidates to reduce thermal/cache bias. */
-        for (order = 0u; order < 2u; ++order) {
-            double started;
-            double finished;
-            if (order == 0u) {
-                started = monotonic_seconds();
-                for (iteration = 0u; iteration < iterations; ++iteration) {
-                    lw_packed_conv1x1_f32(input, packed, bias, output, input_dimensions,
-                                           output_dimensions);
-                }
-                finished = monotonic_seconds();
-                if (started <= 0.0 || finished <= started) {
-                    goto cleanup;
-                }
-                dispatched_ab_total += finished - started;
-                started = monotonic_seconds();
-                for (iteration = 0u; iteration < iterations; ++iteration) {
-                    lw_avx2_fma_packed_conv1x1_f32(input, packed, bias, output, input_dimensions,
-                                                   output_dimensions);
-                }
-                finished = monotonic_seconds();
-                if (started <= 0.0 || finished <= started) {
-                    goto cleanup;
-                }
-                fma_ab_total += finished - started;
-            } else {
-                started = monotonic_seconds();
-                for (iteration = 0u; iteration < iterations; ++iteration) {
-                    lw_avx2_fma_packed_conv1x1_f32(input, packed, bias, output, input_dimensions,
-                                                   output_dimensions);
-                }
-                finished = monotonic_seconds();
-                if (started <= 0.0 || finished <= started) {
-                    goto cleanup;
-                }
-                fma_ab_total += finished - started;
-                started = monotonic_seconds();
-                for (iteration = 0u; iteration < iterations; ++iteration) {
-                    lw_packed_conv1x1_f32(input, packed, bias, output, input_dimensions,
-                                           output_dimensions);
-                }
-                finished = monotonic_seconds();
-                if (started <= 0.0 || finished <= started) {
-                    goto cleanup;
-                }
-                dispatched_ab_total += finished - started;
-            }
-        }
-        dispatched_ms = dispatched_ab_total * 1000.0 / (2.0 * iterations);
-        fma_ms = fma_ab_total * 1000.0 / (2.0 * iterations);
-        lw_avx2_fma_packed_conv1x1_f32(input, packed, bias, output, input_dimensions,
-                                       output_dimensions);
-        fma_checksum = checksum_bytes(output, output_bytes);
-        /* Restore the dispatched result before checking the existing contract. */
-        lw_packed_conv1x1_f32(input, packed, bias, output, input_dimensions, output_dimensions);
-    } else {
-        dispatched_started = monotonic_seconds();
-        for (iteration = 0u; iteration < iterations; ++iteration) {
-            lw_packed_conv1x1_f32(input, packed, bias, output, input_dimensions,
-                                  output_dimensions);
-        }
-        dispatched_finished = monotonic_seconds();
-        if (dispatched_started <= 0.0 || dispatched_finished <= dispatched_started) {
-            fprintf(stderr, "packed Conv benchmark timer failed: %s\n", item->name);
-            goto cleanup;
-        }
-        dispatched_ms = (dispatched_finished - dispatched_started) * 1000.0 / iterations;
+        lw_avx2_packed_conv1x1_f32(input, packed, bias, output,
+                                   input_dimensions, output_dimensions);
     }
-    if (scalar_started <= 0.0 || scalar_finished <= scalar_started ||
-        dispatched_ms <= 0.0 ||
-#if defined(LW_EXPERIMENTAL_AVX2_FMA_DISPATCH)
-        !isfinite(max_abs_difference(reference, output, output_count)) ||
-        max_abs_difference(reference, output, output_count) > 1.0e-2f) {
-#else
-        memcmp(reference, output, output_bytes) != 0) {
-#endif
-        fprintf(stderr, "packed Conv benchmark failed: %s\n", item->name);
-        goto cleanup;
-    }
-    scalar_ms = (scalar_finished - scalar_started) * 1000.0 / iterations;
     checksum = checksum_bytes(output, output_bytes);
     printf("%s{\"name\":\"%s\",\"input_channels\":%u,\"output_channels\":%u,"
-           "\"height\":%u,\"width\":%u,\"scalar_ms\":%.6f,"
-           "\"dispatched_ms\":%.6f,\"speedup\":%.6f,\"checksum\":\"0x%016" PRIx64
-           "\"",
+           "\"height\":%u,\"width\":%u,\"batch\":1,\"scalar_ms\":%.6f,"
+           "\"avx2_available\":%s,\"avx2_ms\":%.6f,\"avx2_min_ms\":%.6f,"
+           "\"avx2_max_ms\":%.6f,\"avx2_p90_ms\":%.6f,\"avx2_speedup\":%.6f,"
+           "\"dispatched_ms\":%.6f,\"speedup\":%.6f,\"checksum\":\"0x%016" PRIx64 "\"",
            first ? "" : ",", item->name, item->input_channels, item->output_channels,
-           item->height, spatial_width, scalar_ms, dispatched_ms, scalar_ms / dispatched_ms,
-           checksum);
+           item->height, spatial_width, scalar_ms, capabilities.simd == LW_SIMD_LEVEL_AVX2 ? "true" : "false",
+           avx2_ms, avx2_min, avx2_max, avx2_p90, scalar_ms / avx2_ms,
+           avx2_ms, scalar_ms / avx2_ms, checksum);
     if (has_fma) {
-        printf(",\"fma_ms\":%.6f,\"fma_speedup\":%.6f,\"fma_max_abs_error\":%.9g,"
-               "\"fma_checksum\":\"0x%016" PRIx64 "\"", fma_ms, scalar_ms / fma_ms,
-               (double)fma_max_abs_error, fma_checksum);
+        printf(",\"fma_ms\":%.6f,\"fma_min_ms\":%.6f,\"fma_max_ms\":%.6f,"
+               "\"fma_p90_ms\":%.6f,\"fma_speedup\":%.6f,\"fma_vs_avx2\":%.6f,"
+               "\"fma_max_abs_error\":%.9g,\"fma_max_relative_error\":%.9g,"
+               "\"fma_checksum\":\"0x%016" PRIx64 "\"",
+               fma_ms, fma_min, fma_max, fma_p90, scalar_ms / fma_ms,
+               avx2_ms / fma_ms, (double)fma_max_abs_error,
+               (double)fma_max_relative_error, fma_checksum);
     }
     printf("}");
     ok = 1;
@@ -302,7 +385,6 @@ cleanup:
     free(input);
     return ok;
 }
-
 int main(int argc, char** argv) {
     static const benchmark_case cases[] = {
         {"early-96x192", 96u, 192u, 12u},

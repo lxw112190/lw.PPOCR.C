@@ -1,6 +1,6 @@
-# x64 SIMD Phase 2A
+# x64 SIMD Phase 2B — AVX2+FMA Conv1x1
 
-Phase 2A establishes the measurement and dispatch-safety foundation for optional
+Phase 2B hardens the measurement and dispatch-safety foundation for optional
 AVX2+FMA kernels. It does not change the default OCR kernel selection.
 
 ## Runtime capability model
@@ -34,6 +34,8 @@ while paired A/B data is collected.
 
 ## Benchmark contract
 
+The packed Conv1x1 benchmark invokes the regular AVX2 and FMA entry points directly; it does not use the dispatch wrapper as the AVX2 baseline. Each case records the requested batch (currently 1), input geometry including width, and seven interleaved ABBA rounds. The report exposes median, minimum, maximum, and p90 timings for both kernels, plus AVX2/FMA ratio and absolute/relative FMA error.
+
 The packed Conv1x1 benchmark reports optional fields when the host supports
 AVX2+FMA. The packed MatMul benchmark separately measures the terminal
 projection shape and checks its argmax contract:
@@ -41,7 +43,8 @@ projection shape and checks its argmax contract:
 - fma_ms;
 - fma_speedup;
 - fma_max_abs_error;
-- fma_checksum.
+- fma_checksum;
+- avx2_ms, avx2_min_ms, avx2_max_ms, avx2_p90_ms, and fma_vs_avx2.
 
 The candidates must remain finite and within the current exploratory absolute
 error bound of `1e-2`. The smoke tests only validate that they are measurable,
