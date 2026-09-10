@@ -1213,6 +1213,17 @@ if(BUILD_TESTING AND NOT EMSCRIPTEN)
                 --tool "${LW_EXPORT_TOOL}")
     set_tests_properties(shared_export_contract PROPERTIES TIMEOUT 60)
 
+    add_test(
+        NAME shared_export_candidate_contract
+        COMMAND "${Python3_EXECUTABLE}"
+                "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_abi_v1_candidate.py"
+                --header "${CMAKE_CURRENT_SOURCE_DIR}/include/lw_infer.h"
+                --manifest "${CMAKE_CURRENT_SOURCE_DIR}/abi/c-abi-v1-candidate.json"
+                --allowlist "${CMAKE_CURRENT_SOURCE_DIR}/abi/exports-v1-candidate.txt"
+                --library "$<TARGET_FILE:lw_ppocr_c_shared>"
+                --tool "${LW_EXPORT_TOOL}")
+    set_tests_properties(shared_export_candidate_contract PROPERTIES TIMEOUT 60)
+
     add_executable(kernel-reference-driver tests/kernel_reference_driver.c)
     target_link_libraries(kernel-reference-driver PRIVATE lw_ppocr_c)
     target_include_directories(kernel-reference-driver PRIVATE
@@ -1753,6 +1764,10 @@ install(DIRECTORY docs/
     FILES_MATCHING
     PATTERN "*.md"
     PATTERN "*.jpg")
+install(FILES
+    abi/c-abi-v1-candidate.json
+    abi/exports-v1-candidate.txt
+    DESTINATION docs/abi)
 install(FILES
     README.md
     README.zh-CN.md

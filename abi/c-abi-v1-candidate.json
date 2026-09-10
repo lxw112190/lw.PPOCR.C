@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "abi_name": "lw.PPOCR.C",
+  "abi_version": 1,
+  "status": "freeze-candidate",
+  "header": "include/lw_infer.h",
+  "stable_symbols": "abi/exports-v1-candidate.txt",
+  "stable_scope": [
+    "common status and error helpers",
+    "recognizer",
+    "classifier",
+    "detector",
+    "full OCR"
+  ],
+  "experimental_scope": [
+    "lw_model_*",
+    "lw_session_*",
+    "LWM v0.1 file format",
+    "WASM Host ABI"
+  ],
+  "input_contract": {
+    "pixel_format": "interleaved BGR8",
+    "image_decoding": "caller-owned",
+    "text_encoding": "UTF-8",
+    "output_buffers": "caller-owned"
+  },
+  "compatibility_policy": {
+    "structs": "exact known sizes in preview; append-only prefix compatibility required before final freeze",
+    "enums": "existing numeric values are permanent after freeze",
+    "functions": "existing signatures are permanent after freeze",
+    "ownership": "each successful create has one matching free"
+  }
+}

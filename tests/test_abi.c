@@ -96,7 +96,18 @@ int main(void) {
                    ocr_options.classifier.struct_size == sizeof(ocr_options.classifier) &&
                    ocr_options.recognizer.struct_size == sizeof(ocr_options.recognizer) &&
                    ocr_info.struct_size == sizeof(ocr_info) &&
-                   ocr_result.struct_size == sizeof(ocr_result)
+                   ocr_result.struct_size == sizeof(ocr_result) &&
+                   options.reserved == 0u && tensor.reserved == 0u &&
+                   session_options.reserved == 0u && recognizer_options.reserved0 == 0u &&
+                   recognizer_options.reserved1 == 0u && recognizer_info.reserved == 0u &&
+                   recognition_result.reserved == 0u && classifier_options.reserved == 0u &&
+                   classification_result.reserved == 0u && detector_options.reserved == 0u &&
+                   detector_info.reserved == 0u && detection_result.reserved == 0u &&
+                   ocr_options.detector.reserved == 0u &&
+                   ocr_options.classifier.reserved == 0u &&
+                   ocr_options.recognizer.reserved0 == 0u &&
+                   ocr_options.recognizer.reserved1 == 0u &&
+                   ocr_result.reserved0 == 0u && ocr_result.reserved1 == 0u
                ? 0
                : 1;
 }

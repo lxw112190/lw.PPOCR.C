@@ -1,0 +1,36 @@
+# C ABI v1 freeze-candidate symbols.
+# Low-level lw_model_* and lw_session_* symbols remain experimental in 0.2.x.
+lw_error_init
+lw_status_string
+lw_recognition_result_init
+lw_recognizer_create
+lw_recognizer_free
+lw_recognizer_get_info
+lw_recognizer_info_init
+lw_recognizer_options_init
+lw_recognizer_recognize_bgr_u8
+lw_classification_result_init
+lw_classifier_classify_bgr_u8
+lw_classifier_create
+lw_classifier_free
+lw_classifier_get_info
+lw_classifier_info_init
+lw_classifier_options_init
+lw_detection_result_init
+lw_detector_create
+lw_detector_detect_bgr_u8
+lw_detector_free
+lw_detector_get_info
+lw_detector_get_reading_order
+lw_detector_info_init
+lw_detector_options_init
+lw_detector_set_reading_order
+lw_ocr_create
+lw_ocr_free
+lw_ocr_get_info
+lw_ocr_get_reading_order
+lw_ocr_info_init
+lw_ocr_options_init
+lw_ocr_result_init
+lw_ocr_run_bgr_u8
+lw_ocr_set_reading_order

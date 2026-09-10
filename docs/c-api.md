@@ -1,11 +1,17 @@
-# Experimental C API
+# C API and ABI v1 freeze candidate
 
-The public API in `include/lw_infer.h` is available for integration experiments
-but is not ABI-frozen before 1.0. It covers low-level model/session planning and
-complete recognize-only, direction-classification, text-detection, and
-full-OCR APIs for decoded BGR8
-pixels. The recognizer hides preprocessing, graph execution, dictionary
-indexing, and UTF-8 CTC decoding. The classifier hides resize/pad/normalize,
+The high-level REC, CLS, DET, and full-OCR portions of `include/lw_infer.h`
+entered the C ABI v1 freeze-candidate period in `v0.2.0-preview.2`. The
+candidate is not a permanent ABI guarantee yet; see
+`docs/c-abi-v1-candidate.md` and `abi/exports-v1-candidate.txt` for the exact
+scope and release gates.
+
+The same header also contains low-level model/session planning APIs. Those
+remain experimental and may change before 1.0. The high-level API covers
+recognize-only, direction-classification, text-detection, and full-OCR calls
+for decoded BGR8 pixels. The recognizer hides preprocessing, graph execution,
+dictionary indexing, and UTF-8 CTC decoding. The classifier hides
+resize/pad/normalize,
 graph execution, and the two-class 0/180-degree decision.
 The detector hides resize/normalize, dynamic graph planning and execution,
 DB-style postprocessing, and original-coordinate quadrilateral restoration.
