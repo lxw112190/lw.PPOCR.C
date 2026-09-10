@@ -297,6 +297,7 @@ bundles as versioned ZIP/TAR.GZ assets when the release workflow runs.
 - [Browser JavaScript SDK](docs/web-sdk.md) and
   [standalone HTML usage](docs/standalone-html.md)
 - [Node.js/WASM distribution](docs/NODE_WASM_DISTRIBUTION.md)
+- [Tiny Legacy Web compatibility build](docs/web-legacy.md)
 - [Development package and managed demos](docs/package.md) and
   [C#/HTTP/web integration](docs/managed-demos.md)
 - [Desktop Java/JVM JNI example](examples/java-jni/README.md)

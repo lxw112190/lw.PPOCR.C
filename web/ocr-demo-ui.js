@@ -47,6 +47,9 @@
   const pdfDiagnostics = document.getElementById("pdf-diagnostics");
   const pdfDiagnosticsText = document.getElementById("pdf-diagnostics-text");
   const copyPdfDiagnosticsButton = document.getElementById("copy-pdf-diagnostics");
+  const browserDiagnostics = document.getElementById("browser-diagnostics");
+  const browserDiagnosticsText = document.getElementById("browser-diagnostics-text");
+  const copyBrowserDiagnosticsButton = document.getElementById("copy-browser-diagnostics");
   const pdfResultTabs = document.getElementById("pdf-result-tabs");
   const showPageResultButton = document.getElementById("show-page-result");
   const showFullResultButton = document.getElementById("show-full-result");
@@ -56,12 +59,56 @@
   function getOcrSdk() {
     const sdk = window.LwPpocr;
     if (!sdk || typeof sdk.create !== "function") {
+      const boot = window.__lwOcrBootStatus &&
+        window.__lwOcrBootStatus.snapshot();
       const error = new Error("OCR SDK 未成功加载");
-      error.code = "LW_WEB_SDK_UNAVAILABLE";
+      error.code = boot && boot.lastError &&
+        boot.lastError.name === "SyntaxError" ?
+        "LW_WEB_JS_SYNTAX_UNSUPPORTED" : "LW_WEB_SDK_UNAVAILABLE";
       error.stage = "sdk";
       throw error;
     }
     return sdk;
+  }
+
+  function clearChildren(node) {
+    while (node && node.firstChild) node.removeChild(node.firstChild);
+  }
+
+  function browserDiagnosticsSnapshot() {
+    const boot = window.__lwOcrBootStatus ?
+      window.__lwOcrBootStatus.snapshot() : {};
+    const sdk = window.LwPpocr;
+    const build = sdk && sdk.buildInfo ? sdk.buildInfo : boot.build;
+    const buildSnapshot = build ? {
+      flavor: build.flavor || null,
+      wasm_simd128: Boolean(build.wasmSimd128),
+      pdf: Boolean(build.pdf),
+      min_chrome: build.minChromeVersion === undefined ?
+        null : build.minChromeVersion
+    } : null;
+    return {
+      build: buildSnapshot,
+      browser: {
+        user_agent: navigator.userAgent || "",
+        language: navigator.language || ""
+      },
+      capabilities: boot.capabilities || {},
+      bootstrap: {
+        sdk_ready: Boolean(boot.sdkReady),
+        wasm_ready: Boolean(boot.wasmReady),
+        backend: boot.backend || null
+      },
+      last_error: boot.lastError || null
+    };
+  }
+
+  function showBrowserDiagnostics() {
+    if (!browserDiagnostics || !browserDiagnosticsText) return;
+    browserDiagnosticsText.textContent =
+      JSON.stringify(browserDiagnosticsSnapshot(), null, 2);
+    browserDiagnostics.hidden = false;
+    browserDiagnostics.open = true;
   }
 
   function waitForImage(image) {
@@ -147,8 +194,10 @@
   }
 
   const modelInfo = window.LwPpocr && window.LwPpocr.modelInfo;
+  const buildInfo = window.LwPpocr && window.LwPpocr.buildInfo;
   if (modelInfoNode && modelInfo && modelInfo.displayName) {
-    modelInfoNode.textContent = "· " + modelInfo.displayName;
+    modelInfoNode.textContent = "· " + modelInfo.displayName +
+      (buildInfo && buildInfo.flavor === "legacy" ? " · 兼容版" : "");
     modelInfoNode.title = modelInfo.family + " / " + modelInfo.variant;
   }
 
@@ -222,7 +271,7 @@
     lastTimingBreakdown = null;
     setExportEnabled(false);
     pdfResultTabs.hidden = true;
-    overlay.replaceChildren();
+    clearChildren(overlay);
   }
   function plainTextResult() {
     if (!lastResults) return "";
@@ -322,12 +371,12 @@
     if (!context) throw new Error("当前浏览器无法创建 Canvas 2D 上下文");
     context.drawImage(image, 0, 0, width, height);
     overlay.setAttribute("viewBox", "0 0 " + width + " " + height);
-    overlay.replaceChildren();
+    clearChildren(overlay);
   }
   function drawResults(lines, width, height, xScale = 1, yScale = 1) {
     const namespace = "http://www.w3.org/2000/svg";
     overlay.setAttribute("viewBox", "0 0 " + width + " " + height);
-    overlay.replaceChildren();
+    clearChildren(overlay);
     lines.forEach((line, index) => {
       const box = line.box.map((coordinate, coordinateIndex) =>
         coordinate * (coordinateIndex % 2 ? yScale : xScale));
@@ -969,6 +1018,12 @@
   copyPdfDiagnosticsButton.addEventListener("click", () =>
     copyTextValue(pdfDiagnosticsText.textContent).then(() => {
       statusNode.textContent = "PDF 诊断信息已复制。";
+    }).catch(error => {
+      statusNode.textContent = "复制诊断信息失败：" + error;
+    }));
+  copyBrowserDiagnosticsButton.addEventListener("click", () =>
+    copyTextValue(browserDiagnosticsText.textContent).then(() => {
+      statusNode.textContent = "浏览器诊断信息已复制。";
     }).catch(error => {
       statusNode.textContent = "复制诊断信息失败：" + error;
     }));

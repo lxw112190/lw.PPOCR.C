@@ -7,12 +7,16 @@
   <style>
     :root { color-scheme: light; font-family: Inter, "Segoe UI", "Microsoft YaHei", sans-serif; }
     * { box-sizing: border-box; }
-    body { margin: 0; min-height: 100vh; min-height: 100dvh; color: #182230; background: #f3f6fa; }
-    header { padding: 28px max(20px, calc((100% - 1180px) / 2)); background: #13243a; color: #fff; }
+    body { margin: 0; min-height: 100vh; color: #182230; background: #f3f6fa; }
+    body { min-height: 100dvh; }
+    header { padding: 28px 20px; background: #13243a; color: #fff; }
+    header { padding-left: max(20px, calc((100% - 1180px) / 2)); padding-right: max(20px, calc((100% - 1180px) / 2)); }
     header h1 { margin: 0 0 6px; font-size: 24px; letter-spacing: .2px; }
     header p { margin: 0; color: #b8c7d9; font-size: 14px; }
     main { max-width: 1180px; margin: 24px auto; padding: 0 20px 40px; }
     .toolbar { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-bottom: 18px; }
+    .toolbar > * { margin-right: 12px; margin-bottom: 12px; }
+    @supports (gap: 12px) { .toolbar > * { margin-right: 0; margin-bottom: 0; } }
     .source-picker { flex: 1; min-width: 260px; }
     .options { display: flex; min-height: 46px; align-items: center; gap: 7px; padding: 11px 13px; border: 1px solid #e0e7ef; border-radius: 8px; background: #fff; color: #526277; font-size: 13px; }
     .options input { accent-color: #2878d4; }
@@ -48,6 +52,13 @@
     .pdf-diagnostics p { margin: 0 0 10px; color: #704846; font-size: 12px; line-height: 1.6; }
     .pdf-diagnostics pre { max-height: 220px; margin: 0 0 10px; overflow: auto; border: 1px solid #ead3d1; border-radius: 7px; padding: 10px; background: #fff; color: #4d3c3b; white-space: pre-wrap; overflow-wrap: anywhere; font: 11px/1.5 ui-monospace, Consolas, monospace; }
     .pdf-diagnostics button { min-height: 38px; padding: 8px 12px; font-size: 12px; }
+    .browser-diagnostics { margin: -2px 0 18px; border-color: #efc6c4; background: #fffafa; }
+    .browser-diagnostics[hidden] { display: none; }
+    .browser-diagnostics summary { padding: 12px 16px; color: #9c302d; font-size: 13px; font-weight: 700; cursor: pointer; }
+    .browser-diagnostics-body { padding: 0 16px 16px; }
+    .browser-diagnostics p { margin: 0 0 10px; color: #704846; font-size: 12px; line-height: 1.6; }
+    .browser-diagnostics pre { max-height: 280px; margin: 0 0 10px; overflow: auto; border: 1px solid #ead3d1; border-radius: 7px; padding: 10px; background: #fff; color: #4d3c3b; white-space: pre-wrap; overflow-wrap: anywhere; font: 11px/1.5 ui-monospace, Consolas, monospace; }
+    .browser-diagnostics button { min-height: 38px; padding: 8px 12px; font-size: 12px; }
     .mobile-tabs { display: none; }
     .grid { display: grid; grid-template-columns: minmax(0, 1.65fr) minmax(300px, 1fr); gap: 18px; }
     .card { overflow: hidden; border: 1px solid #e0e7ef; border-radius: 12px; background: #fff; box-shadow: 0 4px 14px #1c35570d; }
@@ -64,7 +75,8 @@
     .preview { display: flex; min-height: 420px; align-items: center; justify-content: center; padding: 16px; background: #f9fbfd; }
     .preview-stage { position: relative; max-width: 100%; line-height: 0; }
     canvas { display: block; max-width: 100%; height: auto; border-radius: 6px; background: #eef2f6; }
-    #overlay { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+    #overlay { position: absolute; top: 0; right: 0; bottom: 0; left: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+    #overlay { inset: 0; }
     #overlay[hidden] { display: none; }
     #overlay polygon { fill: transparent; stroke: #e53935; vector-effect: non-scaling-stroke; }
     #overlay text { fill: #e53935; stroke: #fff; stroke-width: 3px; paint-order: stroke; font: 14px sans-serif; }
@@ -94,9 +106,11 @@
     a:hover { text-decoration: underline; }
     footer { margin-top: 18px; color: #8491a2; font-size: 12px; text-align: right; }
     @media (max-width: 760px) {
-      header { padding: 20px max(16px, env(safe-area-inset-left)) 18px max(16px, env(safe-area-inset-right)); }
+      header { padding: 20px 16px 18px; }
+      header { padding-left: max(16px, env(safe-area-inset-left)); padding-right: max(16px, env(safe-area-inset-right)); }
       header h1 { font-size: 20px; }
-      main { margin-top: 14px; padding: 0 max(14px, env(safe-area-inset-right)) calc(92px + env(safe-area-inset-bottom)) max(14px, env(safe-area-inset-left)); }
+      main { margin-top: 14px; padding: 0 14px 92px; }
+      main { padding-left: max(14px, env(safe-area-inset-left)); padding-right: max(14px, env(safe-area-inset-right)); padding-bottom: calc(92px + env(safe-area-inset-bottom)); }
       .toolbar { align-items: stretch; }
       .source-picker { width: 100%; min-width: 0; }
       .dropzone { display: none; }
@@ -105,7 +119,8 @@
       .pdf-controls { grid-template-columns: 1fr 1fr; align-items: end; padding: 12px; }
       .pdf-meta, .pdf-page-nav, .pdf-progress { grid-column: 1 / -1; }
       .pdf-page-nav { justify-content: center; }
-      #run { position: fixed; z-index: 20; right: max(14px, env(safe-area-inset-right)); bottom: max(12px, env(safe-area-inset-bottom)); left: max(14px, env(safe-area-inset-left)); min-height: 52px; box-shadow: 0 8px 28px #17324f59; }
+      #run { position: fixed; z-index: 20; right: 14px; bottom: 12px; left: 14px; min-height: 52px; box-shadow: 0 8px 28px #17324f59; }
+      #run { right: max(14px, env(safe-area-inset-right)); bottom: max(12px, env(safe-area-inset-bottom)); left: max(14px, env(safe-area-inset-left)); }
       .mobile-tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; margin-bottom: 10px; padding: 4px; border: 1px solid #dce5ef; border-radius: 10px; background: #eaf0f6; }
       .mobile-tabs button { min-height: 42px; padding: 8px; background: transparent; color: #526277; }
       .mobile-tabs button.active { background: #fff; color: #2867ad; box-shadow: 0 2px 6px #1c35571a; }
@@ -125,7 +140,8 @@
       .result-header { display: block; }
       .result-actions { margin-top: 10px; justify-content: flex-start; }
       .support-content { display: block; }
-      .support img { display: block; width: min(180px, 60vw); height: auto; margin: 4px auto 14px; }
+      .support img { display: block; width: 60vw; max-width: 180px; height: auto; margin: 4px auto 14px; }
+      .support img { width: min(180px, 60vw); }
     }
   </style>
 </head>
@@ -201,9 +217,10 @@
               bootState.phase = message;
               render();
             },
-            markSdkReady: function () {
+            markSdkReady: function (buildInfo) {
               bootState.sdkStarted = true;
               bootState.sdkReady = true;
+              bootState.build = buildInfo || null;
               bootState.phase = "OCR SDK 已加载";
             },
             markWasmReady: function (backend) {
@@ -226,6 +243,7 @@
             window.__lwOcrBootStatus.captureError({
               phase: "javascript",
               code: "LW_WEB_JS_FAILED",
+              name: event.error && event.error.name || "Error",
               message: event.message || "JavaScript execution failed",
               filename: event.filename || "",
               line: event.lineno || 0,
@@ -237,6 +255,7 @@
             window.__lwOcrBootStatus.captureError({
               phase: "javascript",
               code: "LW_WEB_JS_FAILED",
+              name: reason.name || "Error",
               message: reason.message || String(reason)
             });
           });
@@ -269,6 +288,14 @@
         <span id="pdf-progress-label">0 / 0</span>
       </div>
     </section>
+    <details id="browser-diagnostics" class="browser-diagnostics card" hidden>
+      <summary>浏览器兼容性诊断 · 查看详情</summary>
+      <div class="browser-diagnostics-body">
+        <p>如果页面无法初始化，请复制以下信息反馈。内容不包含图片、OCR 文本和本地路径。</p>
+        <pre id="browser-diagnostics-text"></pre>
+        <button id="copy-browser-diagnostics" type="button">复制诊断信息</button>
+      </div>
+    </details>
     <details id="pdf-diagnostics" class="pdf-diagnostics card" hidden>
       <summary>PDF 打开失败 · 查看诊断信息</summary>
       <div class="pdf-diagnostics-body">

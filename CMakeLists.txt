@@ -10,6 +10,10 @@ option(LW_RUNTIME_ONLY
     "Build only the dependency-free native runtime for an embedding target" OFF)
 option(LW_WASM_SIMD128
     "Enable portable WebAssembly SIMD128 for the standalone OCR HTML" ON)
+option(LW_WEB_LEGACY
+    "Build the Tiny scalar Web compatibility distribution" OFF)
+set(LW_WEB_MIN_CHROME_VERSION "70" CACHE STRING
+    "Minimum Chromium version for the legacy browser distribution")
 option(LW_REC_RESIDENT_WIDTHS
     "Prewarm all standard REC widths for native performance experiments" OFF)
 option(LW_EXPERIMENTAL_AVX2_FMA_DISPATCH
@@ -44,6 +48,25 @@ if(NOT LW_WASM_HOST_ABI_VERSION MATCHES "^[0-9]+$")
 endif()
 if(NOT LW_LWM_FORMAT_VERSION MATCHES "^[0-9]+\\.[0-9]+$")
     message(FATAL_ERROR "LW_LWM_FORMAT_VERSION must use the form major.minor")
+endif()
+
+if(LW_WEB_LEGACY)
+    if(LW_WASM_SIMD128)
+        message(FATAL_ERROR
+            "LW_WEB_LEGACY requires LW_WASM_SIMD128=OFF")
+    endif()
+    if(LW_WEB_PDF)
+        message(FATAL_ERROR
+            "LW_WEB_LEGACY requires LW_WEB_PDF=OFF")
+    endif()
+    if(LW_BUILD_WEB_MODEL_VARIANTS)
+        message(FATAL_ERROR
+            "LW_WEB_LEGACY supports PP-OCRv6 Tiny only")
+    endif()
+    if(NOT LW_WEB_MIN_CHROME_VERSION MATCHES "^[0-9]+$")
+        message(FATAL_ERROR
+            "LW_WEB_MIN_CHROME_VERSION must be an integer")
+    endif()
 endif()
 
 include(CTest)
@@ -374,6 +397,11 @@ if(EMSCRIPTEN)
         target_compile_options(lw_ppocr_web PRIVATE -msimd128 -msse2)
         target_link_options(lw_ppocr_web PRIVATE -msimd128)
     endif()
+    if(LW_WEB_LEGACY)
+        target_link_options(lw_ppocr_web PRIVATE
+            "-sMIN_CHROME_VERSION=${LW_WEB_MIN_CHROME_VERSION}"
+            "-sENVIRONMENT=web,webview,worker")
+    endif()
     target_link_options(lw_ppocr_web PRIVATE
         -O3
         "-sMODULARIZE=1" "-sEXPORT_NAME=LwPpocrModule" "-sSINGLE_FILE=1"
@@ -387,8 +415,34 @@ if(EMSCRIPTEN)
     # The generated runtime remains a normal Emscripten module. The browser
     # SDK is a separate deterministic artifact layered on top of that module,
     # so other applications can consume it without the demo HTML.
+    if(LW_WEB_LEGACY)
+        set(LW_WEB_OUTPUT_SUFFIX "-legacy")
+        set(LW_WEB_BUILD_FLAVOR "legacy")
+        set(LW_WEB_WASM_SIMD128 "false")
+        set(LW_WEB_PDF_ENABLED "false")
+        set(LW_WEB_MIN_CHROME_VERSION_VALUE "${LW_WEB_MIN_CHROME_VERSION}")
+        set(LW_WEB_HTML_TITLE
+            "lw.PPOCR.C · PP-OCRv6 Tiny · 兼容版离线 OCR 工作台")
+    else()
+        set(LW_WEB_OUTPUT_SUFFIX "")
+        set(LW_WEB_BUILD_FLAVOR "modern")
+        if(LW_WASM_SIMD128)
+            set(LW_WEB_WASM_SIMD128 "true")
+        else()
+            set(LW_WEB_WASM_SIMD128 "false")
+        endif()
+        if(LW_WEB_PDF)
+            set(LW_WEB_PDF_ENABLED "true")
+        else()
+            set(LW_WEB_PDF_ENABLED "false")
+        endif()
+        set(LW_WEB_MIN_CHROME_VERSION_VALUE "")
+        set(LW_WEB_HTML_TITLE
+            "lw.PPOCR.C · PP-OCRv6 Tiny · 离线 OCR 工作台")
+    endif()
+
     set(LW_PPOCR_C_WEB_SDK
-        "${CMAKE_CURRENT_BINARY_DIR}/lw-ppocr.js")
+        "${CMAKE_CURRENT_BINARY_DIR}/lw-ppocr${LW_WEB_OUTPUT_SUFFIX}.js")
     add_custom_command(
         OUTPUT "${LW_PPOCR_C_WEB_SDK}"
         COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/web/package_ocr_sdk.py"
@@ -401,6 +455,10 @@ if(EMSCRIPTEN)
             --model-variant "tiny"
             --model-display-name "PP-OCRv6 Tiny"
             --version "${PROJECT_VERSION}"
+            --build-flavor "${LW_WEB_BUILD_FLAVOR}"
+            --wasm-simd128 "${LW_WEB_WASM_SIMD128}"
+            --pdf-enabled "${LW_WEB_PDF_ENABLED}"
+            --min-chrome-version "${LW_WEB_MIN_CHROME_VERSION_VALUE}"
             --output "${LW_PPOCR_C_WEB_SDK}"
         DEPENDS
             lw_ppocr_web
@@ -415,7 +473,7 @@ if(EMSCRIPTEN)
     # The standalone HTML is now only a thin UI shell plus the SDK. Keep it as
     # a separate target so CI and downstream users can download either file.
     set(LW_PPOCR_C_WEB_HTML
-        "${CMAKE_CURRENT_BINARY_DIR}/ocr-demo.html")
+        "${CMAKE_CURRENT_BINARY_DIR}/ocr-demo${LW_WEB_OUTPUT_SUFFIX}.html")
     set(LW_PPOCR_C_WEB_HTML_PDF_ARGS --no-pdf)
     set(LW_PPOCR_C_WEB_HTML_PDF_DEPENDS)
     if(LW_WEB_PDF)
@@ -450,7 +508,7 @@ if(EMSCRIPTEN)
             --sdk "${LW_PPOCR_C_WEB_SDK}"
             --ui "${CMAKE_CURRENT_SOURCE_DIR}/web/ocr-demo-ui.js"
             --sponsor "${CMAKE_CURRENT_SOURCE_DIR}/docs/assets/sponsor.jpg"
-            --title "lw.PPOCR.C · PP-OCRv6 Tiny · 离线 OCR 工作台"
+            --title "${LW_WEB_HTML_TITLE}"
             ${LW_PPOCR_C_WEB_HTML_PDF_ARGS}
             --output "${LW_PPOCR_C_WEB_HTML}"
         DEPENDS
@@ -520,6 +578,10 @@ if(EMSCRIPTEN)
                         --model-variant "${variant}"
                         --model-display-name "${display_name}"
                         --version "${PROJECT_VERSION}"
+                        --build-flavor "${LW_WEB_BUILD_FLAVOR}"
+                        --wasm-simd128 "${LW_WEB_WASM_SIMD128}"
+                        --pdf-enabled "${LW_WEB_PDF_ENABLED}"
+                        --min-chrome-version "${LW_WEB_MIN_CHROME_VERSION_VALUE}"
                         --output "${_variant_sdk}"
                 DEPENDS lw_ppocr_web
                         "${_variant_stage_stamp}"
@@ -561,7 +623,8 @@ if(EMSCRIPTEN)
             DEPENDS lw-ocr-html lw-ocr-html-small lw-ocr-html-medium)
     endif()
 
-    # Node consumes the same WASM Host ABI as the browser. Keep this target
+    if(NOT LW_WEB_LEGACY)
+        # Node consumes the same WASM Host ABI as the browser. Keep this target
     # separate from the browser SDK so the Node release never needs to parse
     # or extract assets from ocr-demo.html.
     add_executable(lw_ppocr_node web/lw_web_api.c)
@@ -643,6 +706,7 @@ if(EMSCRIPTEN)
     add_custom_target(lw-node-wasm-package
         DEPENDS "${LW_PPOCR_C_NODE_PACKAGE_ARCHIVE}"
                 "${LW_PPOCR_C_NODE_PACKAGE_CHECKSUM}")
+    endif()
 endif()
 
 set(LW_PPOCR_C_REC_DEMO_PPM

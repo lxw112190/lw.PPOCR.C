@@ -135,9 +135,9 @@ jobs:
           --sample models/ppocrv6-tiny/sample.jpg
           --golden ci/web-ppocrv6-tiny.json
 
-      - name: Run legacy browser compatibility test
+      - name: Run browser fallback simulation test
         run: >-
-          python web/test_web_browser_compat.py
+          python web/test_web_browser_fallbacks.py
           --html build-wasm/ocr-demo.html
           --sample models/ppocrv6-tiny/sample.jpg
 
@@ -224,6 +224,93 @@ jobs:
         with:
           name: node-regression-fixture-${{ github.sha }}
           path: build-wasm/models/sample.ppm
+          if-no-files-found: error
+          retention-days: 14
+
+  legacy:
+    name: Build Tiny legacy scalar HTML
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            requirements-converter.txt
+            requirements-wasm-test.txt
+
+      - name: Install Python dependencies
+        run: >-
+          python -m pip install
+          -r requirements-converter.txt
+          -r requirements-wasm-test.txt
+
+      - name: Install Playwright Chromium
+        run: python -m playwright install --with-deps chromium
+
+      - name: Set up Emscripten
+        uses: mymindstorm/setup-emsdk@v16
+        with:
+          version: 4.0.15
+          actions-cache-folder: emsdk-cache
+
+      - name: Configure Tiny Legacy Web build
+        run: >-
+          emcmake cmake -S . -B build-wasm-legacy -G Ninja
+          -DCMAKE_BUILD_TYPE=Release
+          -DLW_BUILD_HTTP_DEMO=OFF
+          -DLW_BUILD_CSHARP_DEMOS=OFF
+          -DBUILD_TESTING=OFF
+          -DLW_WEB_LEGACY=ON
+          -DLW_WASM_SIMD128=OFF
+          -DLW_WEB_PDF=OFF
+          -DLW_BUILD_WEB_MODEL_VARIANTS=OFF
+
+      - name: Build Tiny Legacy Web artifacts
+        run: >-
+          cmake --build build-wasm-legacy
+          --target lw-ocr-js lw-ocr-html
+          --parallel
+
+      - name: Verify Tiny Legacy Web artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s build-wasm-legacy/lw-ppocr-legacy.js
+          test -s build-wasm-legacy/ocr-demo-legacy.html
+          ! test -e build-wasm-legacy/runtime.cjs
+          ! grep -a -q '__LW_' build-wasm-legacy/lw-ppocr-legacy.js
+          ! grep -a -q '__LW_' build-wasm-legacy/ocr-demo-legacy.html
+          grep -a -q 'flavor: "legacy"' build-wasm-legacy/lw-ppocr-legacy.js
+          grep -a -q 'wasmSimd128: false' build-wasm-legacy/lw-ppocr-legacy.js
+          grep -a -q 'minChromeVersion: 70' build-wasm-legacy/lw-ppocr-legacy.js
+          ! grep -a -q '6.3.289' build-wasm-legacy/ocr-demo-legacy.html
+          ! grep -a -q 'openjpeg.wasm' build-wasm-legacy/ocr-demo-legacy.html
+
+      - name: Run Legacy ES2018 syntax gate
+        run: >-
+          python web/test_legacy_web_syntax.py
+          --sdk build-wasm-legacy/lw-ppocr-legacy.js
+          --html build-wasm-legacy/ocr-demo-legacy.html
+
+      - name: Run Tiny Legacy OCR contract
+        run: >-
+          python web/test_legacy_ocr_html.py
+          --html build-wasm-legacy/ocr-demo-legacy.html
+          --sample models/ppocrv6-tiny/sample.jpg
+          --golden ci/web-ppocrv6-tiny.json
+          --report build-wasm-legacy/legacy-web-report.json
+
+      - name: Upload Tiny Legacy Web artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: lw.PPOCR.C-browser-legacy-${{ github.sha }}
+          path: |
+            build-wasm-legacy/lw-ppocr-legacy.js
+            build-wasm-legacy/ocr-demo-legacy.html
+            build-wasm-legacy/legacy-web-report.json
           if-no-files-found: error
           retention-days: 14
 

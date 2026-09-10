@@ -97,6 +97,13 @@ def main() -> int:
         assert page.evaluate("typeof window.LwPpocr.create") == "function"
         assert page.evaluate("window.LwPpocr.webAbiVersion") == 1
         model_info = page.evaluate("window.LwPpocr.modelInfo")
+        build_info = page.evaluate("window.LwPpocr.buildInfo")
+        assert build_info == {
+            "flavor": "modern",
+            "wasmSimd128": True,
+            "pdf": True,
+            "minChromeVersion": None,
+        }
         assert model_info == {
             "family": "PP-OCRv6",
             "variant": arguments.expected_variant,

@@ -377,6 +377,7 @@ HTTP Demo 和正式发布包均不链接、加载或携带 OpenCV。
 - [浏览器 JavaScript SDK](docs/web-sdk.md)
 - [单文件离线 HTML 使用与定制](docs/standalone-html.md)
 - [Node.js/WASM 发行包](docs/NODE_WASM_DISTRIBUTION.md)
+- [Tiny Legacy Web 兼容版](docs/web-legacy.md)
 - [开发包说明](docs/package.md)
 - [C# 与 HTTP/Web Demo](docs/managed-demos.md)
 

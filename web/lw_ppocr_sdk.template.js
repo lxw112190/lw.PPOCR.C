@@ -7,6 +7,12 @@
     variant: __LW_MODEL_VARIANT__,
     displayName: __LW_MODEL_DISPLAY_NAME__
   });
+  const BUILD_INFO = Object.freeze({
+    flavor: __LW_BUILD_FLAVOR__,
+    wasmSimd128: __LW_WASM_SIMD128__,
+    pdf: __LW_PDF_ENABLED__,
+    minChromeVersion: __LW_MIN_CHROME_VERSION__
+  });
   const WEB_ABI_VERSION = 1;
   const MODEL_B64 = {
     det: "__LW_DET_MODEL_BASE64__",
@@ -680,12 +686,13 @@
     version: SDK_VERSION,
     webAbiVersion: WEB_ABI_VERSION,
     modelInfo: MODEL_INFO,
+    buildInfo: BUILD_INFO,
     Error: LwPpocrError,
     create
   });
   if (global.__lwOcrBootStatus &&
       typeof global.__lwOcrBootStatus.markSdkReady === "function") {
-    global.__lwOcrBootStatus.markSdkReady();
+    global.__lwOcrBootStatus.markSdkReady(BUILD_INFO);
   }
 })(typeof globalThis !== "undefined" ?
     globalThis : (typeof self !== "undefined" ? self : window));

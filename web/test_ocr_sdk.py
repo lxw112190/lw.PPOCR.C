@@ -121,6 +121,7 @@ def main() -> int:
                     version: LwPpocr.version,
                     webAbiVersion: LwPpocr.webAbiVersion,
                     modelInfo: LwPpocr.modelInfo,
+                    buildInfo: LwPpocr.buildInfo,
                     frozen: Object.isFrozen(LwPpocr),
                     invalidOptionsCode,
                     status: window.__sdkEngine.getStatus(),
@@ -134,6 +135,12 @@ def main() -> int:
                 "family": "PP-OCRv6",
                 "variant": arguments.expected_variant,
                 "displayName": f"PP-OCRv6 {arguments.expected_variant.title()}",
+            }
+            assert public_contract["buildInfo"] == {
+                "flavor": "modern",
+                "wasmSimd128": True,
+                "pdf": True,
+                "minChromeVersion": None,
             }
             assert public_contract["frozen"]
             assert public_contract["invalidOptionsCode"] == "LW_OCR_OPTIONS"
