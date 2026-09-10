@@ -162,6 +162,7 @@ def main() -> int:
         "wasmSimd128": False,
         "pdf": False,
         "minChromeVersion": 70,
+        "jsTarget": "chrome70",
     }, legacy_build
     assert len(reference_text) == expected_count, report
     assert len(legacy_text) == expected_count, report

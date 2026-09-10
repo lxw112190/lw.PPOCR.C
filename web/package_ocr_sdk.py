@@ -28,6 +28,7 @@ def main() -> int:
     parser.add_argument("--wasm-simd128", choices=("true", "false"), default="true")
     parser.add_argument("--pdf-enabled", choices=("true", "false"), default="true")
     parser.add_argument("--min-chrome-version", default="")
+    parser.add_argument("--js-target", default="")
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
 
@@ -45,6 +46,9 @@ def main() -> int:
         "__LW_PDF_ENABLED__": args.pdf_enabled,
         "__LW_MIN_CHROME_VERSION__": (
             args.min_chrome_version if args.min_chrome_version else "null"
+        ),
+        "__LW_JS_TARGET__": (
+            json.dumps(args.js_target) if args.js_target else "null"
         ),
         "__LW_RUNTIME_JS_JSON__": json.dumps(runtime),
         "__LW_DET_MODEL_BASE64__": encode(args.det),

@@ -11,7 +11,8 @@
     flavor: __LW_BUILD_FLAVOR__,
     wasmSimd128: __LW_WASM_SIMD128__,
     pdf: __LW_PDF_ENABLED__,
-    minChromeVersion: __LW_MIN_CHROME_VERSION__
+    minChromeVersion: __LW_MIN_CHROME_VERSION__,
+    jsTarget: __LW_JS_TARGET__
   });
   const WEB_ABI_VERSION = 1;
   const MODEL_B64 = {

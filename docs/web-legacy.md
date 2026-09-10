@@ -15,9 +15,13 @@ variants, or PDF support.
 
 ## Build locally or in CI
 
-The build requires the same pinned Emscripten release as the normal Web build:
+The build requires Node.js 20+, the locked JavaScript tools, and the same pinned Emscripten release as the normal Web build:
 
 ~~~bash
+cd web
+npm ci
+cd ..
+
 emcmake cmake -S . -B build-wasm-legacy -G Ninja   -DCMAKE_BUILD_TYPE=Release   -DLW_BUILD_HTTP_DEMO=OFF   -DLW_BUILD_CSHARP_DEMOS=OFF   -DBUILD_TESTING=OFF   -DLW_WEB_LEGACY=ON   -DLW_WASM_SIMD128=OFF   -DLW_WEB_PDF=OFF   -DLW_BUILD_WEB_MODEL_VARIANTS=OFF
 
 cmake --build build-wasm-legacy --target lw-ocr-js lw-ocr-html --parallel
@@ -26,6 +30,9 @@ cmake --build build-wasm-legacy --target lw-ocr-js lw-ocr-html --parallel
 The output names are deliberately distinct:
 
 ~~~text
+build-wasm-legacy/lw_ppocr_web.js                 # raw Runtime (debug only)
+build-wasm-legacy/lw_ppocr_web.legacy.js         # Chrome 70 Runtime (debug only)
+build-wasm-legacy/legacy-runtime-report.json
 build-wasm-legacy/lw-ppocr-legacy.js
 build-wasm-legacy/ocr-demo-legacy.html
 ~~~
@@ -45,7 +52,8 @@ LwPpocr.buildInfo
 //   flavor: "legacy",
 //   wasmSimd128: false,
 //   pdf: false,
-//   minChromeVersion: 70
+//   minChromeVersion: 70,
+//   jsTarget: "chrome70"
 // }
 ~~~
 
@@ -60,6 +68,8 @@ the option used to define the shared Tiny Web golden. The scalar Legacy result
 must be deterministic across two runs, retain all 16 lines and the expected first
 line, and exactly match the Golden text SHA-256. Per-line and character differences
 remain in the report for diagnosis, but do not weaken the correctness gate.
+
+The Legacy SDK runtime is lowered with the pinned esbuild toolchain before packaging. CI parses the complete SDK and every inline script in the final HTML as ES2018; the older Python test checks packaging metadata. The raw and lowered runtime files are debug-only artifacts and are not part of the customer download.
 
 The CI workflow builds and tests this artifact in an independent legacy job
 and uploads it as lw.PPOCR.C-browser-legacy-<commit>. It is upload-only for

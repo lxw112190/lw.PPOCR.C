@@ -103,6 +103,7 @@ def main() -> int:
             "wasmSimd128": True,
             "pdf": True,
             "minChromeVersion": None,
+            "jsTarget": None,
         }
         assert model_info == {
             "family": "PP-OCRv6",

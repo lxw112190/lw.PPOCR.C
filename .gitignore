@@ -19,3 +19,4 @@ __pycache__/
 *.pdb
 *.ilk
 *.log
+/web/node_modules/

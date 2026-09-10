@@ -56,7 +56,7 @@ accepted through paste.
 Inference normally runs inside a Blob Worker so the controls remain
 responsive. If local browser policy rejects Blob Workers, the embedded SDK
 uses its compatible main-thread fallback. The default build enables
-WebAssembly SIMD128.
+WebAssembly SIMD128. For older Android WebView or Chromium targets, use the separate Tiny `ocr-demo-legacy.html` artifact. It is a scalar-WASM, no-PDF build whose Runtime JavaScript is lowered to the declared Chrome 70 syntax target and validated as a complete SDK and HTML artifact in CI.
 
 The standalone page keeps its bootstrap path compatible with older Android
 browsers and WebViews: it does not require globalThis, retries image loading

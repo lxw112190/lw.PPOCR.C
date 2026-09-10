@@ -386,6 +386,15 @@ if(LW_RUNTIME_ONLY)
 endif()
 
 if(EMSCRIPTEN)
+    if(LW_WEB_LEGACY)
+        find_program(LW_NODE_EXECUTABLE NAMES node nodejs REQUIRED)
+        set(LW_LEGACY_ESBUILD_ENTRY
+            "${CMAKE_CURRENT_SOURCE_DIR}/web/node_modules/esbuild/package.json")
+        if(NOT EXISTS "${LW_LEGACY_ESBUILD_ENTRY}")
+            message(FATAL_ERROR
+                "LW_WEB_LEGACY requires web/node_modules; run npm ci in web first")
+        endif()
+    endif()
     add_executable(lw_ppocr_web web/lw_web_api.c)
     target_link_libraries(lw_ppocr_web PRIVATE lw_ppocr_c)
     target_include_directories(lw_ppocr_web PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/include")
@@ -421,6 +430,7 @@ if(EMSCRIPTEN)
         set(LW_WEB_WASM_SIMD128 "false")
         set(LW_WEB_PDF_ENABLED "false")
         set(LW_WEB_MIN_CHROME_VERSION_VALUE "${LW_WEB_MIN_CHROME_VERSION}")
+        set(LW_WEB_JS_TARGET_VALUE "chrome${LW_WEB_MIN_CHROME_VERSION}")
         set(LW_WEB_HTML_TITLE
             "lw.PPOCR.C · PP-OCRv6 Tiny · 兼容版离线 OCR 工作台")
     else()
@@ -437,17 +447,52 @@ if(EMSCRIPTEN)
             set(LW_WEB_PDF_ENABLED "false")
         endif()
         set(LW_WEB_MIN_CHROME_VERSION_VALUE "")
+        set(LW_WEB_JS_TARGET_VALUE "")
         set(LW_WEB_HTML_TITLE
             "lw.PPOCR.C · PP-OCRv6 Tiny · 离线 OCR 工作台")
     endif()
 
+    if(LW_WEB_LEGACY)
+        set(LW_PPOCR_C_LEGACY_RUNTIME_JS
+            "${CMAKE_CURRENT_BINARY_DIR}/lw_ppocr_web.legacy.js")
+        set(LW_PPOCR_C_LEGACY_RUNTIME_REPORT
+            "${CMAKE_CURRENT_BINARY_DIR}/legacy-runtime-report.json")
+        add_custom_command(
+            OUTPUT
+                "${LW_PPOCR_C_LEGACY_RUNTIME_JS}"
+                "${LW_PPOCR_C_LEGACY_RUNTIME_REPORT}"
+            COMMAND "${LW_NODE_EXECUTABLE}"
+                    "${CMAKE_CURRENT_SOURCE_DIR}/web/transpile_legacy_runtime.mjs"
+                    --input "$<TARGET_FILE_DIR:lw_ppocr_web>/lw_ppocr_web.js"
+                    --output "${LW_PPOCR_C_LEGACY_RUNTIME_JS}"
+                    --target "chrome${LW_WEB_MIN_CHROME_VERSION}"
+                    --report "${LW_PPOCR_C_LEGACY_RUNTIME_REPORT}"
+            DEPENDS
+                lw_ppocr_web
+                "${CMAKE_CURRENT_SOURCE_DIR}/web/transpile_legacy_runtime.mjs"
+                "${CMAKE_CURRENT_SOURCE_DIR}/web/package-lock.json"
+                "${CMAKE_CURRENT_SOURCE_DIR}/web/node_modules/esbuild/package.json"
+            COMMENT "Lowering Legacy Web runtime for Chrome ${LW_WEB_MIN_CHROME_VERSION}"
+            VERBATIM)
+        add_custom_target(lw-legacy-runtime
+            DEPENDS
+                "${LW_PPOCR_C_LEGACY_RUNTIME_JS}"
+                "${LW_PPOCR_C_LEGACY_RUNTIME_REPORT}")
+        set(LW_PPOCR_C_WEB_RUNTIME_FOR_PACKAGE
+            "${LW_PPOCR_C_LEGACY_RUNTIME_JS}")
+        set(LW_PPOCR_C_WEB_RUNTIME_DEPENDS lw-legacy-runtime)
+    else()
+        set(LW_PPOCR_C_WEB_RUNTIME_FOR_PACKAGE
+            "$<TARGET_FILE_DIR:lw_ppocr_web>/lw_ppocr_web.js")
+        set(LW_PPOCR_C_WEB_RUNTIME_DEPENDS)
+    endif()
     set(LW_PPOCR_C_WEB_SDK
         "${CMAKE_CURRENT_BINARY_DIR}/lw-ppocr${LW_WEB_OUTPUT_SUFFIX}.js")
     add_custom_command(
         OUTPUT "${LW_PPOCR_C_WEB_SDK}"
         COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/web/package_ocr_sdk.py"
             --template "${CMAKE_CURRENT_SOURCE_DIR}/web/lw_ppocr_sdk.template.js"
-            --runtime "$<TARGET_FILE_DIR:lw_ppocr_web>/lw_ppocr_web.js"
+            --runtime "${LW_PPOCR_C_WEB_RUNTIME_FOR_PACKAGE}"
             --det "${LW_PPOCR_C_DET_LWM}" --cls "${LW_PPOCR_C_CLS_LWM}"
             --rec "${LW_PPOCR_C_REC_LWM}"
             --dictionary "${CMAKE_CURRENT_SOURCE_DIR}/models/ppocrv6-tiny/ppocr_keys.txt"
@@ -459,9 +504,11 @@ if(EMSCRIPTEN)
             --wasm-simd128 "${LW_WEB_WASM_SIMD128}"
             --pdf-enabled "${LW_WEB_PDF_ENABLED}"
             --min-chrome-version "${LW_WEB_MIN_CHROME_VERSION_VALUE}"
+            --js-target "${LW_WEB_JS_TARGET_VALUE}"
             --output "${LW_PPOCR_C_WEB_SDK}"
         DEPENDS
             lw_ppocr_web
+            ${LW_PPOCR_C_WEB_RUNTIME_DEPENDS}
             "${CMAKE_CURRENT_SOURCE_DIR}/web/lw_ppocr_sdk.template.js"
             "${CMAKE_CURRENT_SOURCE_DIR}/web/package_ocr_sdk.py"
             "${LW_PPOCR_C_DET_LWM}" "${LW_PPOCR_C_CLS_LWM}" "${LW_PPOCR_C_REC_LWM}"

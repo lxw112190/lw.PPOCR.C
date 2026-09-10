@@ -234,6 +234,16 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install Legacy JavaScript build tools
+        working-directory: web
+        run: npm ci
+
       - name: Download modern browser reference
         uses: actions/download-artifact@v8
         with:
@@ -285,6 +295,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          test -s build-wasm-legacy/lw_ppocr_web.legacy.js
+          test -s build-wasm-legacy/legacy-runtime-report.json
           test -s build-wasm-legacy/lw-ppocr-legacy.js
           test -s build-wasm-legacy/ocr-demo-legacy.html
           ! test -e build-wasm-legacy/runtime.cjs
@@ -293,10 +305,18 @@ jobs:
           grep -a -q 'flavor: "legacy"' build-wasm-legacy/lw-ppocr-legacy.js
           grep -a -q 'wasmSimd128: false' build-wasm-legacy/lw-ppocr-legacy.js
           grep -a -q 'minChromeVersion: 70' build-wasm-legacy/lw-ppocr-legacy.js
+          grep -a -q 'jsTarget: "chrome70"' build-wasm-legacy/lw-ppocr-legacy.js
           ! grep -a -q '6.3.289' build-wasm-legacy/ocr-demo-legacy.html
           ! grep -a -q 'openjpeg.wasm' build-wasm-legacy/ocr-demo-legacy.html
 
-      - name: Run Legacy ES2018 syntax gate
+      - name: Run Legacy whole-artifact ES2018 syntax gate
+        run: >-
+          node web/check_legacy_js_syntax.mjs
+          --sdk build-wasm-legacy/lw-ppocr-legacy.js
+          --html build-wasm-legacy/ocr-demo-legacy.html
+          --ecma-version 2018
+
+      - name: Run Legacy packaging contract gate
         run: >-
           python web/test_legacy_web_syntax.py
           --sdk build-wasm-legacy/lw-ppocr-legacy.js
@@ -310,6 +330,18 @@ jobs:
           --sample models/ppocrv6-tiny/sample.jpg
           --golden ci/web-ppocrv6-tiny.json
           --report build-wasm-legacy/legacy-web-report.json
+
+      - name: Upload Legacy runtime debug artifacts
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: lw.PPOCR.C-browser-legacy-debug-${{ github.sha }}
+          path: |
+            build-wasm-legacy/lw_ppocr_web.js
+            build-wasm-legacy/lw_ppocr_web.legacy.js
+            build-wasm-legacy/legacy-runtime-report.json
+          if-no-files-found: ignore
+          retention-days: 3
 
       - name: Upload Tiny Legacy Web artifact
         if: always()

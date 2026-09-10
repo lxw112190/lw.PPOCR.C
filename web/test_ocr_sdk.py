@@ -141,6 +141,7 @@ def main() -> int:
                 "wasmSimd128": True,
                 "pdf": True,
                 "minChromeVersion": None,
+                "jsTarget": None,
             }
             assert public_contract["frozen"]
             assert public_contract["invalidOptionsCode"] == "LW_OCR_OPTIONS"

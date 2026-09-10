@@ -1,0 +1,12 @@
+{
+  "name": "lw-ppocr-web-build-tools",
+  "private": true,
+  "scripts": {
+    "legacy:check": "node check_legacy_js_syntax.mjs"
+  },
+  "devDependencies": {
+    "acorn": "8.15.0",
+    "esbuild": "0.25.12",
+    "parse5": "7.3.0"
+  }
+}
