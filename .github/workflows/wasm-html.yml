@@ -135,6 +135,12 @@ jobs:
           --sample models/ppocrv6-tiny/sample.jpg
           --golden ci/web-ppocrv6-tiny.json
 
+      - name: Run legacy browser compatibility test
+        run: >-
+          python web/test_web_browser_compat.py
+          --html build-wasm/ocr-demo.html
+          --sample models/ppocrv6-tiny/sample.jpg
+
       - name: Run Small browser SDK OCR and lifecycle contract
         if: inputs.build_web_variants == true
         run: >-

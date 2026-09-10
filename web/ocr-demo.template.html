@@ -172,19 +172,73 @@
             var seconds = Math.max(0, Math.floor((Date.now() - started) / 1000));
             node.textContent = phase + " · 已等待 " + seconds + " 秒";
           }
+          var bootState = {
+            phase: phase,
+            sdkStarted: false,
+            sdkReady: false,
+            wasmReady: false,
+            backend: "unknown",
+            lastError: null,
+            capabilities: {
+              webassembly: typeof WebAssembly !== "undefined",
+              worker: typeof Worker !== "undefined",
+              blob: typeof Blob !== "undefined",
+              blobWorker: typeof Worker !== "undefined" &&
+                typeof Blob !== "undefined" && window.URL &&
+                typeof window.URL.createObjectURL === "function",
+              textDecoder: typeof TextDecoder !== "undefined",
+              createImageBitmap: typeof window.createImageBitmap === "function",
+              imageDecode: typeof window.HTMLImageElement !== "undefined" &&
+                typeof window.HTMLImageElement.prototype.decode === "function",
+              globalThis: typeof globalThis !== "undefined"
+            }
+          };
           var timer = window.setInterval(render, 1000);
           window.__lwOcrBootStatus = Object.freeze({
             setPhase: function (message) {
               if (!active) return;
               phase = message;
+              bootState.phase = message;
               render();
             },
+            markSdkReady: function () {
+              bootState.sdkStarted = true;
+              bootState.sdkReady = true;
+              bootState.phase = "OCR SDK 已加载";
+            },
+            markWasmReady: function (backend) {
+              bootState.wasmReady = true;
+              bootState.backend = backend || "unknown";
+            },
+            captureError: function (error) {
+              bootState.lastError = error || {message: "unknown error"};
+            },
+            snapshot: function () {
+              return JSON.parse(JSON.stringify(bootState));
+            },
             finish: function () {
-              if (!active) return;
               active = false;
               window.clearInterval(timer);
               node.removeAttribute("data-loading");
             }
+          });
+          window.addEventListener("error", function (event) {
+            window.__lwOcrBootStatus.captureError({
+              phase: "javascript",
+              code: "LW_WEB_JS_FAILED",
+              message: event.message || "JavaScript execution failed",
+              filename: event.filename || "",
+              line: event.lineno || 0,
+              column: event.colno || 0
+            });
+          });
+          window.addEventListener("unhandledrejection", function (event) {
+            var reason = event.reason || {};
+            window.__lwOcrBootStatus.captureError({
+              phase: "javascript",
+              code: "LW_WEB_JS_FAILED",
+              message: reason.message || String(reason)
+            });
           });
           render();
         })();

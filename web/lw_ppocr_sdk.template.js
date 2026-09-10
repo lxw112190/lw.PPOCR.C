@@ -42,6 +42,36 @@
     }
   }
 
+  function waitForImage(image) {
+    if (typeof image.decode === "function") return image.decode();
+    return new Promise((resolve, reject) => {
+      image.onload = () => resolve();
+      image.onerror = () => reject(new LwPpocrError(
+        "图片解码失败", "LW_WEB_IMAGE_DECODE_FAILED", "decode"));
+    });
+  }
+
+  function classifyInitializeError(error) {
+    if (error instanceof LwPpocrError &&
+        typeof error.code === "string" && error.code.indexOf("LW_") === 0) {
+      return error;
+    }
+    const message = String(error && error.message ? error.message : error);
+    if (typeof global.WebAssembly === "undefined") {
+      return new LwPpocrError("当前浏览器不支持 WebAssembly",
+        "LW_WEB_WASM_UNAVAILABLE", "initialize");
+    }
+    if (/simd|v128|invalid opcode/i.test(message)) {
+      return new LwPpocrError("当前浏览器不支持 WebAssembly SIMD",
+        "LW_WEB_WASM_SIMD_UNSUPPORTED", "initialize");
+    }
+    if (/memory|allocate|out of memory|无法分配/i.test(message)) {
+      return new LwPpocrError("初始化时内存不足",
+        "LW_WEB_MEMORY_FAILED", "initialize");
+    }
+    return new LwPpocrError(message, "LW_WEB_WASM_INIT_FAILED", "initialize");
+  }
+
   /*
    * Worker entry point. The SDK creates a Blob containing:
    *   generated Emscripten runtime + this function + model payload
@@ -230,7 +260,8 @@
     }
 
     async initialize() {
-      if (!global.Worker || !global.Blob || !global.URL.createObjectURL) {
+      if (!global.Worker || !global.Blob || !global.URL ||
+          !global.URL.createObjectURL) {
         await this._initializeDirect();
         this._backend = "main-thread";
         this._state = "READY";
@@ -383,10 +414,11 @@
       }
       const url = global.URL.createObjectURL(source);
       try {
-        const image = new Image();
+        const image = new global.Image();
         image.decoding = "async";
+        const ready = waitForImage(image);
         image.src = url;
-        await image.decode();
+        await ready;
         return {image, width: image.naturalWidth, height: image.naturalHeight, close: null};
       } finally {
         global.URL.revokeObjectURL(url);
@@ -414,7 +446,9 @@
           const canvas = document.createElement("canvas");
           canvas.width = width;
           canvas.height = height;
-          const context = canvas.getContext("2d", {willReadFrequently: true});
+          const context = canvas.getContext("2d", {willReadFrequently: true}) ||
+            canvas.getContext("2d");
+          if (!context) throw new LwPpocrError("无法创建 Canvas", 22, "decode");
           context.drawImage(decoded.image, 0, 0, width, height);
           imageData = context.getImageData(0, 0, width, height);
         }
@@ -621,6 +655,10 @@
   }
 
   async function create(options = {}) {
+    if (typeof global.WebAssembly === "undefined") {
+      throw new LwPpocrError("当前浏览器不支持 WebAssembly",
+        "LW_WEB_WASM_UNAVAILABLE", "initialize");
+    }
     if (!options || typeof options !== "object") {
       throw new LwPpocrError("create() options 必须是对象", "LW_OCR_OPTIONS", "initialize");
     }
@@ -634,8 +672,7 @@
       return engine;
     } catch (error) {
       engine.destroy();
-      if (error instanceof LwPpocrError) throw error;
-      throw new LwPpocrError(String(error), "LW_OCR_INIT_FAILED", "initialize");
+      throw classifyInitializeError(error);
     }
   }
 
@@ -646,4 +683,9 @@
     Error: LwPpocrError,
     create
   });
-})(globalThis);
+  if (global.__lwOcrBootStatus &&
+      typeof global.__lwOcrBootStatus.markSdkReady === "function") {
+    global.__lwOcrBootStatus.markSdkReady();
+  }
+})(typeof globalThis !== "undefined" ?
+    globalThis : (typeof self !== "undefined" ? self : window));

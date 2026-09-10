@@ -53,6 +53,30 @@
   const exportButtons = [copyTextButton, exportTxtButton, exportJsonButton];
   const resultActionButtons = [...exportButtons, shareResultButton];
 
+  function getOcrSdk() {
+    const sdk = window.LwPpocr;
+    if (!sdk || typeof sdk.create !== "function") {
+      const error = new Error("OCR SDK 未成功加载");
+      error.code = "LW_WEB_SDK_UNAVAILABLE";
+      error.stage = "sdk";
+      throw error;
+    }
+    return sdk;
+  }
+
+  function waitForImage(image) {
+    if (typeof image.decode === "function") return image.decode();
+    return new Promise((resolve, reject) => {
+      image.onload = () => resolve();
+      image.onerror = () => reject(new Error("图片解码失败"));
+    });
+  }
+
+  function getCanvasContext(target) {
+    return target.getContext("2d", {willReadFrequently: true}) ||
+      target.getContext("2d");
+  }
+
   let engine = null;
   let enginePromise = null;
   let source = null;
@@ -148,8 +172,8 @@
       "pdf" : "image";
   }
   function pdfStatus() {
-    return window.LwPdf && typeof LwPdf.getStatus === "function" ?
-      LwPdf.getStatus() : null;
+    return window.LwPdf && typeof window.LwPdf.getStatus === "function" ?
+      window.LwPdf.getStatus() : null;
   }
   function clearPdfDiagnostics() {
     pdfDiagnostics.hidden = true;
@@ -294,7 +318,9 @@
   function drawPreview(image, width, height) {
     canvas.width = width;
     canvas.height = height;
-    canvas.getContext("2d").drawImage(image, 0, 0, width, height);
+    const context = getCanvasContext(canvas);
+    if (!context) throw new Error("当前浏览器无法创建 Canvas 2D 上下文");
+    context.drawImage(image, 0, 0, width, height);
     overlay.setAttribute("viewBox", "0 0 " + width + " " + height);
     overlay.replaceChildren();
   }
@@ -363,18 +389,19 @@
     const started = performance.now();
     let image;
     let close = null;
-    if (window.createImageBitmap) {
-      image = await createImageBitmap(file);
+    if (typeof window.createImageBitmap === "function") {
+      image = await window.createImageBitmap(file);
       close = image.close ? () => image.close() : null;
     } else {
-      const url = URL.createObjectURL(file);
+      const url = window.URL.createObjectURL(file);
       try {
-        image = new Image();
+        image = new window.Image();
         image.decoding = "async";
+        const ready = waitForImage(image);
         image.src = url;
-        await image.decode();
+        await ready;
       } finally {
-        URL.revokeObjectURL(url);
+        window.URL.revokeObjectURL(url);
       }
     }
     try {
@@ -499,7 +526,7 @@
     statusNode.textContent = "正在打开 PDF…";
     let documentHandle = null;
     try {
-      documentHandle = await LwPdf.open(file);
+      documentHandle = await window.LwPdf.open(file);
       if (sequence !== previewSequence) {
         await documentHandle.close();
         return null;
@@ -648,7 +675,8 @@
       window.__lwOcrBootStatus.setPhase("正在初始化 WASM 和模型");
     }
     try {
-      const instance = await LwPpocr.create({
+      const sdk = getOcrSdk();
+      const instance = await sdk.create({
         useCls: clsInput.checked,
         readingOrder: readingOrderInput.value,
         // The Demo owns image and PDF page sizing. The reusable SDK default
@@ -656,7 +684,10 @@
         maxImageSide: 0
       });
       engine = instance;
-      if (window.__lwOcrBootStatus) window.__lwOcrBootStatus.finish();
+      if (window.__lwOcrBootStatus) {
+        window.__lwOcrBootStatus.markWasmReady(instance.getStatus().backend);
+        window.__lwOcrBootStatus.finish();
+      }
       updateStats(instance.getStatus());
       runButton.disabled = !source;
       statusNode.textContent = source ?
@@ -967,17 +998,17 @@
     },
     selectImage: async file => {
       if (file && sourceKind(file) !== "image") {
-        throw new LwPpocr.Error("selectImage() 仅接受图片", "LW_OCR_DECODE", "decode");
+        throw new (getOcrSdk().Error)("selectImage() 仅接受图片", "LW_OCR_DECODE", "decode");
       }
       return selectFile(file);
     },
     recognize: async (file, options = {}) => {
       await window.lwPpocrDemo.ready();
       if (running) {
-        throw new LwPpocr.Error("OCR 实例正忙，请等待当前识别完成", "LW_OCR_BUSY", "busy");
+        throw new (getOcrSdk().Error)("OCR 实例正忙，请等待当前识别完成", "LW_OCR_BUSY", "busy");
       }
       if (file && sourceKind(file) !== "image") {
-        throw new LwPpocr.Error("recognize() 仅接受图片", "LW_OCR_DECODE", "decode");
+        throw new (getOcrSdk().Error)("recognize() 仅接受图片", "LW_OCR_DECODE", "decode");
       }
       if (typeof options.useCls === "boolean" && options.useCls !== clsInput.checked) {
         clsInput.checked = options.useCls;
@@ -988,7 +1019,7 @@
       }
       if (file) await selectFile(file);
       if (!source || source.kind !== "image" || !preparedSource) {
-        throw new LwPpocr.Error("请先选择图片", "LW_OCR_INPUT_REQUIRED", "decode");
+        throw new (getOcrSdk().Error)("请先选择图片", "LW_OCR_INPUT_REQUIRED", "decode");
       }
       return runImageOcr();
     },
@@ -1012,15 +1043,24 @@
   window.addEventListener("beforeunload", () => {
     if (source && source.kind === "pdf") source.document.close();
     if (engine) engine.destroy();
-    if (window.LwPdf) LwPdf.dispose();
+    if (window.LwPdf) window.LwPdf.dispose();
   });
   enginePromise = createEngine().catch(error => {
     engine = null;
     if (window.__lwOcrBootStatus) window.__lwOcrBootStatus.finish();
     statsNode.textContent = "引擎加载失败";
-    statusNode.textContent = "WASM 初始化失败：" + error;
+    const code = error && error.code ? error.code : "LW_WEB_WASM_INIT_FAILED";
+    const message = error && error.message ? error.message : String(error);
+    statusNode.textContent = "OCR 引擎加载失败（" + code + "）：" + message;
+    if (window.__lwOcrBootStatus) {
+      window.__lwOcrBootStatus.captureError({
+        phase: error && error.stage ? error.stage : "initialize",
+        code,
+        message
+      });
+    }
     document.dispatchEvent(new CustomEvent("lwppocr:error", {
-      detail: {phase: "initialize", message: String(error)}
+      detail: {phase: "initialize", code, message}
     }));
     console.error(error);
   });

@@ -151,6 +151,22 @@ the SDK falls back to a main-thread backend. Inspect
 **engine.getStatus().backend** when diagnostics need to distinguish
 **worker** from **main-thread**.
 
+### Browser compatibility and diagnostics
+
+The SDK wrapper resolves its global object as globalThis, then self, then
+window, so the standalone SDK can start in older browser and WebView
+environments that do not expose globalThis. Image decoding uses
+createImageBitmap when available and falls back to Image onload/onerror;
+Canvas creation also retries without the optional willReadFrequently hint.
+
+Initialization failures use stable codes where possible: LW_WEB_SDK_UNAVAILABLE,
+LW_WEB_WASM_UNAVAILABLE, LW_WEB_WASM_SIMD_UNSUPPORTED,
+LW_WEB_WASM_INIT_FAILED, LW_WEB_MEMORY_FAILED, and
+LW_WEB_IMAGE_DECODE_FAILED. The standalone Demo exposes a local
+window.__lwOcrBootStatus.snapshot() object with browser capabilities, SDK/WASM
+readiness, backend, and the last captured JavaScript error. It does not upload
+this diagnostic data.
+
 ## Recognize an image
 
 The async **engine.recognize(source)** method accepts:

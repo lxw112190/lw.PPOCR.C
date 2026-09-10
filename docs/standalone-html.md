@@ -58,6 +58,15 @@ responsive. If local browser policy rejects Blob Workers, the embedded SDK
 uses its compatible main-thread fallback. The default build enables
 WebAssembly SIMD128.
 
+The standalone page keeps its bootstrap path compatible with older Android
+browsers and WebViews: it does not require globalThis, retries image loading
+with onload when HTMLImageElement.decode() is unavailable, and retries
+Canvas 2D creation without optional context hints. If startup still fails, the
+status line reports a stable code such as LW_WEB_WASM_SIMD_UNSUPPORTED or
+LW_WEB_WASM_INIT_FAILED; local diagnostics are available from
+window.__lwOcrBootStatus.snapshot(). Worker OCR remains preferred, with the
+existing main-thread fallback when Blob Workers are unavailable.
+
 PDF.js also prefers its own Blob module Worker. The standalone page constructs
 that Worker directly, avoiding PDF.js's nested Blob wrapper on `file://` pages.
 If a mobile browser or embedded WebView rejects module Workers, PDF parsing and
