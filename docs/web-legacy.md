@@ -55,12 +55,11 @@ containing the build flavor, user agent, capabilities, bootstrap state, and
 last error. It never includes image bytes, OCR text, or local file paths.
 
 Legacy supports image OCR only. PDF controls are not included in this
-distribution. CI first verifies the paired Modern Tiny HTML against the exact
-Tiny golden checksum, then compares the scalar Legacy result with that Modern
-result on the same runner and browser. The Legacy result must be deterministic
-across two runs, retain all 16 lines and the expected first line, keep at least
-75% exact lines, and remain below 5% character error rate. This allows bounded
-floating-point backend differences without reducing the test to a smoke check.
+distribution. CI runs both paired builds with explicit `useCls: true`, matching
+the option used to define the shared Tiny Web golden. The scalar Legacy result
+must be deterministic across two runs, retain all 16 lines and the expected first
+line, and exactly match the Golden text SHA-256. Per-line and character differences
+remain in the report for diagnosis, but do not weaken the correctness gate.
 
 The CI workflow builds and tests this artifact in an independent legacy job
 and uploads it as lw.PPOCR.C-browser-legacy-<commit>. It is upload-only for

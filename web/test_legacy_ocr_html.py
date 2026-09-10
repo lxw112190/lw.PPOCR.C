@@ -10,8 +10,6 @@ from pathlib import Path
 from playwright.sync_api import Browser, sync_playwright
 
 EXPECTED_FIRST_LINE = "纯臻营养护发素"
-MIN_EXACT_LINE_RATE = 0.75
-MAX_CHARACTER_ERROR_RATE = 0.05
 
 
 def line_texts(result: dict) -> list[str]:
@@ -52,7 +50,9 @@ def recognize(browser: Browser, html: Path, sample: Path, repeats: int) -> tuple
             "() => !document.querySelector('#run').disabled", timeout=180_000
         )
         results = [
-            page.evaluate("() => window.lwPpocrDemo.recognize()")
+            page.evaluate(
+                "() => window.lwPpocrDemo.recognize(undefined, {useCls: true})"
+            )
             for _ in range(repeats)
         ]
         status = page.evaluate("() => window.__lwOcrTest.snapshot()")
@@ -127,6 +127,7 @@ def main() -> int:
         "wasm_simd128": False,
         "pdf": False,
         "min_chrome": 70,
+        "ocr_options": {"use_cls": True},
         "html_bytes": args.html.stat().st_size,
         "reference_build": reference_build,
         "legacy_build": legacy_build,
@@ -167,8 +168,8 @@ def main() -> int:
     assert len(legacy_repeat_text) == expected_count, report
     assert legacy_text == legacy_repeat_text, report
     assert legacy_text[0] == EXPECTED_FIRST_LINE, report
-    assert exact_line_rate >= MIN_EXACT_LINE_RATE, report
-    assert character_error_rate <= MAX_CHARACTER_ERROR_RATE, report
+    assert legacy_hash == expected_reference_hash, report
+    assert legacy_repeat_hash == expected_reference_hash, report
     return 0
 
 
