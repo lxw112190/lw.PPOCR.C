@@ -1105,6 +1105,22 @@ if(BUILD_TESTING AND NOT EMSCRIPTEN)
     endif()
     add_test(NAME c_abi_contract COMMAND test-c-abi)
 
+    add_executable(abi-layout-driver tests/abi_layout_driver.c)
+    target_include_directories(abi-layout-driver PRIVATE
+        "${CMAKE_CURRENT_SOURCE_DIR}/include")
+    target_compile_features(abi-layout-driver PRIVATE c_std_11)
+    if(MSVC)
+        target_compile_options(abi-layout-driver PRIVATE /W4 /WX /utf-8)
+    else()
+        target_compile_options(abi-layout-driver PRIVATE -Wall -Wextra -Wpedantic -Werror)
+    endif()
+    add_test(
+        NAME abi_layout_contract
+        COMMAND "${Python3_EXECUTABLE}"
+                "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_abi_layout.py"
+                --driver "$<TARGET_FILE:abi-layout-driver>"
+                --manifest "${CMAKE_CURRENT_SOURCE_DIR}/abi/c-abi-v1-layout.json")
+
     add_executable(test-recognizer-api tests/test_recognizer.c)
     target_link_libraries(test-recognizer-api PRIVATE lw_ppocr_c)
     target_compile_features(test-recognizer-api PRIVATE c_std_11)
@@ -1767,6 +1783,7 @@ install(DIRECTORY docs/
     PATTERN "*.jpg")
 install(FILES
     abi/c-abi-v1-candidate.json
+    abi/c-abi-v1-layout.json
     abi/exports-v1-candidate.txt
     DESTINATION docs/abi)
 install(FILES

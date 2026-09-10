@@ -46,6 +46,7 @@ class AbiV1CandidateTest(unittest.TestCase):
         self.assertEqual(manifest["abi_version"], 1)
         self.assertEqual(manifest["status"], "freeze-candidate")
         self.assertEqual(manifest["stable_symbols"], "abi/exports-v1-candidate.txt")
+        self.assertEqual(manifest["layout_manifest"], "abi/c-abi-v1-layout.json")
         self.assertIn("lw_model_*", manifest["experimental_scope"])
         self.assertIn("lw_session_*", manifest["experimental_scope"])
 

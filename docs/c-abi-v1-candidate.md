@@ -38,8 +38,8 @@ and experiments but is not covered by the candidate compatibility promise.
 
 The current preview validates the complete known `struct_size` for public calls. Prefix-compatible input/output handling is a requirement to verify before the permanent freeze; this candidate does not claim that older shorter structures are already accepted.
 
-- All public structures begin with `struct_size` and must be initialized with
-  their matching `_init` function.
+- Public option/info/result structures begin with struct_size and must be initialized with
+  their matching _init function. Array element records lw_detection_box and lw_ocr_line intentionally omit struct_size; their capacities and layout are governed by the surrounding result structures.
 - Existing structure prefixes and enum numeric values are retained after the
   eventual freeze. Additive fields can only be appended under the documented
   size/version rules.

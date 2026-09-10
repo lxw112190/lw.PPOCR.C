@@ -1,0 +1,38 @@
+{
+  "schema_version": 1,
+  "abi_name": "lw.PPOCR.C",
+  "abi_version": 1,
+  "structures": {
+    "lw_error": {"size": 264, "struct_size_offset": 0},
+    "lw_recognizer_options": {"size": 48, "struct_size_offset": 0},
+    "lw_recognizer_info": {"size": 40, "struct_size_offset": 0},
+    "lw_recognition_result": {"size": 32, "struct_size_offset": 0},
+    "lw_classifier_options": {"size": 40, "struct_size_offset": 0},
+    "lw_classifier_info": {"size": 24, "struct_size_offset": 0},
+    "lw_classification_result": {"size": 24, "struct_size_offset": 0},
+    "lw_detector_options": {"size": 64, "struct_size_offset": 0},
+    "lw_detector_info": {"size": 40, "struct_size_offset": 0},
+    "lw_detection_box": {"size": 40, "struct_size_offset": null},
+    "lw_detection_result": {"size": 32, "struct_size_offset": 0},
+    "lw_ocr_options": {"size": 176, "struct_size_offset": 0},
+    "lw_ocr_info": {"size": 40, "struct_size_offset": 0},
+    "lw_ocr_line": {"size": 80, "struct_size_offset": null},
+    "lw_ocr_result": {"size": 40, "struct_size_offset": 0}
+  },
+  "enums": {
+    "LW_STATUS_OK": 0,
+    "LW_STATUS_INVALID_ARGUMENT": 1,
+    "LW_STATUS_IO_ERROR": 2,
+    "LW_STATUS_OUT_OF_MEMORY": 3,
+    "LW_STATUS_INVALID_FORMAT": 4,
+    "LW_STATUS_UNSUPPORTED_VERSION": 5,
+    "LW_STATUS_OUT_OF_BOUNDS": 6,
+    "LW_STATUS_CHECKSUM_MISMATCH": 7,
+    "LW_STATUS_UNSUPPORTED": 8,
+    "LW_STATUS_INVALID_SHAPE": 9,
+    "LW_STATUS_MEMORY_LIMIT": 10,
+    "LW_READING_ORDER_HORIZONTAL_LTR": 0,
+    "LW_READING_ORDER_VERTICAL_RTL": 1,
+    "LW_READING_ORDER_VERTICAL_LTR": 2
+  }
+}

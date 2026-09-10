@@ -4,10 +4,13 @@
 /*
  * Public C ABI for model loading and PP-OCR inference.
  *
- * Keep this header usable from both C and C++. Every public structure starts
- * with struct_size so a caller and a newer library can detect incompatible
- * layouts. Handles are opaque, and caller-provided buffers never cross an
- * allocator boundary; this is especially important for DLL users on Windows.
+ * Keep this header usable from both C and C++. Public option/info/result
+ * structures start with struct_size so a caller and a newer library can detect
+ * incompatible layouts. Array element records lw_detection_box and lw_ocr_line
+ * intentionally omit struct_size because their capacities are carried by the
+ * surrounding result structures. Handles are opaque, and caller-provided buffers
+ * never cross an allocator boundary; this is especially important for DLL users
+ * on Windows.
  */
 
 #include <stdint.h>

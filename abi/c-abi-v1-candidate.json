@@ -5,6 +5,7 @@
   "status": "freeze-candidate",
   "header": "include/lw_infer.h",
   "stable_symbols": "abi/exports-v1-candidate.txt",
+  "layout_manifest": "abi/c-abi-v1-layout.json",
   "stable_scope": [
     "common status and error helpers",
     "recognizer",
