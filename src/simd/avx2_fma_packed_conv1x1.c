@@ -58,68 +58,51 @@ void lw_avx2_fma_packed_conv1x1_f32(const float* input, const float* packed_weig
                     __m256 accumulator3_low =
                         _mm256_set1_ps(bias == NULL ? 0.0f : bias[output_base + 3u]);
                     __m256 accumulator3_high = accumulator3_low;
+                    const float* input_ptr = batch_input + (size_t)spatial;
+                    const float* packed_ptr =
+                        packed_weights +
+                        (size_t)((uint64_t)output_block * input_channels *
+                                  LW_PACKED_CONV1X1_OUTPUT_TILE);
                     uint32_t input_channel;
                     for (input_channel = 0u; input_channel < input_channels; ++input_channel) {
-                        const float* input_channel_data =
-                            batch_input +
-                            (size_t)((uint64_t)input_channel * channel_plane + spatial);
-                        const float* packed =
-                            packed_weights +
-                            (size_t)(((uint64_t)output_block * input_channels + input_channel) *
-                                     LW_PACKED_CONV1X1_OUTPUT_TILE);
-                        __m256 input_low = _mm256_loadu_ps(input_channel_data);
-                        __m256 input_high = _mm256_loadu_ps(input_channel_data + 8u);
-                        __m256 weight = _mm256_set1_ps(packed[0]);
+                        __m256 input_low = _mm256_loadu_ps(input_ptr);
+                        __m256 input_high = _mm256_loadu_ps(input_ptr + 8u);
+                        __m256 weight = _mm256_set1_ps(packed_ptr[0]);
                         accumulator0_low =
                             _mm256_fmadd_ps(input_low, weight, accumulator0_low);
                         accumulator0_high =
                             _mm256_fmadd_ps(input_high, weight, accumulator0_high);
-                        weight = _mm256_set1_ps(packed[1]);
+                        weight = _mm256_set1_ps(packed_ptr[1]);
                         accumulator1_low =
                             _mm256_fmadd_ps(input_low, weight, accumulator1_low);
                         accumulator1_high =
                             _mm256_fmadd_ps(input_high, weight, accumulator1_high);
-                        weight = _mm256_set1_ps(packed[2]);
+                        weight = _mm256_set1_ps(packed_ptr[2]);
                         accumulator2_low =
                             _mm256_fmadd_ps(input_low, weight, accumulator2_low);
                         accumulator2_high =
                             _mm256_fmadd_ps(input_high, weight, accumulator2_high);
-                        weight = _mm256_set1_ps(packed[3]);
+                        weight = _mm256_set1_ps(packed_ptr[3]);
                         accumulator3_low =
                             _mm256_fmadd_ps(input_low, weight, accumulator3_low);
                         accumulator3_high =
                             _mm256_fmadd_ps(input_high, weight, accumulator3_high);
+                        input_ptr += (size_t)channel_plane;
+                        packed_ptr += LW_PACKED_CONV1X1_OUTPUT_TILE;
                     }
-                    _mm256_storeu_ps(batch_output +
-                                         (size_t)((uint64_t)output_base * channel_plane + spatial),
-                                     accumulator0_low);
-                    _mm256_storeu_ps(batch_output + (size_t)((uint64_t)output_base * channel_plane +
-                                                             spatial + 8u),
-                                     accumulator0_high);
-                    _mm256_storeu_ps(
-                        batch_output +
-                            (size_t)((uint64_t)(output_base + 1u) * channel_plane + spatial),
-                        accumulator1_low);
-                    _mm256_storeu_ps(
-                        batch_output +
-                            (size_t)((uint64_t)(output_base + 1u) * channel_plane + spatial + 8u),
-                        accumulator1_high);
-                    _mm256_storeu_ps(
-                        batch_output +
-                            (size_t)((uint64_t)(output_base + 2u) * channel_plane + spatial),
-                        accumulator2_low);
-                    _mm256_storeu_ps(
-                        batch_output +
-                            (size_t)((uint64_t)(output_base + 2u) * channel_plane + spatial + 8u),
-                        accumulator2_high);
-                    _mm256_storeu_ps(
-                        batch_output +
-                            (size_t)((uint64_t)(output_base + 3u) * channel_plane + spatial),
-                        accumulator3_low);
-                    _mm256_storeu_ps(
-                        batch_output +
-                            (size_t)((uint64_t)(output_base + 3u) * channel_plane + spatial + 8u),
-                        accumulator3_high);
+                    float* output0 =
+                        batch_output + (size_t)((uint64_t)output_base * channel_plane + spatial);
+                    float* output1 = output0 + (size_t)channel_plane;
+                    float* output2 = output1 + (size_t)channel_plane;
+                    float* output3 = output2 + (size_t)channel_plane;
+                    _mm256_storeu_ps(output0, accumulator0_low);
+                    _mm256_storeu_ps(output0 + 8u, accumulator0_high);
+                    _mm256_storeu_ps(output1, accumulator1_low);
+                    _mm256_storeu_ps(output1 + 8u, accumulator1_high);
+                    _mm256_storeu_ps(output2, accumulator2_low);
+                    _mm256_storeu_ps(output2 + 8u, accumulator2_high);
+                    _mm256_storeu_ps(output3, accumulator3_low);
+                    _mm256_storeu_ps(output3 + 8u, accumulator3_high);
                 }
             }
 #  endif
@@ -131,44 +114,39 @@ void lw_avx2_fma_packed_conv1x1_f32(const float* input, const float* packed_weig
                     bias == NULL || valid_outputs <= 2u ? 0.0f : bias[output_base + 2u]);
                 __m256 accumulator3 = _mm256_set1_ps(
                     bias == NULL || valid_outputs <= 3u ? 0.0f : bias[output_base + 3u]);
+                const float* input_ptr = batch_input + (size_t)spatial;
+                const float* packed_ptr =
+                    packed_weights +
+                    (size_t)((uint64_t)output_block * input_channels *
+                              LW_PACKED_CONV1X1_OUTPUT_TILE);
                 uint32_t input_channel;
                 for (input_channel = 0u; input_channel < input_channels; ++input_channel) {
-                    const float* input_channel_data =
-                        batch_input + (size_t)((uint64_t)input_channel * channel_plane + spatial);
-                    const float* packed =
-                        packed_weights +
-                        (size_t)(((uint64_t)output_block * input_channels + input_channel) *
-                                 LW_PACKED_CONV1X1_OUTPUT_TILE);
-                    __m256 input_values = _mm256_loadu_ps(input_channel_data);
+                    __m256 input_values = _mm256_loadu_ps(input_ptr);
                     accumulator0 = _mm256_fmadd_ps(
-                        input_values, _mm256_set1_ps(packed[0]), accumulator0);
+                        input_values, _mm256_set1_ps(packed_ptr[0]), accumulator0);
                     accumulator1 = _mm256_fmadd_ps(
-                        input_values, _mm256_set1_ps(packed[1]), accumulator1);
+                        input_values, _mm256_set1_ps(packed_ptr[1]), accumulator1);
                     accumulator2 = _mm256_fmadd_ps(
-                        input_values, _mm256_set1_ps(packed[2]), accumulator2);
+                        input_values, _mm256_set1_ps(packed_ptr[2]), accumulator2);
                     accumulator3 = _mm256_fmadd_ps(
-                        input_values, _mm256_set1_ps(packed[3]), accumulator3);
+                        input_values, _mm256_set1_ps(packed_ptr[3]), accumulator3);
+                    input_ptr += (size_t)channel_plane;
+                    packed_ptr += LW_PACKED_CONV1X1_OUTPUT_TILE;
                 }
-                _mm256_storeu_ps(batch_output +
-                                     (size_t)((uint64_t)output_base * channel_plane + spatial),
-                                 accumulator0);
+                float* output0 =
+                    batch_output + (size_t)((uint64_t)output_base * channel_plane + spatial);
+                float* output1 = output0 + (size_t)channel_plane;
+                float* output2 = output1 + (size_t)channel_plane;
+                float* output3 = output2 + (size_t)channel_plane;
+                _mm256_storeu_ps(output0, accumulator0);
                 if (valid_outputs > 1u) {
-                    _mm256_storeu_ps(
-                        batch_output +
-                            (size_t)((uint64_t)(output_base + 1u) * channel_plane + spatial),
-                        accumulator1);
+                    _mm256_storeu_ps(output1, accumulator1);
                 }
                 if (valid_outputs > 2u) {
-                    _mm256_storeu_ps(
-                        batch_output +
-                            (size_t)((uint64_t)(output_base + 2u) * channel_plane + spatial),
-                        accumulator2);
+                    _mm256_storeu_ps(output2, accumulator2);
                 }
                 if (valid_outputs > 3u) {
-                    _mm256_storeu_ps(
-                        batch_output +
-                            (size_t)((uint64_t)(output_base + 3u) * channel_plane + spatial),
-                        accumulator3);
+                    _mm256_storeu_ps(output3, accumulator3);
                 }
             }
             for (; spatial < channel_plane; ++spatial) {
@@ -179,30 +157,33 @@ void lw_avx2_fma_packed_conv1x1_f32(const float* input, const float* packed_weig
                     bias == NULL || valid_outputs <= 2u ? 0.0f : bias[output_base + 2u];
                 float accumulator3 =
                     bias == NULL || valid_outputs <= 3u ? 0.0f : bias[output_base + 3u];
+                const float* input_ptr = batch_input + (size_t)spatial;
+                const float* packed_ptr =
+                    packed_weights +
+                    (size_t)((uint64_t)output_block * input_channels *
+                              LW_PACKED_CONV1X1_OUTPUT_TILE);
                 uint32_t input_channel;
                 for (input_channel = 0u; input_channel < input_channels; ++input_channel) {
-                    float input_value =
-                        batch_input[(size_t)((uint64_t)input_channel * channel_plane + spatial)];
-                    const float* packed =
-                        packed_weights +
-                        (size_t)(((uint64_t)output_block * input_channels + input_channel) *
-                                 LW_PACKED_CONV1X1_OUTPUT_TILE);
-                    accumulator0 += input_value * packed[0];
-                    accumulator1 += input_value * packed[1];
-                    accumulator2 += input_value * packed[2];
-                    accumulator3 += input_value * packed[3];
+                    float input_value = *input_ptr;
+                    accumulator0 += input_value * packed_ptr[0];
+                    accumulator1 += input_value * packed_ptr[1];
+                    accumulator2 += input_value * packed_ptr[2];
+                    accumulator3 += input_value * packed_ptr[3];
+                    input_ptr += (size_t)channel_plane;
+                    packed_ptr += LW_PACKED_CONV1X1_OUTPUT_TILE;
                 }
-                batch_output[(size_t)((uint64_t)output_base * channel_plane + spatial)] =
-                    accumulator0;
+                float* output0 =
+                    batch_output + (size_t)((uint64_t)output_base * channel_plane + spatial);
+                float* output1 = output0 + (size_t)channel_plane;
+                float* output2 = output1 + (size_t)channel_plane;
+                float* output3 = output2 + (size_t)channel_plane;
+                *output0 = accumulator0;
                 if (valid_outputs > 1u)
-                    batch_output[(size_t)((uint64_t)(output_base + 1u) * channel_plane + spatial)] =
-                        accumulator1;
+                    *output1 = accumulator1;
                 if (valid_outputs > 2u)
-                    batch_output[(size_t)((uint64_t)(output_base + 2u) * channel_plane + spatial)] =
-                        accumulator2;
+                    *output2 = accumulator2;
                 if (valid_outputs > 3u)
-                    batch_output[(size_t)((uint64_t)(output_base + 3u) * channel_plane + spatial)] =
-                        accumulator3;
+                    *output3 = accumulator3;
             }
         }
     }
