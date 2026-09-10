@@ -61,6 +61,7 @@ endif()
 
 execute_process(
     COMMAND "${LW_PYTHON}" "${LW_TEST_SCRIPT}" --root "${LW_STAGE_DIR}"
+            --consumer-build "${consumer_build}"
             --http-script "${LW_HTTP_TEST_SCRIPT}"
             --http-request-timeout "${LW_HTTP_TEST_REQUEST_TIMEOUT}"
             --http-process-timeout "${LW_HTTP_TEST_PROCESS_TIMEOUT}"

@@ -35,3 +35,6 @@ lw_configure_example(lw-detect-ppm-consumer)
 
 add_executable(lw-ocr-ppm-consumer ocr_ppm.c)
 lw_configure_example(lw-ocr-ppm-consumer)
+
+add_executable(lw-abi-v1-consumer abi_v1_client.c)
+lw_configure_example(lw-abi-v1-consumer)

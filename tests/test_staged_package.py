@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import subprocess
 import sys
 import unittest
@@ -18,6 +19,7 @@ def positive_seconds(value: str) -> float:
 class StagedPackageTest(unittest.TestCase):
     def test_required_files_and_live_demo(self) -> None:
         root = ARGUMENTS.root.resolve()
+        consumer_build = ARGUMENTS.consumer_build.resolve()
         executable = (
             "lw-recognize-ppm.exe"
             if sys.platform == "win32"
@@ -68,6 +70,34 @@ class StagedPackageTest(unittest.TestCase):
             )
         missing = [str(path) for path in required if not path.is_file()]
         self.assertFalse(missing, f"missing staged files: {missing}")
+        consumer = consumer_build / ("Release" if sys.platform == "win32" else "") / (
+            "lw-abi-v1-consumer.exe" if sys.platform == "win32" else "lw-abi-v1-consumer"
+        )
+        self.assertTrue(consumer.is_file(), f"missing package consumer: {consumer}")
+        consumer_env = os.environ.copy()
+        library_dir = root / ("bin" if sys.platform == "win32" else "lib")
+        loader_key = "PATH" if sys.platform == "win32" else "LD_LIBRARY_PATH"
+        consumer_env[loader_key] = (
+            str(library_dir) + os.pathsep + consumer_env.get(loader_key, "")
+        )
+        abi_client = subprocess.run(
+            [
+                str(consumer),
+                str(root / "models" / "rec.lwm"),
+                str(root / "models" / "ppocr_keys.txt"),
+                str(root / "models" / "sample-crop.ppm"),
+            ],
+            cwd=consumer.parent,
+            env=consumer_env,
+            check=False,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=180,
+        )
+        self.assertEqual(abi_client.returncode, 0, abi_client.stdout + abi_client.stderr)
+        self.assertIn("abi_v1_consumer=ok", abi_client.stdout)
         completed = subprocess.run(
             [
                 str(root / "bin" / executable),
@@ -209,6 +239,7 @@ class StagedPackageTest(unittest.TestCase):
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--root", type=Path, required=True)
+    parser.add_argument("--consumer-build", type=Path, required=True)
     parser.add_argument("--http-script", type=Path, required=True)
     parser.add_argument(
         "--http-request-timeout", type=positive_seconds, default=30.0

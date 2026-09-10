@@ -84,6 +84,7 @@ remain green:
 2. exact legacy export checks in `abi/exports-v0.txt`;
 3. candidate stable-symbol checks in `abi/exports-v1-candidate.txt`;
 4. recognition-only buffer, error, and lifecycle tests;
+   The staged package also configures and runs the abi_v1_client.c example against the installed CMake package and shared library;
 5. candidate client tests against the staged Windows and Linux packages;
 6. Tiny, Small, and Medium model-pack compatibility tests.
 

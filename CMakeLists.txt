@@ -1725,6 +1725,7 @@ install(FILES
     examples/classify_ppm.c
     examples/detect_ppm.c
     examples/ocr_ppm.c
+    examples/abi_v1_client.c
     examples/ppm_image.h
     examples/recognize_ppm.c
     DESTINATION examples)
