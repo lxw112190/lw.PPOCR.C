@@ -90,10 +90,10 @@ only measured beneficial shapes to the FMA candidates. The current explicit
 - late 768 -> 384 at height 3;
 - late 1536 -> 768 at height 3.
 
-The measured 384 -> 768 late shape is excluded because its candidate was
-slower than regular AVX2. Unknown shapes, 1024 -> 512, and all other
-medium/late shapes remain on regular AVX2. The terminal Tiny MatMul candidate
-continues to use its separate exact-shape gate. The default build keeps the
+The 384 -> 768 late shape remains on the regular four-output FMA path; the
+8x8 candidate is intentionally not used for it. Unknown shapes, 1024 -> 512,
+and all other medium/late shapes remain on regular AVX2. The terminal Tiny MatMul
+candidate continues to use its separate exact-shape gate. The default build keeps the
 existing AVX2 dispatch and is unchanged.
 
 The experimental benchmarks accept the small FMA rounding difference with a

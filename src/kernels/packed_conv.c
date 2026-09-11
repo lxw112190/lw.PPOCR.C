@@ -132,6 +132,7 @@ static int lw_experimental_fma_shape_allowed(const int32_t input_dimensions[4],
           (input_channels == 512u && output_channels == 1024u))) ||
         (height == 3u &&
          ((input_channels == 160u && output_channels == 320u) ||
+          (input_channels == 384u && output_channels == 768u) ||
           (input_channels == 768u && output_channels == 384u) ||
           (input_channels == 1536u && output_channels == 768u)))) {
         return 1;
