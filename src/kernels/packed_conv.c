@@ -118,14 +118,7 @@ static int lw_experimental_fma_shape_allowed(const int32_t input_dimensions[4],
     input_channels = (uint32_t)input_dimensions[1];
     output_channels = (uint32_t)output_dimensions[1];
     height = (uint32_t)input_dimensions[2];
-    if (height == 3u &&
-        ((input_channels == 1536u && output_channels == 768u) ||
-         (input_channels == 768u && output_channels == 384u))) {
-        return 0;
-    }
-    if (height == 6u &&
-        ((input_channels == 1024u && output_channels == 512u) ||
-         (input_channels == 512u && output_channels == 1024u))) {
+    if (height == 6u && input_channels == 1024u && output_channels == 512u) {
         return 0;
     }
     if ((height == 12u &&
@@ -135,15 +128,42 @@ static int lw_experimental_fma_shape_allowed(const int32_t input_dimensions[4],
         (height == 6u &&
          ((input_channels == 96u && output_channels == 192u) ||
           (input_channels == 192u && output_channels == 96u) ||
-          (input_channels == 192u && output_channels == 384u))) ||
+          (input_channels == 192u && output_channels == 384u) ||
+          (input_channels == 512u && output_channels == 1024u))) ||
         (height == 3u &&
          ((input_channels == 160u && output_channels == 320u) ||
-          (input_channels == 384u && output_channels == 768u)))) {
+          (input_channels == 768u && output_channels == 384u) ||
+          (input_channels == 1536u && output_channels == 768u)))) {
         return 1;
     }
     return 0;
 }
 #endif
+#if defined(LW_EXPERIMENTAL_AVX2_FMA_DISPATCH)
+/*
+ * The 8x8 candidate keeps two packed four-output blocks live. It is useful
+ * only for the large late feature maps where the extra output reuse offsets
+ * the additional register pressure. Keep this list explicit: the regular
+ * four-output FMA kernel remains the fallback for every other shape.
+ */
+static int lw_experimental_fma_8x8_shape_allowed(
+    const int32_t input_dimensions[4], const int32_t output_dimensions[4]) {
+    uint32_t input_channels;
+    uint32_t output_channels;
+    uint32_t height;
+    if (input_dimensions == NULL || output_dimensions == NULL || input_dimensions[2] <= 0) {
+        return 0;
+    }
+    input_channels = (uint32_t)input_dimensions[1];
+    output_channels = (uint32_t)output_dimensions[1];
+    height = (uint32_t)input_dimensions[2];
+    return (height == 6u && input_channels == 512u && output_channels == 1024u) ||
+           (height == 3u &&
+            ((input_channels == 768u && output_channels == 384u) ||
+             (input_channels == 1536u && output_channels == 768u)));
+}
+#endif
+
 void lw_packed_conv1x1_f32(const float* input, const float* packed_weights, const float* bias,
                            float* output, const int32_t input_dimensions[4],
                            const int32_t output_dimensions[4]) {
@@ -152,6 +172,11 @@ void lw_packed_conv1x1_f32(const float* input, const float* packed_weights, cons
 #if defined(LW_EXPERIMENTAL_AVX2_FMA_DISPATCH)
     if (capabilities.has_avx2_fma &&
         lw_experimental_fma_shape_allowed(input_dimensions, output_dimensions)) {
+        if (lw_experimental_fma_8x8_shape_allowed(input_dimensions, output_dimensions)) {
+            lw_avx2_fma_packed_conv1x1_8x8_f32(input, packed_weights, bias, output,
+                                               input_dimensions, output_dimensions);
+            return;
+        }
         lw_avx2_fma_packed_conv1x1_f32(input, packed_weights, bias, output, input_dimensions,
                                        output_dimensions);
         return;

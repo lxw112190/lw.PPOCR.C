@@ -83,10 +83,18 @@ which is the input for a future shape-aware dispatch policy.
 ## Shape-aware experimental dispatch
 
 `LW_EXPERIMENTAL_AVX2_FMA_DISPATCH=ON` enables a native-only policy that routes
-only the measured beneficial Tiny/REC Conv1x1 shapes and the terminal Tiny MatMul
-shape to the FMA candidates. Unknown shapes and the measured Conv1x1 regressions
-(the large medium/late shapes) remain on regular AVX2.
-The default build keeps the existing AVX2 dispatch and is unchanged.
+only measured beneficial shapes to the FMA candidates. The current explicit
+8x8 candidate allowlist is intentionally small:
+
+- Medium 512 -> 1024 at height 6;
+- late 768 -> 384 at height 3;
+- late 1536 -> 768 at height 3.
+
+The measured 384 -> 768 late shape is excluded because its candidate was
+slower than regular AVX2. Unknown shapes, 1024 -> 512, and all other
+medium/late shapes remain on regular AVX2. The terminal Tiny MatMul candidate
+continues to use its separate exact-shape gate. The default build keeps the
+existing AVX2 dispatch and is unchanged.
 
 The experimental benchmarks accept the small FMA rounding difference with a
 `1.0e-2` maximum absolute error bound; the default benchmarks remain byte-exact.
@@ -126,6 +134,6 @@ the real Tiny, Small, and Medium REC shapes at widths 320 and 960. Require:
 6. no peak working-set increase.
 
 If the candidate does not meet these gates, remove it and retain the current
-non-FMA AVX2 path. The new 8x8 kernel remains an x64 benchmark candidate only
+non-FMA AVX2 path. The shape-gated 8x8 kernel remains an x64 benchmark candidate only
 until the same shape-aware and end-to-end gates are met; it is not part of the
 production dispatcher. AVX512 remains a later, profile-driven experiment.
