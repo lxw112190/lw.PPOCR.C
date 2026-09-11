@@ -141,7 +141,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           cmake --build build-x64 --config Release --parallel 2 --target `
             full-ocr-profile-driver full-ocr-intra-benchmark simd-backend-driver `
-            packed-conv1x1-benchmark-driver lw-ocr-ppm
+            packed-conv1x1-benchmark-driver conv3x3-stride2-benchmark-driver lw-ocr-ppm
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Require AVX2 backend
         shell: pwsh
@@ -235,10 +235,35 @@ jobs:
           )
           cmake @configureArgs
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          cmake --build build-x64-fma --config Release --parallel 2 --target full-ocr-intra-benchmark lw-ocr-ppm packed-conv1x1-benchmark-driver packed-matmul-benchmark-driver
+          cmake --build build-x64-fma --config Release --parallel 2 --target full-ocr-intra-benchmark lw-ocr-ppm packed-conv1x1-benchmark-driver packed-matmul-benchmark-driver conv3x3-stride2-benchmark-driver
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          ctest --test-dir build-x64-fma -C Release --output-on-failure -R '^(packed_conv1x1_benchmark_smoke|packed_matmul_benchmark_smoke)$'
+          ctest --test-dir build-x64-fma -C Release --output-on-failure -R '^(packed_conv1x1_benchmark_smoke|packed_matmul_benchmark_smoke|conv3x3_stride2_benchmark_smoke)$'
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $defaultConv3x3 = (Resolve-Path 'build-x64/Release/conv3x3-stride2-benchmark-driver.exe').Path
+          $fmaConv3x3 = (Resolve-Path 'build-x64-fma/Release/conv3x3-stride2-benchmark-driver.exe').Path
+          foreach ($width in @(320, 960)) {
+            $baseline = ((& $defaultConv3x3 $width 3) -join "`n") | ConvertFrom-Json
+            $candidate = ((& $fmaConv3x3 $width 3) -join "`n") | ConvertFrom-Json
+            $baselineCase = @($baseline.cases | Where-Object { $_.name -eq 'rec-node6-24x48' })[0]
+            $candidateCase = @($candidate.cases | Where-Object { $_.name -eq 'rec-node6-24x48' })[0]
+            if ($null -eq $baselineCase -or $null -eq $candidateCase) { throw "Node 6 case missing for width $width" }
+            if ($baselineCase.checksum -ne $candidateCase.checksum) { throw "Node 6 checksum changed for width $width" }
+            $comparison = [pscustomobject]@{
+              schema_version = 1
+              target_width = $width
+              case = 'rec-node6-24x48'
+              baseline = $baselineCase
+              candidate = $candidateCase
+              baseline_over_candidate_packed = [double]$baselineCase.packed_ms / [double]$candidateCase.packed_ms
+              checksum = $candidateCase.checksum
+            }
+            $comparison | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath "x64-fma-results/conv3x3-$width.json" -Encoding utf8
+            "### Conv3x3 Node 6 AVX2+FMA A/B ($width)" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+            "- packed AVX2: $([double]$baselineCase.packed_ms) ms" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+            "- packed FMA: $([double]$candidateCase.packed_ms) ms" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+            "- AVX2/FMA: $([double]$comparison.baseline_over_candidate_packed)x" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+            "- checksum: $($comparison.checksum)" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+          }
       - name: Compare default and experimental FMA OCR
         shell: pwsh
         env:

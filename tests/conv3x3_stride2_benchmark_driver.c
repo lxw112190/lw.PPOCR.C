@@ -4,6 +4,7 @@
 #include "scalar_kernels.h"
 
 #include <inttypes.h>
+#include <math.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -84,6 +85,20 @@ static uint64_t checksum_bytes(const void* data, size_t bytes) {
     }
     return hash;
 }
+
+#if defined(LW_EXPERIMENTAL_AVX2_FMA_DISPATCH)
+static float max_abs_difference(const float* expected, const float* actual, uint64_t count) {
+    uint64_t index;
+    float maximum = 0.0f;
+    for (index = 0u; index < count; ++index) {
+        const float difference = fabsf(expected[(size_t)index] - actual[(size_t)index]);
+        if (difference > maximum) {
+            maximum = difference;
+        }
+    }
+    return maximum;
+}
+#endif
 
 static lw_status run_dispatched(const float* input, const float* weights, const float* bias,
                                 uint32_t output_channels, float* output,
@@ -187,7 +202,12 @@ static int run_case(const benchmark_case* item, uint32_t target_width, uint32_t 
     }
     lw_packed_conv3x3_stride2_pad1_f32(
         input, packed_weights, bias, packed_output, input_dimensions, output_dimensions);
+#if defined(LW_EXPERIMENTAL_AVX2_FMA_DISPATCH)
+    if (!isfinite(max_abs_difference(reference, packed_output, output_count)) ||
+        max_abs_difference(reference, packed_output, output_count) > 1.0e-2f) {
+#else
     if (memcmp(reference, packed_output, output_bytes) != 0) {
+#endif
         fprintf(stderr, "packed stride-2 Conv result mismatch: %s\n", item->name);
         goto cleanup;
     }
@@ -218,7 +238,12 @@ static int run_case(const benchmark_case* item, uint32_t target_width, uint32_t 
         dispatched_started <= 0.0 || dispatched_finished <= dispatched_started ||
         packed_started <= 0.0 || packed_finished <= packed_started ||
         memcmp(reference, output, output_bytes) != 0 ||
+#if defined(LW_EXPERIMENTAL_AVX2_FMA_DISPATCH)
+        !isfinite(max_abs_difference(reference, packed_output, output_count)) ||
+        max_abs_difference(reference, packed_output, output_count) > 1.0e-2f) {
+#else
         memcmp(reference, packed_output, output_bytes) != 0) {
+#endif
         fprintf(stderr, "stride-2 Conv benchmark failed: %s\n", item->name);
         goto cleanup;
     }

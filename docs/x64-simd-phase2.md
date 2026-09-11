@@ -89,7 +89,13 @@ only measured beneficial shapes to the FMA candidates. The current explicit
 - Medium 512 -> 1024 at height 6;
 - late 768 -> 384 at height 3;
 - late 1536 -> 768 at height 3.
-
+The same experimental build now contains a separate FMA candidate for the REC
+Node 6 stride-2 Conv3x3 shape `24 -> 48`. It is gated to batch 1, input height
+24, output height 12, and widths `160 -> 80` or `480 -> 240` (REC target widths
+320 and 960). It reuses the existing packed 3x3 layout and is selected only
+when the cached capability snapshot reports AVX2+FMA. All other stride-2
+Conv3x3 shapes continue to use the regular AVX2 path. The candidate is still
+opt-in and is not part of the default build.
 The 384 -> 768 late shape remains on the regular four-output FMA path; the
 8x8 candidate is intentionally not used for it. Unknown shapes, 1024 -> 512,
 and all other medium/late shapes remain on regular AVX2. The terminal Tiny MatMul

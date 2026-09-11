@@ -952,3 +952,190 @@ void lw_avx2_packed_conv3x3_stride2_pad1_f32(
         input, packed_weights, bias, output, input_dimensions, output_dimensions);
 #endif
 }
+
+#if defined(LW_EXPERIMENTAL_AVX2_FMA_DISPATCH)
+#if LW_COMPILES_AVX2_CONV3X3 && (defined(__GNUC__) || defined(__clang__))
+__attribute__((target("avx2,fma")))
+#endif
+void lw_avx2_fma_packed_conv3x3_stride2_pad1_f32(
+    const float* input, const float* packed_weights, const float* bias, float* output,
+    const int32_t input_dimensions[4], const int32_t output_dimensions[4]) {
+#if LW_COMPILES_AVX2_CONV3X3
+    const uint32_t input_channels = (uint32_t)input_dimensions[1];
+    const uint32_t input_height = (uint32_t)input_dimensions[2];
+    const uint32_t input_width = (uint32_t)input_dimensions[3];
+    const uint32_t output_channels = (uint32_t)output_dimensions[1];
+    const uint32_t output_height = (uint32_t)output_dimensions[2];
+    const uint32_t output_width = (uint32_t)output_dimensions[3];
+    const uint64_t input_plane = (uint64_t)input_height * input_width;
+    const uint64_t output_plane = (uint64_t)output_height * output_width;
+    const uint32_t output_blocks =
+        output_channels / LW_PACKED_CONV3X3_STRIDE2_OUTPUT_TILE;
+    uint32_t batch;
+    for (batch = 0u; batch < (uint32_t)input_dimensions[0]; ++batch) {
+        const float* batch_input =
+            input + (size_t)((uint64_t)batch * input_channels * input_plane);
+        float* batch_output =
+            output + (size_t)((uint64_t)batch * output_channels * output_plane);
+        uint32_t output_block;
+        for (output_block = 0u; output_block < output_blocks; ++output_block) {
+            float* output_planes[LW_PACKED_CONV3X3_STRIDE2_OUTPUT_TILE];
+            float initial[LW_PACKED_CONV3X3_STRIDE2_OUTPUT_TILE];
+            uint32_t lane;
+            for (lane = 0u; lane < LW_PACKED_CONV3X3_STRIDE2_OUTPUT_TILE; ++lane) {
+                const uint32_t output_channel =
+                    output_block * LW_PACKED_CONV3X3_STRIDE2_OUTPUT_TILE + lane;
+                output_planes[lane] =
+                    batch_output + (size_t)((uint64_t)output_channel * output_plane);
+                initial[lane] = bias == NULL ? 0.0f : bias[output_channel];
+            }
+            {
+                uint32_t output_y;
+                for (output_y = 0u; output_y < output_height; ++output_y) {
+                    const size_t output_row_offset =
+                        (size_t)((uint64_t)output_y * output_width);
+                    uint32_t output_x = 0u;
+                    while (output_x < output_width) {
+                        const int full_height =
+                            output_y != 0u &&
+                            (uint64_t)output_y * 2u + 1u < input_height;
+                        const int full_width =
+                            output_x != 0u && output_x + 8u <= output_width &&
+                            ((uint64_t)output_x + 7u) * 2u + 1u < input_width;
+                        if (full_height && full_width) {
+                            __m256 accumulators[LW_PACKED_CONV3X3_STRIDE2_OUTPUT_TILE];
+                            uint32_t input_channel;
+                            for (lane = 0u;
+                                 lane < LW_PACKED_CONV3X3_STRIDE2_OUTPUT_TILE; ++lane) {
+                                accumulators[lane] = _mm256_set1_ps(initial[lane]);
+                            }
+                            for (input_channel = 0u; input_channel < input_channels;
+                                 ++input_channel) {
+                                const float* input_channel_data =
+                                    batch_input +
+                                    (size_t)((uint64_t)input_channel * input_plane);
+                                uint32_t kernel_y;
+                                for (kernel_y = 0u; kernel_y < 3u; ++kernel_y) {
+                                    const uint32_t input_y =
+                                        output_y * 2u - 1u + kernel_y;
+                                    const float* input_row =
+                                        input_channel_data +
+                                        (size_t)((uint64_t)input_y * input_width);
+                                    uint32_t kernel_x;
+                                    for (kernel_x = 0u; kernel_x < 3u; ++kernel_x) {
+                                        const uint32_t input_x =
+                                            output_x * 2u - 1u + kernel_x;
+                                        const uint32_t kernel_index =
+                                            kernel_y * 3u + kernel_x;
+                                        const float* packed =
+                                            packed_weights +
+                                            (size_t)((((uint64_t)output_block *
+                                                           input_channels +
+                                                       input_channel) *
+                                                          9u +
+                                                      kernel_index) *
+                                                     LW_PACKED_CONV3X3_STRIDE2_OUTPUT_TILE);
+                                        __m256 first =
+                                            _mm256_loadu_ps(input_row + input_x);
+                                        __m256 second =
+                                            _mm256_loadu_ps(input_row + input_x + 8u);
+                                        __m128 first_even = _mm_shuffle_ps(
+                                            _mm256_castps256_ps128(first),
+                                            _mm256_extractf128_ps(first, 1),
+                                            _MM_SHUFFLE(2, 0, 2, 0));
+                                        __m128 second_even = _mm_shuffle_ps(
+                                            _mm256_castps256_ps128(second),
+                                            _mm256_extractf128_ps(second, 1),
+                                            _MM_SHUFFLE(2, 0, 2, 0));
+                                        __m256 input_values =
+                                            _mm256_castps128_ps256(first_even);
+                                        input_values = _mm256_insertf128_ps(
+                                            input_values, second_even, 1);
+                                        for (lane = 0u;
+                                             lane < LW_PACKED_CONV3X3_STRIDE2_OUTPUT_TILE;
+                                             ++lane) {
+                                            accumulators[lane] = _mm256_fmadd_ps(
+                                                input_values,
+                                                _mm256_set1_ps(packed[lane]),
+                                                accumulators[lane]);
+                                        }
+                                    }
+                                }
+                            }
+                            for (lane = 0u;
+                                 lane < LW_PACKED_CONV3X3_STRIDE2_OUTPUT_TILE; ++lane) {
+                                _mm256_storeu_ps(
+                                    output_planes[lane] + output_row_offset + output_x,
+                                    accumulators[lane]);
+                            }
+                            output_x += 8u;
+                        } else {
+                            float accumulators[LW_PACKED_CONV3X3_STRIDE2_OUTPUT_TILE];
+                            uint32_t input_channel;
+                            for (lane = 0u;
+                                 lane < LW_PACKED_CONV3X3_STRIDE2_OUTPUT_TILE; ++lane) {
+                                accumulators[lane] = initial[lane];
+                            }
+                            for (input_channel = 0u; input_channel < input_channels;
+                                 ++input_channel) {
+                                const float* input_channel_data =
+                                    batch_input +
+                                    (size_t)((uint64_t)input_channel * input_plane);
+                                uint32_t kernel_y;
+                                for (kernel_y = 0u; kernel_y < 3u; ++kernel_y) {
+                                    const int64_t input_y =
+                                        (int64_t)output_y * 2 - 1 + kernel_y;
+                                    uint32_t kernel_x;
+                                    if (input_y < 0 ||
+                                        input_y >= (int64_t)input_height) {
+                                        continue;
+                                    }
+                                    for (kernel_x = 0u; kernel_x < 3u; ++kernel_x) {
+                                        const int64_t input_x =
+                                            (int64_t)output_x * 2 - 1 + kernel_x;
+                                        if (input_x >= 0 &&
+                                            input_x < (int64_t)input_width) {
+                                            const uint32_t kernel_index =
+                                                kernel_y * 3u + kernel_x;
+                                            const float* packed =
+                                                packed_weights +
+                                                (size_t)((((uint64_t)output_block *
+                                                               input_channels +
+                                                           input_channel) *
+                                                              9u +
+                                                          kernel_index) *
+                                                         LW_PACKED_CONV3X3_STRIDE2_OUTPUT_TILE);
+                                            const float value =
+                                                input_channel_data[(size_t)(
+                                                    (uint64_t)(uint32_t)input_y *
+                                                        input_width +
+                                                    (uint32_t)input_x)];
+                                            for (lane = 0u;
+                                                 lane <
+                                                     LW_PACKED_CONV3X3_STRIDE2_OUTPUT_TILE;
+                                                 ++lane) {
+                                                accumulators[lane] +=
+                                                    value * packed[lane];
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            for (lane = 0u;
+                                 lane < LW_PACKED_CONV3X3_STRIDE2_OUTPUT_TILE; ++lane) {
+                                output_planes[lane][output_row_offset + output_x] =
+                                    accumulators[lane];
+                            }
+                            ++output_x;
+                        }
+                    }
+                }
+            }
+        }
+    }
+#else
+    lw_scalar_packed_conv3x3_stride2_pad1_f32(
+        input, packed_weights, bias, output, input_dimensions, output_dimensions);
+#endif
+}
+#endif

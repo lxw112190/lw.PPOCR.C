@@ -165,6 +165,18 @@ preserved their scalar-reference checksums. The gain is real but modest, so
 this node is now covered by a stable A/B baseline before any further
 specialization is considered.
 
+An opt-in AVX2+FMA candidate was then measured for this exact Node 6 geometry.
+The candidate is enabled only by `LW_EXPERIMENTAL_AVX2_FMA_DISPATCH=ON` and only
+for the two REC widths above; the default build and every other Conv3x3 shape
+remain unchanged. On the local AVX2 host, the packed kernel measured `0.619220`
+ms (320) and `1.839400` ms (960) in the default build, versus `0.561200` ms
+and `1.519500` ms in the experimental build. The corresponding isolated
+packed-kernel ratios were `1.103x` and `1.210x`; both builds passed the complete
+Conv3x3 benchmark smoke, and the FMA path stayed within a `1.0e-2` maximum
+absolute-error bound. A one-shot full-OCR check at width 960 kept checksum
+`c9c15dc8d3fe01ab` and showed no working-set increase, but this is not yet a
+promotion gate: paired CI measurements across Tiny, Small, and Medium are still
+required before enabling the candidate outside the experimental build.
 ## REC Erf measurement
 
 REC profile attribution shows Erf as the next large operator family. The new
