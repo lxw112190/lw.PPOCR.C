@@ -168,6 +168,17 @@ class FullOcrProfileTest(unittest.TestCase):
                 )
 
                 implementation_paths = report["implementation_paths"]
+                for component_name in ("detector", "classifier", "recognizer"):
+                    binding = implementation_paths[component_name]["prepared_binding"]
+                    if ARGUMENTS.expect_prepared:
+                        self.assertGreater(binding["lookups"], 0)
+                        self.assertEqual(
+                            binding["hits"] + binding["fallbacks"], binding["lookups"]
+                        )
+                    else:
+                        self.assertEqual(binding["lookups"], 0)
+                        self.assertEqual(binding["hits"], 0)
+                        self.assertEqual(binding["fallbacks"], 0)
                 for component_name, component_key in (
                     ("detector", "det_invocations"),
                     ("classifier", "cls_invocations"),
@@ -359,6 +370,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--dictionary", required=True)
     parser.add_argument("--image", required=True)
     parser.add_argument("--expect-resident", action="store_true")
+    parser.add_argument("--expect-prepared", action="store_true")
     return parser.parse_args()
 
 

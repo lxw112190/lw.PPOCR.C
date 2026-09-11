@@ -97,6 +97,12 @@ void lw_pipeline_component_profile_accumulate(lw_pipeline_component_profile* des
         add_saturated(&destination->execution.conv_transpose_thread_histogram[index],
                       source->execution.conv_transpose_thread_histogram[index]);
     }
+    add_saturated(&destination->execution.prepared_binding_lookups,
+                  source->execution.prepared_binding_lookups);
+    add_saturated(&destination->execution.prepared_binding_hits,
+                  source->execution.prepared_binding_hits);
+    add_saturated(&destination->execution.prepared_binding_fallbacks,
+                  source->execution.prepared_binding_fallbacks);
     add_saturated(&destination->execution.packed_conv1x1_invocations,
                   source->execution.packed_conv1x1_invocations);
     add_saturated(&destination->execution.packed_conv3x3_stride2_invocations,

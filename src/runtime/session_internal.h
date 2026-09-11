@@ -12,26 +12,35 @@
 
 #define LW_WORKSPACE_ALIGNMENT 64u
 
-typedef enum lw_prepared_node_kind {
-    LW_PREPARED_NODE_NONE = 0,
-    LW_PREPARED_NODE_CONV1X1_PACKED4 = 1,
-    LW_PREPARED_NODE_MATMUL_PACKED16 = 2,
-    LW_PREPARED_NODE_CONV3X3_STRIDE2_PACKED8 = 3
-} lw_prepared_node_kind;
+typedef enum lw_prepared_constant_kind {
+    LW_PREPARED_CONSTANT_NONE = 0,
+    LW_PREPARED_CONSTANT_CONV1X1_PACKED4 = 1,
+    LW_PREPARED_CONSTANT_MATMUL_PACKED16 = 2,
+    LW_PREPARED_CONSTANT_CONV3X3_STRIDE2_PACKED8 = 3
+} lw_prepared_constant_kind;
 
-typedef struct lw_prepared_node {
+typedef struct lw_prepared_constant {
     uint32_t kind;
     uint32_t reserved;
     uint64_t packed_weight_offset;
     uint64_t packed_weight_count;
-} lw_prepared_node;
+} lw_prepared_constant;
 
 typedef struct lw_shared_prepared_constants {
     uint32_t ref_count;
-    lw_prepared_node* prepared_nodes;
+    lw_prepared_constant* constants;
     uint8_t* packed_weights;
     size_t packed_weight_bytes;
 } lw_shared_prepared_constants;
+typedef struct lw_bound_node {
+    uint32_t node_index;
+    uint16_t operator_type;
+    uint16_t input_count;
+    uint32_t input_indices[LWM_V0_MAX_NODE_INPUTS];
+    uint32_t output_index;
+    uint32_t implementation;
+    const lw_prepared_constant* prepared_constant;
+} lw_bound_node;
 
 typedef struct lw_runtime_tensor {
     uint32_t dtype;
@@ -51,10 +60,12 @@ struct lw_session {
     lw_runtime_tensor* tensors;
     uint8_t* workspace;
     size_t workspace_bytes;
-    lw_prepared_node* prepared_nodes;
+    lw_prepared_constant* prepared_constants;
     uint8_t* packed_weights;
     size_t packed_weight_bytes;
     lw_shared_prepared_constants* shared_prepared_constants;
+    lw_bound_node* execution_nodes;
+    uint32_t execution_node_count;
     lw_thread_pool* thread_pool;
     uint32_t intra_op_thread_count;
     lw_session_info info;
@@ -66,5 +77,7 @@ void lw_session_set_intra_op_thread_count(lw_session* session, uint32_t thread_c
 lw_status lw_session_share_prepared_constants(lw_session* destination,
                                                const lw_session* source,
                                                lw_error* error);
+lw_status lw_prepare_execution_nodes(lw_session* session, lw_error* error);
+void lw_free_execution_nodes(lw_session* session);
 
 #endif

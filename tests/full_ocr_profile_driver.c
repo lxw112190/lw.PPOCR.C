@@ -94,11 +94,15 @@ static uint64_t operator_invocations(const lw_ocr_execution_profile* profile, ui
 }
 
 static void print_execution_path_counters(const lw_execution_profile* profile) {
-    printf("{\"packed_conv1x1\":%llu,\"packed_conv3x3_stride2\":%llu,"
+    printf("{\"prepared_binding\":{\"lookups\":%llu,\"hits\":%llu,\"fallbacks\":%llu},"
+           "\"packed_conv1x1\":%llu,\"packed_conv3x3_stride2\":%llu,"
            "\"unpacked_conv\":%llu,\"packed_matmul\":%llu,"
            "\"unpacked_matmul\":%llu,\"fused_gelu\":%llu,"
            "\"ctc_greedy\":%llu,\"ctc_packed_projection\":%llu,"
            "\"ctc_generic_projection\":%llu}",
+           (unsigned long long)profile->prepared_binding_lookups,
+           (unsigned long long)profile->prepared_binding_hits,
+           (unsigned long long)profile->prepared_binding_fallbacks,
            (unsigned long long)profile->packed_conv1x1_invocations,
            (unsigned long long)profile->packed_conv3x3_stride2_invocations,
            (unsigned long long)profile->unpacked_conv_invocations,

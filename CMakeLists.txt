@@ -18,6 +18,8 @@ option(LW_REC_RESIDENT_WIDTHS
     "Prewarm all standard REC widths for native performance experiments" OFF)
 option(LW_EXPERIMENTAL_AVX2_FMA_DISPATCH
     "Use experimental AVX2+FMA Conv1x1 and terminal MatMul paths in native builds" OFF)
+option(LW_EXPERIMENTAL_PREPARED_EXECUTION
+    "Build the experimental session-local prepared execution table" OFF)
 set(LW_WASM_HOST_ABI_VERSION "1" CACHE STRING
     "WASM Host ABI version embedded in the Web adapter and Node manifest")
 set(LW_LWM_FORMAT_VERSION "0.1" CACHE STRING
@@ -232,6 +234,7 @@ set(LW_PPOCR_C_SOURCES
     src/runtime/memory.c
     src/runtime/model.c
     src/runtime/parallel.c
+    src/runtime/prepared_execution.c
     src/runtime/session.c
     src/runtime/shape.c
     src/runtime/validate.c
@@ -359,6 +362,9 @@ endif()
 if(LW_EXPERIMENTAL_AVX2_FMA_DISPATCH AND NOT EMSCRIPTEN)
     target_compile_definitions(lw_ppocr_c PRIVATE LW_EXPERIMENTAL_AVX2_FMA_DISPATCH=1)
 endif()
+if(LW_EXPERIMENTAL_PREPARED_EXECUTION)
+    target_compile_definitions(lw_ppocr_c PRIVATE LW_EXPERIMENTAL_PREPARED_EXECUTION=1)
+endif()
 
 if(NOT EMSCRIPTEN AND NOT LW_RUNTIME_ONLY)
 add_library(lw_ppocr_c_shared SHARED ${LW_PPOCR_C_SOURCES})
@@ -377,6 +383,9 @@ if(LW_REC_RESIDENT_WIDTHS)
 endif()
 if(LW_EXPERIMENTAL_AVX2_FMA_DISPATCH)
     target_compile_definitions(lw_ppocr_c_shared PRIVATE LW_EXPERIMENTAL_AVX2_FMA_DISPATCH=1)
+endif()
+if(LW_EXPERIMENTAL_PREPARED_EXECUTION)
+    target_compile_definitions(lw_ppocr_c_shared PRIVATE LW_EXPERIMENTAL_PREPARED_EXECUTION=1)
 endif()
 endif()
 
@@ -1186,6 +1195,11 @@ if(BUILD_TESTING AND NOT EMSCRIPTEN)
 
     add_executable(test-session-planner tests/test_session.c)
     target_link_libraries(test-session-planner PRIVATE lw_ppocr_c)
+    target_include_directories(test-session-planner PRIVATE
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/runtime")
+    if(LW_EXPERIMENTAL_PREPARED_EXECUTION)
+        target_compile_definitions(test-session-planner PRIVATE LW_EXPERIMENTAL_PREPARED_EXECUTION=1)
+    endif()
     target_compile_features(test-session-planner PRIVATE c_std_11)
     add_dependencies(test-session-planner convert_rec_model)
     if(MSVC)
@@ -1735,6 +1749,9 @@ if(BUILD_TESTING AND NOT EMSCRIPTEN)
         --image "${LW_PPOCR_C_DET_DEMO_PPM}")
     if(LW_REC_RESIDENT_WIDTHS AND NOT EMSCRIPTEN)
         list(APPEND full_ocr_profile_test_args --expect-resident)
+    endif()
+    if(LW_EXPERIMENTAL_PREPARED_EXECUTION AND NOT EMSCRIPTEN)
+        list(APPEND full_ocr_profile_test_args --expect-prepared)
     endif()
     add_test(
         NAME full_ocr_operator_profile

@@ -1,4 +1,6 @@
 #include "lw_infer.h"
+#include "lwm_read.h"
+#include "session_internal.h"
 
 #include <inttypes.h>
 #include <stdint.h>
@@ -14,6 +16,43 @@ static void make_rec_input(lw_tensor_desc* input, int32_t batch, int32_t width) 
     input->dimensions[3] = width;
 }
 
+static int check_execution_table(const lw_model* model, const lw_session* session) {
+    uint32_t node_index;
+#if defined(LW_EXPERIMENTAL_PREPARED_EXECUTION)
+    if (session->execution_nodes == NULL ||
+        session->execution_node_count != model->info.node_count) {
+        return 0;
+    }
+    for (node_index = 0u; node_index < session->execution_node_count; ++node_index) {
+        const uint8_t* disk = model->bytes + (size_t)model->node_offset +
+                              (size_t)node_index * LWM_V0_NODE_SIZE;
+        const lw_bound_node* bound = &session->execution_nodes[node_index];
+        if (bound->node_index != node_index ||
+            bound->operator_type != lwm_read_u16(disk) ||
+            bound->input_count != lwm_read_u16(disk + 2u) ||
+            bound->output_index != lwm_read_u32(disk + 40u)) {
+            return 0;
+        }
+        for (uint32_t input_index = 0u; input_index < bound->input_count; ++input_index) {
+            if (bound->input_indices[input_index] !=
+                lwm_read_u32(disk + 8u + (size_t)input_index * sizeof(uint32_t))) {
+                return 0;
+            }
+        }
+        if (bound->prepared_constant != NULL &&
+            bound->prepared_constant != &session->prepared_constants[node_index]) {
+            return 0;
+        }
+    }
+#else
+    (void)model;
+    (void)node_index;
+    if (session->execution_nodes != NULL || session->execution_node_count != 0u) {
+        return 0;
+    }
+#endif
+    return 1;
+}
 static int create_and_check(const lw_model* model, int32_t batch, int32_t width,
                             int32_t expected_steps, uint64_t* workspace_size) {
     lw_tensor_desc input;
@@ -28,6 +67,11 @@ static int create_and_check(const lw_model* model, int32_t batch, int32_t width,
     if (status != LW_STATUS_OK) {
         fprintf(stderr, "session create failed for width %" PRId32 ": %s: %s\n", width,
                 lw_status_string(status), error.message);
+        return 0;
+    }
+    if (!check_execution_table(model, session)) {
+        fprintf(stderr, "unexpected prepared execution table for width %" PRId32 "\n", width);
+        lw_session_free(session);
         return 0;
     }
     lw_session_info_init(&info);

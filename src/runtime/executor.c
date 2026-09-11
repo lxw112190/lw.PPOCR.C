@@ -143,7 +143,7 @@ static uint32_t parallel_conv_worker_count(const lw_session* session,
     }
     if (context->packed != 0u) {
         const uint32_t output_tile =
-            context->packed == LW_PREPARED_NODE_CONV3X3_STRIDE2_PACKED8
+            context->packed == LW_PREPARED_CONSTANT_CONV3X3_STRIDE2_PACKED8
                 ? LW_PACKED_CONV3X3_STRIDE2_OUTPUT_TILE
                 : LW_PACKED_CONV1X1_OUTPUT_TILE;
         if (output_channels % output_tile != 0u) {
@@ -172,7 +172,7 @@ static void execute_parallel_conv_slice(void* opaque, uint32_t worker_index,
     lw_parallel_conv_context* context = (lw_parallel_conv_context*)opaque;
     uint32_t output_channels = (uint32_t)context->output_dimensions[1];
     uint32_t item_size =
-        context->packed == LW_PREPARED_NODE_CONV3X3_STRIDE2_PACKED8
+        context->packed == LW_PREPARED_CONSTANT_CONV3X3_STRIDE2_PACKED8
             ? LW_PACKED_CONV3X3_STRIDE2_OUTPUT_TILE
             : (context->packed != 0u ? LW_PACKED_CONV1X1_OUTPUT_TILE : 1u);
     uint32_t item_count = output_channels / item_size;
@@ -199,14 +199,14 @@ static void execute_parallel_conv_slice(void* opaque, uint32_t worker_index,
     memcpy(output_dimensions, context->output_dimensions, sizeof(output_dimensions));
     output_dimensions[1] = (int32_t)channel_count;
     weight_dimensions[0] = (int32_t)channel_count;
-    if (context->packed == LW_PREPARED_NODE_CONV1X1_PACKED4) {
+    if (context->packed == LW_PREPARED_CONSTANT_CONV1X1_PACKED4) {
         uint32_t input_channels = (uint32_t)input_dimensions[1];
         weights = context->weights + (size_t)((uint64_t)channel_begin * input_channels);
         lw_packed_conv1x1_f32(input, weights, bias, output, input_dimensions, output_dimensions);
         context->statuses[worker_index] = LW_STATUS_OK;
         return;
     }
-    if (context->packed == LW_PREPARED_NODE_CONV3X3_STRIDE2_PACKED8) {
+    if (context->packed == LW_PREPARED_CONSTANT_CONV3X3_STRIDE2_PACKED8) {
         const uint32_t input_channels = (uint32_t)input_dimensions[1];
         weights = context->weights +
                   (size_t)((uint64_t)channel_begin * input_channels * 9u);
@@ -373,6 +373,34 @@ static lw_status dispatch_parallel_conv_transpose(
     return LW_STATUS_OK;
 }
 
+static const lw_prepared_constant* prepared_constant_for_node(
+    const lw_session* session, uint32_t node_index, lw_execution_profile* profile) {
+#if !defined(LW_EXPERIMENTAL_PREPARED_EXECUTION)
+    (void)profile;
+#endif
+#if defined(LW_EXPERIMENTAL_PREPARED_EXECUTION)
+    if (session->execution_nodes != NULL && node_index < session->execution_node_count) {
+        const lw_prepared_constant* prepared =
+            session->execution_nodes[node_index].prepared_constant;
+        if (profile != NULL && profile->prepared_binding_lookups != UINT64_MAX) {
+            ++profile->prepared_binding_lookups;
+            if (prepared != NULL) {
+                if (profile->prepared_binding_hits != UINT64_MAX) {
+                    ++profile->prepared_binding_hits;
+                }
+            } else if (profile->prepared_binding_fallbacks != UINT64_MAX) {
+                ++profile->prepared_binding_fallbacks;
+            }
+        }
+        return prepared;
+    }
+#endif
+    if (session->prepared_constants == NULL) {
+        return NULL;
+    }
+    return &session->prepared_constants[node_index];
+}
+
 static lw_status dispatch_node(lw_session* session, const uint8_t* node, uint32_t node_index,
                                uint32_t graph_input_index, const float* graph_input,
                                lw_simd_level simd_level, lw_execution_profile* profile) {
@@ -387,6 +415,7 @@ static lw_status dispatch_node(lw_session* session, const uint8_t* node, uint32_
     lw_runtime_tensor* output_tensor;
     float* output;
     uint32_t index;
+    const lw_prepared_constant* prepared_constant;
 
     if (output_count != 1u) {
         return LW_STATUS_UNSUPPORTED;
@@ -405,6 +434,7 @@ static lw_status dispatch_node(lw_session* session, const uint8_t* node, uint32_
     if (output_tensor->dtype != LW_DTYPE_F32 || output == NULL) {
         return LW_STATUS_UNSUPPORTED;
     }
+    prepared_constant = prepared_constant_for_node(session, node_index, profile);
 
     /* Parameters were structurally validated at model-load time. Each kernel
      * still validates runtime-dependent shapes before reading tensor data. */
@@ -420,49 +450,54 @@ static lw_status dispatch_node(lw_session* session, const uint8_t* node, uint32_
         if (input_count != 2u && input_count != 3u) {
             return LW_STATUS_INVALID_SHAPE;
         }
-        if (session->prepared_nodes != NULL &&
-            session->prepared_nodes[node_index].kind == LW_PREPARED_NODE_CONV1X1_PACKED4) {
-            if (profile != NULL && profile->packed_conv1x1_invocations != UINT64_MAX) {
-                ++profile->packed_conv1x1_invocations;
-            }
-            const lw_prepared_node* prepared = &session->prepared_nodes[node_index];
-            const float* packed_weights =
-                (const float*)(const void*)(session->packed_weights +
-                                            (size_t)prepared->packed_weight_offset);
-            parallel_status = dispatch_parallel_conv(
-                session, inputs[0], packed_weights, input_count == 3u ? inputs[2] : NULL, output,
-                input_tensors[0]->dimensions, input_tensors[1]->dimensions,
-                output_tensor->dimensions, kernel, strides, dilations, pads, groups, 1u, profile);
-            if (parallel_status == LW_STATUS_OK) {
+        {
+            if (prepared_constant != NULL &&
+                prepared_constant->kind == LW_PREPARED_CONSTANT_CONV1X1_PACKED4) {
+                const float* packed_weights =
+                    (const float*)(const void*)(session->packed_weights +
+                                                (size_t)prepared_constant->packed_weight_offset);
+                if (profile != NULL && profile->packed_conv1x1_invocations != UINT64_MAX) {
+                    ++profile->packed_conv1x1_invocations;
+                }
+                parallel_status = dispatch_parallel_conv(
+                    session, inputs[0], packed_weights,
+                    input_count == 3u ? inputs[2] : NULL, output,
+                    input_tensors[0]->dimensions, input_tensors[1]->dimensions,
+                    output_tensor->dimensions, kernel, strides, dilations, pads, groups, 1u,
+                    profile);
+                if (parallel_status == LW_STATUS_OK) {
+                    return LW_STATUS_OK;
+                }
+                lw_packed_conv1x1_f32(
+                    inputs[0], packed_weights, input_count == 3u ? inputs[2] : NULL,
+                    output, input_tensors[0]->dimensions, output_tensor->dimensions);
                 return LW_STATUS_OK;
             }
-            lw_packed_conv1x1_f32(inputs[0], packed_weights, input_count == 3u ? inputs[2] : NULL,
-                                  output, input_tensors[0]->dimensions, output_tensor->dimensions);
-            return LW_STATUS_OK;
         }
-        if (session->prepared_nodes != NULL &&
-            session->prepared_nodes[node_index].kind ==
-                LW_PREPARED_NODE_CONV3X3_STRIDE2_PACKED8) {
-            if (profile != NULL && profile->packed_conv3x3_stride2_invocations != UINT64_MAX) {
-                ++profile->packed_conv3x3_stride2_invocations;
-            }
-            const lw_prepared_node* prepared = &session->prepared_nodes[node_index];
-            const float* packed_weights =
-                (const float*)(const void*)(session->packed_weights +
-                                            (size_t)prepared->packed_weight_offset);
-            parallel_status = dispatch_parallel_conv(
-                session, inputs[0], packed_weights,
-                input_count == 3u ? inputs[2] : NULL, output,
-                input_tensors[0]->dimensions, input_tensors[1]->dimensions,
-                output_tensor->dimensions, kernel, strides, dilations, pads, groups,
-                LW_PREPARED_NODE_CONV3X3_STRIDE2_PACKED8, profile);
-            if (parallel_status == LW_STATUS_OK) {
+        {
+            if (prepared_constant != NULL &&
+                prepared_constant->kind == LW_PREPARED_CONSTANT_CONV3X3_STRIDE2_PACKED8) {
+                const float* packed_weights =
+                    (const float*)(const void*)(session->packed_weights +
+                                                (size_t)prepared_constant->packed_weight_offset);
+                if (profile != NULL &&
+                    profile->packed_conv3x3_stride2_invocations != UINT64_MAX) {
+                    ++profile->packed_conv3x3_stride2_invocations;
+                }
+                parallel_status = dispatch_parallel_conv(
+                    session, inputs[0], packed_weights,
+                    input_count == 3u ? inputs[2] : NULL, output,
+                    input_tensors[0]->dimensions, input_tensors[1]->dimensions,
+                    output_tensor->dimensions, kernel, strides, dilations, pads, groups,
+                    LW_PREPARED_CONSTANT_CONV3X3_STRIDE2_PACKED8, profile);
+                if (parallel_status == LW_STATUS_OK) {
+                    return LW_STATUS_OK;
+                }
+                lw_packed_conv3x3_stride2_pad1_f32(
+                    inputs[0], packed_weights, input_count == 3u ? inputs[2] : NULL,
+                    output, input_tensors[0]->dimensions, output_tensor->dimensions);
                 return LW_STATUS_OK;
             }
-            lw_packed_conv3x3_stride2_pad1_f32(
-                inputs[0], packed_weights, input_count == 3u ? inputs[2] : NULL,
-                output, input_tensors[0]->dimensions, output_tensor->dimensions);
-            return LW_STATUS_OK;
         }
         if (profile != NULL && profile->unpacked_conv_invocations != UINT64_MAX) {
             ++profile->unpacked_conv_invocations;
@@ -607,21 +642,22 @@ static lw_status dispatch_node(lw_session* session, const uint8_t* node, uint32_
         if (batch_count > UINT32_MAX) {
             return LW_STATUS_OUT_OF_BOUNDS;
         }
-        if (lw_simd_level_is_avx2(simd_level) && session->prepared_nodes != NULL &&
-            session->prepared_nodes[node_index].kind == LW_PREPARED_NODE_MATMUL_PACKED16) {
-            if (profile != NULL && profile->packed_matmul_invocations != UINT64_MAX) {
-                ++profile->packed_matmul_invocations;
-            }
-            const lw_prepared_node* prepared = &session->prepared_nodes[node_index];
+        {
+            if (lw_simd_level_is_avx2(simd_level) && prepared_constant != NULL &&
+                prepared_constant->kind == LW_PREPARED_CONSTANT_MATMUL_PACKED16) {
+                if (profile != NULL && profile->packed_matmul_invocations != UINT64_MAX) {
+                    ++profile->packed_matmul_invocations;
+                }
             const float* packed_weights =
                 (const float*)(const void*)(session->packed_weights +
-                                            (size_t)prepared->packed_weight_offset);
-            lw_avx2_packed_matmul_shared_f32(inputs[0], packed_weights, output,
-                                             (uint32_t)batch_count,
-                                             (uint32_t)input_tensors[0]->dimensions[rank - 2u],
-                                             (uint32_t)input_tensors[0]->dimensions[rank - 1u],
-                                             (uint32_t)input_tensors[1]->dimensions[1]);
-            return LW_STATUS_OK;
+                                            (size_t)prepared_constant->packed_weight_offset);
+                lw_avx2_packed_matmul_shared_f32(inputs[0], packed_weights, output,
+                                                 (uint32_t)batch_count,
+                                                 (uint32_t)input_tensors[0]->dimensions[rank - 2u],
+                                                 (uint32_t)input_tensors[0]->dimensions[rank - 1u],
+                                                 (uint32_t)input_tensors[1]->dimensions[1]);
+                return LW_STATUS_OK;
+            }
         }
         if (profile != NULL && profile->unpacked_matmul_invocations != UINT64_MAX) {
             ++profile->unpacked_matmul_invocations;
@@ -1086,7 +1122,7 @@ typedef struct lw_packed_ctc_projection {
 
 static int match_packed_ctc_projection(lw_session* session, const float* graph_input,
                                        uint32_t logits_index, uint32_t time_steps,
-                                       uint32_t class_count,
+                                       uint32_t class_count, lw_execution_profile* profile,
                                        lw_packed_ctc_projection* projection) {
     const lw_model* model = session->model;
     uint32_t matmul_node_index;
@@ -1101,10 +1137,10 @@ static int match_packed_ctc_projection(lw_session* session, const float* graph_i
     const lw_runtime_tensor* weights;
     const lw_runtime_tensor* matmul_output;
     const lw_runtime_tensor* bias;
-    const lw_prepared_node* prepared;
+    const lw_prepared_constant* prepared;
     uint32_t graph_input_index;
     if (projection == NULL || model->info.node_count < 3u ||
-        !lw_simd_level_is_avx2(session->cpu.simd) || session->prepared_nodes == NULL ||
+        !lw_simd_level_is_avx2(session->cpu.simd) || session->prepared_constants == NULL ||
         session->packed_weights == NULL) {
         return 0;
     }
@@ -1134,8 +1170,8 @@ static int match_packed_ctc_projection(lw_session* session, const float* graph_i
     weights = &session->tensors[weights_index];
     matmul_output = &session->tensors[matmul_output_index];
     bias = &session->tensors[bias_index];
-    prepared = &session->prepared_nodes[matmul_node_index];
-    if (prepared->kind != LW_PREPARED_NODE_MATMUL_PACKED16 ||
+    prepared = prepared_constant_for_node(session, matmul_node_index, profile);
+    if (prepared == NULL || prepared->kind != LW_PREPARED_CONSTANT_MATMUL_PACKED16 ||
         activation->dtype != LW_DTYPE_F32 || activation->rank != 3u ||
         activation->dimensions[0] != 1 || activation->dimensions[1] != (int32_t)time_steps ||
         activation->dimensions[2] <= 0 || weights->dtype != LW_DTYPE_F32 ||
@@ -1225,7 +1261,7 @@ lw_status lw_execute_session_f32_ctc_greedy(
     }
     softmax_node_index = session->model->info.node_count - 1u;
     fused_projection = match_packed_ctc_projection(session, input, logits_index, time_steps,
-                                                   class_count, &projection);
+                                                   class_count, profile, &projection);
     if (profile != NULL) {
         if (profile->ctc_greedy_invocations != UINT64_MAX) {
             ++profile->ctc_greedy_invocations;

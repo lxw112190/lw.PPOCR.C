@@ -53,7 +53,7 @@ static void release_shared_prepared_constants(lw_shared_prepared_constants* cons
         return;
     }
     workspace_release(constants->packed_weights);
-    free(constants->prepared_nodes);
+    free(constants->constants);
     free(constants);
 }
 
@@ -284,28 +284,28 @@ static lw_status prepare_constant_weights(lw_session* session, lw_error* error) 
         return LW_STATUS_OUT_OF_MEMORY;
     }
     session->shared_prepared_constants->ref_count = 1u;
-    session->prepared_nodes =
-        (lw_prepared_node*)calloc(model->info.node_count, sizeof(*session->prepared_nodes));
-    if (session->prepared_nodes == NULL) {
+    session->prepared_constants =
+        (lw_prepared_constant*)calloc(model->info.node_count, sizeof(*session->prepared_constants));
+    if (session->prepared_constants == NULL) {
         lw_set_error(error, LW_STATUS_OUT_OF_MEMORY, "unable to allocate prepared node table");
         return LW_STATUS_OUT_OF_MEMORY;
     }
-    session->shared_prepared_constants->prepared_nodes = session->prepared_nodes;
+    session->shared_prepared_constants->constants = session->prepared_constants;
     for (node_index = 0u; node_index < model->info.node_count; ++node_index) {
         uint32_t weight_tensor_index;
         uint64_t packed_weight_count;
         uint64_t packed_bytes;
-        lw_prepared_node* prepared = &session->prepared_nodes[node_index];
+        lw_prepared_constant* prepared = &session->prepared_constants[node_index];
         if (prepared_pointwise_node(session, simd_level, node_index, &weight_tensor_index,
                                     &packed_weight_count)) {
-            prepared->kind = LW_PREPARED_NODE_CONV1X1_PACKED4;
+            prepared->kind = LW_PREPARED_CONSTANT_CONV1X1_PACKED4;
         } else if (prepared_stride2_conv3x3_node(
                        session, simd_level, node_index, &weight_tensor_index,
                        &packed_weight_count)) {
-            prepared->kind = LW_PREPARED_NODE_CONV3X3_STRIDE2_PACKED8;
+            prepared->kind = LW_PREPARED_CONSTANT_CONV3X3_STRIDE2_PACKED8;
         } else if (prepared_matmul_node(session, simd_level, node_index, &weight_tensor_index,
                                         &packed_weight_count)) {
-            prepared->kind = LW_PREPARED_NODE_MATMUL_PACKED16;
+            prepared->kind = LW_PREPARED_CONSTANT_MATMUL_PACKED16;
         } else {
             continue;
         }
@@ -340,14 +340,14 @@ static lw_status prepare_constant_weights(lw_session* session, lw_error* error) 
     session->shared_prepared_constants->packed_weights = session->packed_weights;
     session->shared_prepared_constants->packed_weight_bytes = session->packed_weight_bytes;
     for (node_index = 0u; node_index < model->info.node_count; ++node_index) {
-        lw_prepared_node* prepared = &session->prepared_nodes[node_index];
+        lw_prepared_constant* prepared = &session->prepared_constants[node_index];
         uint32_t weight_tensor_index;
         uint64_t packed_weight_count;
         const uint8_t* node;
         uint32_t input_index;
         uint32_t output_index;
         node = model->bytes + (size_t)model->node_offset + (size_t)node_index * LWM_V0_NODE_SIZE;
-        if (prepared->kind == LW_PREPARED_NODE_CONV1X1_PACKED4 &&
+        if (prepared->kind == LW_PREPARED_CONSTANT_CONV1X1_PACKED4 &&
             prepared_pointwise_node(session, simd_level, node_index, &weight_tensor_index,
                                     &packed_weight_count) &&
             packed_weight_count == prepared->packed_weight_count) {
@@ -359,7 +359,7 @@ static lw_status prepare_constant_weights(lw_session* session, lw_error* error) 
                 (uint32_t)session->tensors[output_index].dimensions[1],
                 (float*)(void*)(session->packed_weights +
                                 (size_t)prepared->packed_weight_offset));
-        } else if (prepared->kind == LW_PREPARED_NODE_CONV3X3_STRIDE2_PACKED8 &&
+        } else if (prepared->kind == LW_PREPARED_CONSTANT_CONV3X3_STRIDE2_PACKED8 &&
                    prepared_stride2_conv3x3_node(
                        session, simd_level, node_index, &weight_tensor_index,
                        &packed_weight_count) &&
@@ -372,7 +372,7 @@ static lw_status prepare_constant_weights(lw_session* session, lw_error* error) 
                 (uint32_t)session->tensors[output_index].dimensions[1],
                 (float*)(void*)(session->packed_weights +
                                 (size_t)prepared->packed_weight_offset));
-        } else if (prepared->kind == LW_PREPARED_NODE_MATMUL_PACKED16 &&
+        } else if (prepared->kind == LW_PREPARED_CONSTANT_MATMUL_PACKED16 &&
                    prepared_matmul_node(session, simd_level, node_index, &weight_tensor_index,
                                         &packed_weight_count) &&
                    packed_weight_count == prepared->packed_weight_count) {
@@ -587,6 +587,11 @@ lw_status lw_session_create(const lw_model* model, const lw_tensor_desc* inputs,
         lw_session_free(session);
         return status;
     }
+    status = lw_prepare_execution_nodes(session, error);
+    if (status != LW_STATUS_OK) {
+        lw_session_free(session);
+        return status;
+    }
     memset(&session->info, 0, sizeof(session->info));
     session->info.struct_size = (uint32_t)sizeof(session->info);
     session->info.tensor_count = model->info.tensor_count;
@@ -622,13 +627,14 @@ void lw_session_free(lw_session* session) {
     }
     lw_thread_pool_free(session->thread_pool);
     session->thread_pool = NULL;
+    lw_free_execution_nodes(session);
     workspace_release(session->workspace);
     session->workspace = NULL;
     release_shared_prepared_constants(session->shared_prepared_constants);
     session->shared_prepared_constants = NULL;
     session->packed_weights = NULL;
     session->packed_weight_bytes = 0u;
-    session->prepared_nodes = NULL;
+    session->prepared_constants = NULL;
     free(session->tensors);
     session->tensors = NULL;
     free(session);
@@ -637,6 +643,7 @@ void lw_session_free(lw_session* session) {
 lw_status lw_session_share_prepared_constants(lw_session* destination,
                                                const lw_session* source,
                                                lw_error* error) {
+    lw_status execution_status;
     if (destination == NULL || source == NULL || destination->model != source->model) {
         lw_set_error(error, LW_STATUS_INVALID_ARGUMENT,
                      "sessions from the same model are required");
@@ -651,12 +658,17 @@ lw_status lw_session_share_prepared_constants(lw_session* destination,
                      "prepared constants reference count overflows");
         return LW_STATUS_OUT_OF_BOUNDS;
     }
+    lw_free_execution_nodes(destination);
     release_shared_prepared_constants(destination->shared_prepared_constants);
     destination->shared_prepared_constants = source->shared_prepared_constants;
     ++destination->shared_prepared_constants->ref_count;
-    destination->prepared_nodes = source->prepared_nodes;
+    destination->prepared_constants = destination->shared_prepared_constants->constants;
     destination->packed_weights = source->packed_weights;
     destination->packed_weight_bytes = source->packed_weight_bytes;
+    execution_status = lw_prepare_execution_nodes(destination, error);
+    if (execution_status != LW_STATUS_OK) {
+        return execution_status;
+    }
     lw_set_error(error, LW_STATUS_OK, "");
     return LW_STATUS_OK;
 }
