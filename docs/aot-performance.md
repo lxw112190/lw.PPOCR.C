@@ -177,6 +177,20 @@ absolute-error bound. A one-shot full-OCR check at width 960 kept checksum
 `c9c15dc8d3fe01ab` and showed no working-set increase, but this is not yet a
 promotion gate: paired CI measurements across Tiny, Small, and Medium are still
 required before enabling the candidate outside the experimental build.
+## Latest x64 FMA CI checkpoint
+
+The paired native x64 workflow confirmed the Node 6 FMA candidate at both
+production REC widths: `1.141x` for width 320 and `1.134x` for width 960. The
+full OCR profiles improved by `3.44%` (1 worker) and `4.05%` (4 workers), while
+keeping 16 lines and checksum `0ebf8b448ab7df47`. Peak RSS deltas were `+0.023`
+and `+0.037 MiB`, respectively. These are strong experimental results, but the
+working-set gate is not yet satisfied, so the candidate stays behind the native
+FMA experiment switch.
+
+The same report shows why Conv1x1 remains shape-gated: its median AVX2/FMA ratio
+was `1.139x` at width 320 and `1.070x` at width 960, while the slowest shapes
+were `0.978x` and `0.981x`. Unknown and regressing shapes must continue using
+regular AVX2 until more runner data justifies a narrower or revised allowlist.
 ## REC Erf measurement
 
 REC profile attribution shows Erf as the next large operator family. The new

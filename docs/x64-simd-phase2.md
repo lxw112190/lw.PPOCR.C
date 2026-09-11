@@ -127,6 +127,22 @@ not a release gate: generated images remain local-only, and the FMA dispatch sta
 opt-in until repeated runner measurements confirm the performance and working-set
 gates below.
 
+## Latest x64 CI checkpoint
+
+The latest native x64 FMA run confirms that the shape-gated experiment is useful
+but is not yet a blanket replacement for AVX2. The paired Conv3x3 Node 6
+candidate measured `1.141x` at REC width 320 and `1.134x` at width 960. The
+Conv1x1 direct A/B median was `1.139x` at width 320 and `1.070x` at width 960,
+but the slowest measured shapes were `0.978x` and `0.981x`, respectively. This
+supports keeping explicit shape allowlists rather than routing every Conv1x1
+shape to FMA.
+
+The same run measured complete OCR mean latency reductions of `3.44%` for the
+1-worker profile and `4.05%` for the 4-worker profile. Both profiles retained
+checksum `0ebf8b448ab7df47` and 16 lines. Peak RSS changed by only `+0.023 MiB`
+and `+0.037 MiB`, but the current promotion policy requires no stable working-set
+increase, so the candidate remains opt-in pending another paired run and the
+Tiny/Small/Medium corpus gate.
 ## Promotion gate
 
 Before enabling FMA in the production dispatch, collect paired measurements on
