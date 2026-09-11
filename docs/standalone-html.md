@@ -58,6 +58,8 @@ responsive. If local browser policy rejects Blob Workers, the embedded SDK
 uses its compatible main-thread fallback. The default build enables
 WebAssembly SIMD128. For older Android WebView or Chromium targets, use the separate Tiny `ocr-demo-legacy.html` artifact. It is a scalar-WASM, no-PDF build whose Runtime JavaScript is lowered to the declared Chrome 70 syntax target and validated as a complete SDK and HTML artifact in CI.
 
+On narrow screens, the Legacy page exposes two explicit native file-picker buttons: `拍照识别` opens the camera input and `从相册选择` opens the gallery/file input. The inputs remain visually hidden rather than using `display:none`, which keeps the flow compatible with older Android WebViews. Selecting a file is allowed while OCR is still initializing; the preview is prepared first and recognition becomes available when the engine is ready. The picker clears its value before each click, so selecting the same file again triggers a new change event. For diagnostics, `window.__lwOcrBootStatus.snapshot().picker` reports the last source, current picker state, and selected-file count, while `backend_state` reports the OCR startup state.
+
 The standalone page keeps its bootstrap path compatible with older Android
 browsers and WebViews: it does not require globalThis, retries image loading
 with onload when HTMLImageElement.decode() is unavailable, and retries

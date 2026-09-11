@@ -365,6 +365,10 @@ def main() -> int:
         # camera/gallery experience. The sponsor QR is intentionally visible.
         page.set_viewport_size({"width": 390, "height": 844})
         assert page.locator(".mobile-source-actions").is_visible()
+        assert page.locator("#pick-camera").inner_text() == "拍照识别"
+        assert page.locator("#pick-file").inner_text() == "从相册选择"
+        assert page.locator("#show-image").inner_text() == "预览"
+        assert page.locator("#show-results").inner_text() == "结果"
         assert page.locator("#support").get_attribute("open") is not None
         sponsor_image = page.locator("#support img")
         assert sponsor_image.is_visible()

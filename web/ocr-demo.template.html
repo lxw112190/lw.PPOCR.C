@@ -24,13 +24,17 @@
     .dropzone.drag { border-color: #2878d4; background: #edf5ff; }
     .dropzone strong { display: block; font-size: 14px; }
     .dropzone span { display: block; margin-top: 3px; color: #718096; font-size: 12px; }
-    input[type=file] { display: none; }
+    .native-file-input { position: absolute; left: -10000px; top: 0; width: 1px; height: 1px; overflow: hidden; opacity: 0; }
     button { border: 0; border-radius: 8px; padding: 12px 20px; color: #fff; background: #2878d4; font-weight: 600; cursor: pointer; }
     button:disabled { cursor: not-allowed; opacity: .5; }
     button.stop { background: #c93632; }
     button:focus-visible, a:focus-visible, summary:focus-visible, label:focus-visible { outline: 3px solid #85bfff; outline-offset: 2px; }
-    .mobile-source-actions { display: none; gap: 10px; }
-    .source-button { display: flex; min-height: 46px; flex: 1; align-items: center; justify-content: center; border: 1px solid #9aabc0; border-radius: 9px; background: #fff; color: #2867ad; font-size: 14px; font-weight: 600; cursor: pointer; }
+    .mobile-source-actions { display: flex; width: 100%; align-items: stretch; }
+    .mobile-source-actions > * { margin-right: 10px; }
+    .mobile-source-actions > *:last-child { margin-right: 0; }
+    .source-button { display: flex; min-height: 46px; flex: 1; align-items: center; justify-content: center; border: 1px solid #9aabc0; border-radius: 9px; padding: 8px 12px; background: #fff; color: #2867ad; font-size: 14px; font-weight: 600; cursor: pointer; }
+    @supports (gap: 10px) { .mobile-source-actions { gap: 10px; } .mobile-source-actions > * { margin-right: 0; } }
+    @media (min-width: 761px) { .mobile-source-actions { display: none; } }
     #status { min-height: 20px; color: #526277; font-size: 13px; }
     #stats { margin: 0 0 18px; color: #607086; font-size: 12px; }
     .pdf-controls { display: grid; grid-template-columns: minmax(160px, 1fr) auto auto; gap: 12px; align-items: end; margin: -2px 0 18px; padding: 14px 16px; }
@@ -114,7 +118,7 @@
       .toolbar { align-items: stretch; }
       .source-picker { width: 100%; min-width: 0; }
       .dropzone { display: none; }
-      .mobile-source-actions { display: flex; }
+
       .options { width: 100%; }
       .pdf-controls { grid-template-columns: 1fr 1fr; align-items: end; padding: 12px; }
       .pdf-meta, .pdf-page-nav, .pdf-progress { grid-column: 1 / -1; }
@@ -158,12 +162,12 @@
           <span>支持 JPG、PNG、BMP、WebP、PDF；图片也可直接 Ctrl+V / ⌘V 粘贴截图，所有文件仅在本机处理</span>
         </label>
         <div class="mobile-source-actions" aria-label="选择图片">
-          <label class="source-button" for="camera" tabindex="0">拍照识别</label>
-          <label class="source-button" for="file" tabindex="0">选择图片 / PDF</label>
+          <button id="pick-camera" class="source-button" type="button">拍照识别</button>
+          <button id="pick-file" class="source-button" type="button">从相册选择</button>
         </div>
       </div>
-      <input id="file" type="file" accept="image/*,application/pdf,.pdf">
-      <input id="camera" type="file" accept="image/*" capture="environment">
+      <input id="file" class="native-file-input" type="file" accept="image/*,application/pdf,.pdf">
+      <input id="camera" class="native-file-input" type="file" accept="image/*" capture="environment">
       <label class="options" for="reading-order">Reading order:
         <select id="reading-order" disabled>
           <option value="horizontal-ltr">Horizontal LTR</option>
@@ -194,6 +198,8 @@
             sdkReady: false,
             wasmReady: false,
             backend: "unknown",
+            backendState: "starting",
+            picker: {lastSource: null, state: "idle", changeCount: 0},
             lastError: null,
             capabilities: {
               webassembly: typeof WebAssembly !== "undefined",
@@ -223,9 +229,19 @@
               bootState.build = buildInfo || null;
               bootState.phase = "OCR SDK 已加载";
             },
+            setBackendState: function (backend, state) {
+              bootState.backend = backend || bootState.backend || "unknown";
+              bootState.backendState = state || "starting";
+            },
+            setPickerState: function (source, state) {
+              bootState.picker.lastSource = source || null;
+              bootState.picker.state = state || "idle";
+              if (state === "selected") bootState.picker.changeCount += 1;
+            },
             markWasmReady: function (backend) {
               bootState.wasmReady = true;
               bootState.backend = backend || "unknown";
+              bootState.backendState = "ready";
             },
             captureError: function (error) {
               bootState.lastError = error || {message: "unknown error"};
@@ -306,7 +322,7 @@
     </details>
     <div id="stats">引擎状态：加载中</div>
     <nav class="mobile-tabs" aria-label="工作区视图">
-      <button id="show-image" class="active" type="button" aria-pressed="true">图片</button>
+      <button id="show-image" class="active" type="button" aria-pressed="true" aria-label="显示图片预览">预览</button>
       <button id="show-results" type="button" aria-pressed="false">结果</button>
     </nav>
     <div id="workspace" class="grid" data-mobile-panel="image">

@@ -38,14 +38,31 @@ def recognize(browser: Browser, html: Path, sample: Path, repeats: int) -> tuple
     page = browser.new_page()
     try:
         page.goto(html.resolve().as_uri(), wait_until="load", timeout=180_000)
+        page.set_viewport_size({"width": 360, "height": 800})
         page.wait_for_function(
             "() => window.LwPpocr && window.__lwOcrTest", timeout=180_000
         )
+        assert page.locator("#pick-camera").is_visible()
+        assert page.locator("#pick-file").is_visible()
+        assert page.locator("#pick-camera").is_enabled()
+        assert page.locator("#pick-file").is_enabled()
+        assert page.locator("#show-image").inner_text() == "\u9884\u89c8"
+        assert page.locator("#show-results").inner_text() == "\u7ed3\u679c"
+        with page.expect_file_chooser() as chooser_info:
+            page.locator("#pick-file").click()
+        chooser_info.value.set_files(str(sample.resolve()))
+        page.wait_for_function(
+            "() => window.__lwOcrTest.snapshot().sourceKind === 'image' && "
+            "window.__lwOcrTest.snapshot().prepared", timeout=180_000
+        )
+        picker = page.evaluate("() => window.__lwOcrTest.snapshot().picker")
+        assert picker["lastSource"] == "gallery", picker
+        assert picker["state"] == "selected", picker
+        assert picker["changeCount"] == 1, picker
+        build = page.evaluate("() => window.LwPpocr.buildInfo")
         page.wait_for_function(
             "() => window.__lwOcrTest.snapshot().ready", timeout=180_000
         )
-        build = page.evaluate("() => window.LwPpocr.buildInfo")
-        page.locator("#file").set_input_files(str(sample.resolve()))
         page.wait_for_function(
             "() => !document.querySelector('#run').disabled", timeout=180_000
         )
@@ -55,6 +72,16 @@ def recognize(browser: Browser, html: Path, sample: Path, repeats: int) -> tuple
             )
             for _ in range(repeats)
         ]
+        prepare_count = page.evaluate("() => window.__lwOcrTest.snapshot().prepareCount")
+        with page.expect_file_chooser() as chooser_info:
+            page.locator("#pick-file").click()
+        chooser_info.value.set_files(str(sample.resolve()))
+        page.wait_for_function(
+            "() => window.__lwOcrTest.snapshot().prepareCount > " + str(prepare_count),
+            timeout=180_000,
+        )
+        picker = page.evaluate("() => window.__lwOcrTest.snapshot().picker")
+        assert picker["changeCount"] == 2, picker
         status = page.evaluate("() => window.__lwOcrTest.snapshot()")
         return build, results, status
     finally:

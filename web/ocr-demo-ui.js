@@ -15,6 +15,8 @@
 
   const fileInput = document.getElementById("file");
   const cameraInput = document.getElementById("camera");
+  const pickFileButton = document.getElementById("pick-file");
+  const pickCameraButton = document.getElementById("pick-camera");
   const dropzone = document.getElementById("dropzone");
   const runButton = document.getElementById("run");
   const clsInput = document.getElementById("use-cls");
@@ -97,8 +99,10 @@
       bootstrap: {
         sdk_ready: Boolean(boot.sdkReady),
         wasm_ready: Boolean(boot.wasmReady),
-        backend: boot.backend || null
+        backend: boot.backend || null,
+        backend_state: boot.backendState || null
       },
+      picker: boot.picker || null,
       last_error: boot.lastError || null
     };
   }
@@ -205,7 +209,7 @@
     fileInput.accept = "image/*";
     const dropTitle = dropzone.querySelector("strong");
     const dropHint = dropzone.querySelector("span");
-    const galleryLabel = document.querySelector('.source-button[for="file"]');
+    const galleryLabel = document.getElementById("pick-file");
     if (dropTitle) dropTitle.textContent = "选择、拖入或粘贴图片";
     if (dropHint) dropHint.textContent =
       "支持 JPG、PNG、BMP、WebP，也可直接 Ctrl+V / ⌘V 粘贴截图，所有文件仅在本机处理";
@@ -554,8 +558,10 @@
           originalHeight
         };
         resultsNode.innerHTML = '<div class="empty">图片已准备好，点击“开始识别”执行 OCR。</div>';
-        statusNode.textContent = "已选择：" + (file.name || "image") + " · 处理尺寸 " +
-          prepared.width + "×" + prepared.height + "，点击“开始识别”。";
+        statusNode.textContent = engine ?
+          "已选择：" + (file.name || "image") + " · 处理尺寸 " +
+            prepared.width + "×" + prepared.height + "，点击“开始识别”。" :
+          "图片已选择，正在等待 OCR 引擎就绪……";
         runButton.disabled = !engine;
         return preparedSource;
       } catch (error) {
@@ -592,7 +598,9 @@
         pdfLoadMilliseconds: prepareMilliseconds
       };
       updatePdfControls();
-      resultsNode.innerHTML = '<div class="empty">PDF 已准备好，点击“开始识别”执行 OCR。</div>';
+      resultsNode.innerHTML = engine ?
+        '<div class="empty">PDF 已准备好，点击“开始识别”执行 OCR。</div>' :
+        '<div class="empty">PDF 已准备好，正在等待 OCR 引擎就绪。</div>';
       await renderPdfPreview(1);
       runButton.disabled = !engine;
       return source;
@@ -716,12 +724,47 @@
         (clsInput.checked ? "开启" : "关闭");
     }
   }
+  function setPickerState(sourceName, state) {
+    if (window.__lwOcrBootStatus &&
+        typeof window.__lwOcrBootStatus.setPickerState === "function") {
+      window.__lwOcrBootStatus.setPickerState(sourceName, state);
+    }
+  }
+  function refreshSourceControls() {
+    const disabled = Boolean(running);
+    fileInput.disabled = disabled;
+    cameraInput.disabled = disabled;
+    if (pickFileButton) pickFileButton.disabled = disabled;
+    if (pickCameraButton) pickCameraButton.disabled = disabled;
+  }
+  function openNativeFilePicker(input, sourceName) {
+    if (!input || input.disabled) return;
+    try {
+      input.value = "";
+    } catch (_) {
+      // Older browsers may reject clearing a file input; click still works.
+    }
+    setPickerState(sourceName, "opening");
+    input.click();
+  }
+  function handleFileInputChange(input, sourceName) {
+    const file = input.files && input.files.length ? input.files[0] : null;
+    setPickerState(sourceName, file ? "selected" : "cancelled");
+    if (!file) return;
+    selectFile(file).catch(error => {
+      statusNode.textContent = "图片加载失败：" +
+        (error && error.message ? error.message : String(error));
+    });
+  }
   async function createEngine() {
     clsInput.disabled = true;
     readingOrderInput.disabled = true;
-    statusNode.textContent = "正在加载 WASM 和模型…";
+    statusNode.textContent = "正在初始化 OCR 引擎，可先选择图片…";
     if (window.__lwOcrBootStatus) {
-      window.__lwOcrBootStatus.setPhase("正在初始化 WASM 和模型");
+      window.__lwOcrBootStatus.setPhase("正在初始化 OCR 引擎，可先选择图片");
+      if (typeof window.__lwOcrBootStatus.setBackendState === "function") {
+        window.__lwOcrBootStatus.setBackendState(null, "starting");
+      }
     }
     try {
       const sdk = getOcrSdk();
@@ -760,8 +803,7 @@
   }
   function setRunningState(value, canStop = false) {
     running = value;
-    fileInput.disabled = value;
-    cameraInput.disabled = value;
+    refreshSourceControls();
     clsInput.disabled = value;
     readingOrderInput.disabled = value;
     runButton.disabled = value && !canStop;
@@ -957,10 +999,13 @@
   }
   function snapshot() {
     const status = engine ? engine.getStatus() : {ready: false, backend: "loading"};
+    const boot = window.__lwOcrBootStatus ? window.__lwOcrBootStatus.snapshot() : {};
     const pdf = source && source.kind === "pdf" ? source : null;
     const documentStatus = pdfStatus();
     return {
       ...status,
+      backendState: boot.backendState || null,
+      picker: boot.picker || null,
       ready: Boolean(engine && status.ready),
       runCount,
       prepareCount,
@@ -979,10 +1024,18 @@
     };
   }
 
-  fileInput.addEventListener("change", event =>
-    selectFile(event.target.files[0] || null).catch(() => {}));
-  cameraInput.addEventListener("change", event =>
-    selectFile(event.target.files[0] || null).catch(() => {}));
+  if (pickFileButton) pickFileButton.addEventListener("click", function() {
+    openNativeFilePicker(fileInput, "gallery");
+  });
+  if (pickCameraButton) pickCameraButton.addEventListener("click", function() {
+    openNativeFilePicker(cameraInput, "camera");
+  });
+  fileInput.addEventListener("change", function() {
+    handleFileInputChange(fileInput, "gallery");
+  });
+  cameraInput.addEventListener("change", function() {
+    handleFileInputChange(cameraInput, "camera");
+  });
   clsInput.addEventListener("change", () => reconfigureCls().catch(error => {
     statusNode.textContent = "切换 CLS 失败：" + error;
   }));
