@@ -462,6 +462,7 @@ int main(int argc, char** argv) {
         {"rec-160x320-h3", 160u, 320u, 3u},
         {"rec-320x160-h3", 320u, 160u, 3u},
         {"middle-192x384", 192u, 384u, 6u},
+        {"middle-384x192", 384u, 192u, 6u},
         {"late-384x768", 384u, 768u, 3u},
         {"late-768x384", 768u, 384u, 3u},
         {"medium-512x1024", 512u, 1024u, 6u},

@@ -143,6 +143,44 @@ checksum `0ebf8b448ab7df47` and 16 lines. Peak RSS changed by only `+0.023 MiB`
 and `+0.037 MiB`, but the current promotion policy requires no stable working-set
 increase, so the candidate remains opt-in pending another paired run and the
 Tiny/Small/Medium corpus gate.
+
+## Medium 1024 -> 512 exclusion checkpoint
+
+A paired local A/B was run against the Medium REC profile at target width 960
+with two OCR iterations, using the same Windows x64 host and the same checksum
+contract. The direct Conv1x1 benchmark had suggested that the `1024 -> 512`,
+height-6 shape might benefit from FMA, so it was tested both with the regular
+four-output FMA kernel and with the eight-output-by-eight-spatial candidate.
+Neither variant improved the complete OCR pipeline:
+
+| Candidate | 1 worker total | 4 workers total | checksum |
+|---|---:|---:|---|
+| Existing shape-gated FMA | 16182.5 ms | 11568.3 ms | `c9c15dc8d3fe01ab` |
+| Enable 1024 -> 512 four-output FMA | 16219.0 ms (+0.23%) | 12000.2 ms (+3.73%) | identical |
+| Enable 1024 -> 512 8x8 FMA | 16252.3 ms (+0.43%) | 11908.2 ms (+2.94%) | identical |
+
+The result is a useful negative checkpoint: isolated-kernel speedups are not
+sufficient evidence for promotion when FMA frequency effects and worker-level
+scheduling are included. The shape remains on regular AVX2, and the 8x8
+allowlist is unchanged.
+
+## Small 384 -> 192 candidate checkpoint
+
+The Small REC profile contains repeated `384 -> 192`, height-6 Conv1x1 nodes.
+The isolated benchmark was added as `middle-384x192` and measured AVX2/FMA
+ratios of `1.008x` at REC width 320 and `1.091x` at width 960. A paired
+end-to-end Small OCR check with three iterations produced:
+
+| REC width | 1 worker AVX2/FMA | 4 workers AVX2/FMA | checksum |
+|---:|---:|---:|---|
+| 320 | 1.052x | 1.075x | identical |
+| 960 | 1.021x | 0.994x | identical |
+
+Because the 960-width multi-worker result is neutral and the 320-width kernel
+ratio is close to parity, this shape is not added to the experimental runtime
+allowlist yet. The benchmark case remains so future CI runs can re-evaluate it
+with more replicas and the same FMA contract.
+
 ## Promotion gate
 
 Before enabling FMA in the production dispatch, collect paired measurements on

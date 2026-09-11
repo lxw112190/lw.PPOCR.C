@@ -39,6 +39,7 @@ class PackedConv1x1BenchmarkTest(unittest.TestCase):
                     (160, 320, 3, expected_width),
                     (320, 160, 3, expected_width),
                     (192, 384, 6, expected_width),
+                    (384, 192, 6, expected_width),
                     (384, 768, 3, expected_width),
                     (768, 384, 3, expected_width),
                     (512, 1024, 6, expected_width),
