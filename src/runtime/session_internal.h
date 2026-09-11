@@ -6,6 +6,7 @@
 #include "model_internal.h"
 #include "parallel_internal.h"
 #include "../simd/cpu_features.h"
+#include "../kernels/packed_conv_internal.h"
 
 #include <stddef.h>
 #include <stdint.h>
@@ -32,6 +33,30 @@ typedef struct lw_shared_prepared_constants {
     uint8_t* packed_weights;
     size_t packed_weight_bytes;
 } lw_shared_prepared_constants;
+typedef enum lw_bound_execution_kind {
+    LW_BOUND_EXEC_GENERIC = 0,
+    LW_BOUND_EXEC_CONV1X1_PACKED = 1
+} lw_bound_execution_kind;
+
+typedef enum lw_conv1x1_kernel_id {
+    LW_CONV1X1_KERNEL_NONE = 0,
+    LW_CONV1X1_KERNEL_SCALAR = 1,
+    LW_CONV1X1_KERNEL_SSE2 = 2,
+    LW_CONV1X1_KERNEL_AVX2 = 3,
+    LW_CONV1X1_KERNEL_NEON = 4,
+    LW_CONV1X1_KERNEL_LSX = 5
+} lw_conv1x1_kernel_id;
+
+typedef struct lw_bound_conv1x1 {
+    lw_packed_conv1x1_kernel_fn kernel;
+    const float* packed_weights;
+    uint32_t input_index;
+    uint32_t bias_index;
+    uint32_t output_index;
+    uint16_t kernel_id;
+    uint16_t output_tile;
+} lw_bound_conv1x1;
+
 typedef struct lw_bound_node {
     uint32_t node_index;
     uint16_t operator_type;
@@ -39,6 +64,11 @@ typedef struct lw_bound_node {
     uint32_t input_indices[LWM_V0_MAX_NODE_INPUTS];
     uint32_t output_index;
     uint32_t implementation;
+    uint16_t execution_kind;
+    uint16_t reserved_execution;
+    union {
+        lw_bound_conv1x1 conv1x1;
+    } data;
     const lw_prepared_constant* prepared_constant;
 } lw_bound_node;
 

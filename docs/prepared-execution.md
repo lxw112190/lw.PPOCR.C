@@ -48,3 +48,21 @@ The next phase can bind a small, measured operator subset (starting with
 prepared Conv1x1) behind the same option. It should only be enabled after
 scalar parity, native SIMD parity, checksum, and representative REC latency
 measurements pass.
+## Phase 3.1: direct packed Conv1x1 execution
+
+When `LW_EXPERIMENTAL_PREPARED_EXECUTION=ON`, eligible packed Conv1x1
+nodes bind their concrete scalar/SSE2/AVX2/NEON/LSX kernel, packed-weight
+pointer, tensor indices, and output tile during session creation. The executor
+uses this short path for single-worker and parallel execution; generic nodes
+continue through the existing interpreter. AVX2 FMA policy is intentionally
+not selected by this phase so the A/B comparison isolates dispatch overhead.
+
+The internal profile now reports:
+
+- `prepared_execution.prepared_nodes`: nodes executed through a prepared path;
+- `prepared_execution.generic_nodes`: nodes executed by the generic interpreter;
+- `prepared_execution.conv1x1`: prepared Conv1x1 executions.
+
+A prepared run must keep the same line count and output checksum as the default
+run. On the bundled Tiny sample, the initial local A/B result was mixed across
+REC widths, so the option remains experimental and disabled by default.

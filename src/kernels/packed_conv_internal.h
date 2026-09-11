@@ -13,6 +13,10 @@
 
 #define LW_PACKED_CONV1X1_OUTPUT_TILE 4u
 
+typedef void (*lw_packed_conv1x1_kernel_fn)(
+    const float* input, const float* packed_weights, const float* bias, float* output,
+    const int32_t input_dimensions[4], const int32_t output_dimensions[4]);
+
 int lw_packed_conv1x1_weight_count(uint32_t input_channels, uint32_t output_channels,
                                    uint64_t* weight_count);
 void lw_pack_conv1x1_weights_f32(const float* weights, uint32_t input_channels,

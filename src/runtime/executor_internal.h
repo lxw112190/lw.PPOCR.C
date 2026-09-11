@@ -42,6 +42,9 @@ typedef struct lw_execution_profile {
     uint64_t prepared_binding_lookups;
     uint64_t prepared_binding_hits;
     uint64_t prepared_binding_fallbacks;
+    uint64_t prepared_node_invocations;
+    uint64_t generic_node_invocations;
+    uint64_t prepared_conv1x1_invocations;
     uint64_t packed_conv1x1_invocations;
     uint64_t packed_conv3x3_stride2_invocations;
     uint64_t unpacked_conv_invocations;
