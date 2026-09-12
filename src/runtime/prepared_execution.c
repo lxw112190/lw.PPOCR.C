@@ -3,10 +3,21 @@
 #include "error_internal.h"
 #include "lwm_read.h"
 #include "packed_conv_internal.h"
+#include "packed_conv3x3_internal.h"
 #include "../simd/simd_kernels.h"
 
 #include <stdint.h>
 #include <stdlib.h>
+
+static lw_packed_conv3x3_kernel_fn select_conv3x3_kernel(const lw_session* session,
+                                                          uint16_t* kernel_id) {
+    if (lw_simd_level_is_avx2(session->cpu.simd)) {
+        *kernel_id = LW_CONV3X3_KERNEL_AVX2;
+        return lw_avx2_packed_conv3x3_stride2_pad1_f32;
+    }
+    *kernel_id = LW_CONV3X3_KERNEL_SCALAR;
+    return lw_scalar_packed_conv3x3_stride2_pad1_f32;
+}
 
 static lw_packed_conv1x1_kernel_fn select_conv1x1_kernel(const lw_session* session,
                                                           uint16_t* kernel_id) {
@@ -107,6 +118,21 @@ lw_status lw_prepare_execution_nodes(lw_session* session, lw_error* error) {
                     input_count == 3u ? bound->input_indices[2] : UINT32_MAX;
                 bound->data.conv1x1.output_index = bound->output_index;
                 bound->data.conv1x1.output_tile = LW_PACKED_CONV1X1_OUTPUT_TILE;
+            } else if (bound->operator_type == 1u &&
+                       bound->implementation == LW_PREPARED_CONSTANT_CONV3X3_STRIDE2_PACKED8 &&
+                       input_count >= 2u) {
+                bound->execution_kind = LW_BOUND_EXEC_CONV3X3_PACKED;
+                bound->data.conv3x3.kernel = select_conv3x3_kernel(
+                    session, &bound->data.conv3x3.kernel_id);
+                bound->data.conv3x3.packed_weights =
+                    (const float*)(const void*)(session->packed_weights +
+                        (size_t)session->prepared_constants[node_index].packed_weight_offset);
+                bound->data.conv3x3.input_index = bound->input_indices[0];
+                bound->data.conv3x3.bias_index =
+                    input_count == 3u ? bound->input_indices[2] : UINT32_MAX;
+                bound->data.conv3x3.output_index = bound->output_index;
+                bound->data.conv3x3.output_tile =
+                    LW_PACKED_CONV3X3_STRIDE2_OUTPUT_TILE;
             }
         }
     }

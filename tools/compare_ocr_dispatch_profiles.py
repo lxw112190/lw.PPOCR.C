@@ -123,7 +123,9 @@ def summarize(
     }
 
 
-def render_markdown(summary: dict[str, Any], title: str) -> str:
+def render_markdown(
+    summary: dict[str, Any], title: str, baseline_label: str, candidate_label: str
+) -> str:
     baseline = summary["baseline"]
     candidate = summary["candidate"]
     comparison = summary["comparison"]
@@ -134,8 +136,8 @@ def render_markdown(summary: dict[str, Any], title: str) -> str:
             "",
             "| Profile | OCR mean (ms) | OCR P95 (ms) | Peak RSS (MiB) |",
             "|---|---:|---:|---:|",
-            f"| Default AVX2 | {baseline['ocr_mean_ms']:.3f} | {baseline['ocr_p95_ms']:.3f} | {baseline['peak_rss_mib']:.3f} |",
-            f"| Experimental AVX2+FMA | {candidate['ocr_mean_ms']:.3f} | {candidate['ocr_p95_ms']:.3f} | {candidate['peak_rss_mib']:.3f} |",
+            f"| {baseline_label} | {baseline['ocr_mean_ms']:.3f} | {baseline['ocr_p95_ms']:.3f} | {baseline['peak_rss_mib']:.3f} |",
+            f"| {candidate_label} | {candidate['ocr_mean_ms']:.3f} | {candidate['ocr_p95_ms']:.3f} | {candidate['peak_rss_mib']:.3f} |",
             "",
             f"Median repeats: **{summary['repeats']}**",
             f"Mean speedup: **{comparison['mean_speedup']:.3f}x**",
@@ -167,7 +169,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--det-threads", type=int, default=0)
     parser.add_argument("--json-output", type=pathlib.Path)
     parser.add_argument("--markdown-output", type=pathlib.Path)
-    parser.add_argument("--title", default="Default vs Experimental AVX2+FMA OCR")
+    parser.add_argument("--title", default="Default vs Candidate OCR")
+    parser.add_argument("--baseline-label", default="Default")
+    parser.add_argument("--candidate-label", default="Candidate")
     args = parser.parse_args(argv)
     if min(args.warmup, args.iterations, args.repeats, args.workers) <= 0:
         parser.error("warmup, iterations, repeats and workers must be positive")
@@ -181,7 +185,9 @@ def main(argv: list[str] | None = None) -> int:
         args.baseline_driver, args.candidate_driver, benchmark_args, args.repeats
     )
     summary = summarize(baseline, candidate)
-    markdown = render_markdown(summary, args.title)
+    markdown = render_markdown(
+        summary, args.title, args.baseline_label, args.candidate_label
+    )
     if args.json_output:
         args.json_output.write_text(json.dumps(summary, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     if args.markdown_output:

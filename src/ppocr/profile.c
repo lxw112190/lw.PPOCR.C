@@ -109,6 +109,8 @@ void lw_pipeline_component_profile_accumulate(lw_pipeline_component_profile* des
                   source->execution.generic_node_invocations);
     add_saturated(&destination->execution.prepared_conv1x1_invocations,
                   source->execution.prepared_conv1x1_invocations);
+    add_saturated(&destination->execution.prepared_conv3x3_invocations,
+                  source->execution.prepared_conv3x3_invocations);
     add_saturated(&destination->execution.packed_conv1x1_invocations,
                   source->execution.packed_conv1x1_invocations);
     add_saturated(&destination->execution.packed_conv3x3_stride2_invocations,

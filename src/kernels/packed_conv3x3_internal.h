@@ -11,6 +11,10 @@
 
 #define LW_PACKED_CONV3X3_STRIDE2_OUTPUT_TILE 8u
 
+typedef void (*lw_packed_conv3x3_kernel_fn)(
+    const float* input, const float* packed_weights, const float* bias, float* output,
+    const int32_t input_dimensions[4], const int32_t output_dimensions[4]);
+
 int lw_packed_conv3x3_stride2_weight_count(uint32_t input_channels,
                                            uint32_t output_channels,
                                            uint64_t* weight_count);

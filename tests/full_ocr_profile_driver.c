@@ -439,7 +439,11 @@ int main(int argc, char** argv) {
     printf(",\"recognizer\":");
     print_execution_path_counters(&profile.recognizer.execution);
     printf("},");
-    printf("\"prepared_execution\":{\"prepared_nodes\":%llu,\"generic_nodes\":%llu,\"conv1x1\":%llu},", (unsigned long long)(profile.detector.execution.prepared_node_invocations + profile.classifier.execution.prepared_node_invocations + profile.recognizer.execution.prepared_node_invocations), (unsigned long long)(profile.detector.execution.generic_node_invocations + profile.classifier.execution.generic_node_invocations + profile.recognizer.execution.generic_node_invocations), (unsigned long long)(profile.detector.execution.prepared_conv1x1_invocations + profile.classifier.execution.prepared_conv1x1_invocations + profile.recognizer.execution.prepared_conv1x1_invocations));
+    printf("\"prepared_execution\":{\"prepared_nodes\":%llu,\"generic_nodes\":%llu,\"conv1x1\":%llu,\"conv3x3\":%llu},",
+           (unsigned long long)(profile.detector.execution.prepared_node_invocations + profile.classifier.execution.prepared_node_invocations + profile.recognizer.execution.prepared_node_invocations),
+           (unsigned long long)(profile.detector.execution.generic_node_invocations + profile.classifier.execution.generic_node_invocations + profile.recognizer.execution.generic_node_invocations),
+           (unsigned long long)(profile.detector.execution.prepared_conv1x1_invocations + profile.classifier.execution.prepared_conv1x1_invocations + profile.recognizer.execution.prepared_conv1x1_invocations),
+           (unsigned long long)(profile.detector.execution.prepared_conv3x3_invocations + profile.classifier.execution.prepared_conv3x3_invocations + profile.recognizer.execution.prepared_conv3x3_invocations));
     printf("\"graph_work_nanoseconds\":%llu,\"operators\":[",
            (unsigned long long)graph_work_nanoseconds);
     for (index = 1u; index < LW_EXECUTION_PROFILE_OPERATOR_CAPACITY; ++index) {

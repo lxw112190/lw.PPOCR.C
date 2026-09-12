@@ -182,11 +182,15 @@ class FullOcrProfileTest(unittest.TestCase):
                 prepared_execution = report["prepared_execution"]
                 if ARGUMENTS.expect_prepared:
                     self.assertGreater(prepared_execution["prepared_nodes"], 0)
-                    self.assertEqual(prepared_execution["prepared_nodes"], prepared_execution["conv1x1"])
+                    self.assertEqual(
+                        prepared_execution["prepared_nodes"],
+                        prepared_execution["conv1x1"] + prepared_execution["conv3x3"],
+                    )
                     self.assertGreater(prepared_execution["generic_nodes"], 0)
                 else:
                     self.assertEqual(prepared_execution["prepared_nodes"], 0)
                     self.assertEqual(prepared_execution["conv1x1"], 0)
+                    self.assertEqual(prepared_execution["conv3x3"], 0)
                 for component_name, component_key in (
                     ("detector", "det_invocations"),
                     ("classifier", "cls_invocations"),

@@ -103,6 +103,7 @@ typedef struct lw_parallel_conv_context {
     uint32_t groups;
     uint32_t packed;
     lw_packed_conv1x1_kernel_fn conv1x1_kernel;
+    lw_packed_conv3x3_kernel_fn conv3x3_kernel;
     lw_status statuses[LW_PARALLEL_MAX_WORKERS];
 } lw_parallel_conv_context;
 
@@ -218,6 +219,12 @@ static void execute_parallel_conv_slice(void* opaque, uint32_t worker_index,
         const uint32_t input_channels = (uint32_t)input_dimensions[1];
         weights = context->weights +
                   (size_t)((uint64_t)channel_begin * input_channels * 9u);
+        if (context->conv3x3_kernel != NULL) {
+            context->conv3x3_kernel(input, weights, bias, output, input_dimensions,
+                                    output_dimensions);
+            context->statuses[worker_index] = LW_STATUS_OK;
+            return;
+        }
         lw_packed_conv3x3_stride2_pad1_f32(
             input, weights, bias, output, input_dimensions, output_dimensions);
         context->statuses[worker_index] = LW_STATUS_OK;
@@ -246,6 +253,7 @@ static lw_status dispatch_parallel_conv(lw_session* session, const float* input,
                                         const int32_t strides[2], const int32_t dilations[2],
                                         const int32_t pads[4], uint32_t groups, uint32_t packed,
                                         lw_packed_conv1x1_kernel_fn conv1x1_kernel,
+                                        lw_packed_conv3x3_kernel_fn conv3x3_kernel,
                                         lw_execution_profile* profile) {
     lw_parallel_conv_context context;
     uint32_t worker_count;
@@ -265,6 +273,7 @@ static lw_status dispatch_parallel_conv(lw_session* session, const float* input,
     context.groups = groups;
     context.packed = packed;
     context.conv1x1_kernel = conv1x1_kernel;
+    context.conv3x3_kernel = conv3x3_kernel;
     worker_count = parallel_conv_worker_count(session, &context);
     if (profile != NULL && worker_count < LW_EXECUTION_PROFILE_THREAD_HISTOGRAM_CAPACITY &&
         profile->conv_thread_histogram[worker_count] != UINT64_MAX) {
@@ -427,6 +436,7 @@ static lw_status dispatch_node(lw_session* session, const uint8_t* node, uint32_
     uint32_t index;
     const lw_prepared_constant* prepared_constant;
     lw_packed_conv1x1_kernel_fn bound_kernel = NULL;
+    lw_packed_conv3x3_kernel_fn bound_conv3x3_kernel = NULL;
 
     if (output_count != 1u) {
         return LW_STATUS_UNSUPPORTED;
@@ -450,6 +460,10 @@ static lw_status dispatch_node(lw_session* session, const uint8_t* node, uint32_
     if (session->execution_nodes != NULL && node_index < session->execution_node_count &&
         session->execution_nodes[node_index].execution_kind == LW_BOUND_EXEC_CONV1X1_PACKED) {
         bound_kernel = session->execution_nodes[node_index].data.conv1x1.kernel;
+    } else if (session->execution_nodes != NULL &&
+               node_index < session->execution_node_count &&
+               session->execution_nodes[node_index].execution_kind == LW_BOUND_EXEC_CONV3X3_PACKED) {
+        bound_conv3x3_kernel = session->execution_nodes[node_index].data.conv3x3.kernel;
     }
 #endif
 
@@ -481,7 +495,7 @@ static lw_status dispatch_node(lw_session* session, const uint8_t* node, uint32_
                     input_count == 3u ? inputs[2] : NULL, output,
                     input_tensors[0]->dimensions, input_tensors[1]->dimensions,
                     output_tensor->dimensions, kernel, strides, dilations, pads, groups, 1u,
-                    bound_kernel, profile);
+                    bound_kernel, NULL, profile);
                 if (parallel_status == LW_STATUS_OK) {
                     return LW_STATUS_OK;
                 }
@@ -512,13 +526,19 @@ static lw_status dispatch_node(lw_session* session, const uint8_t* node, uint32_
                     input_count == 3u ? inputs[2] : NULL, output,
                     input_tensors[0]->dimensions, input_tensors[1]->dimensions,
                     output_tensor->dimensions, kernel, strides, dilations, pads, groups,
-                    LW_PREPARED_CONSTANT_CONV3X3_STRIDE2_PACKED8, NULL, profile);
+                    LW_PREPARED_CONSTANT_CONV3X3_STRIDE2_PACKED8, NULL, bound_conv3x3_kernel, profile);
                 if (parallel_status == LW_STATUS_OK) {
                     return LW_STATUS_OK;
                 }
-                lw_packed_conv3x3_stride2_pad1_f32(
-                    inputs[0], packed_weights, input_count == 3u ? inputs[2] : NULL,
-                    output, input_tensors[0]->dimensions, output_tensor->dimensions);
+                if (bound_conv3x3_kernel != NULL) {
+                    bound_conv3x3_kernel(inputs[0], packed_weights,
+                                         input_count == 3u ? inputs[2] : NULL, output,
+                                         input_tensors[0]->dimensions, output_tensor->dimensions);
+                } else {
+                    lw_packed_conv3x3_stride2_pad1_f32(
+                        inputs[0], packed_weights, input_count == 3u ? inputs[2] : NULL,
+                        output, input_tensors[0]->dimensions, output_tensor->dimensions);
+                }
                 return LW_STATUS_OK;
             }
         }
@@ -528,7 +548,7 @@ static lw_status dispatch_node(lw_session* session, const uint8_t* node, uint32_
         parallel_status = dispatch_parallel_conv(
             session, inputs[0], inputs[1], input_count == 3u ? inputs[2] : NULL, output,
             input_tensors[0]->dimensions, input_tensors[1]->dimensions, output_tensor->dimensions,
-            kernel, strides, dilations, pads, groups, 0u, NULL, profile);
+            kernel, strides, dilations, pads, groups, 0u, NULL, NULL, profile);
         if (parallel_status == LW_STATUS_OK) {
             return LW_STATUS_OK;
         }
@@ -959,7 +979,7 @@ static lw_status execute_bound_conv1x1(lw_session* session, const lw_bound_node*
     status = dispatch_parallel_conv(
         session, input, conv->packed_weights, bias, output, input_tensor->dimensions,
         weight_dimensions, output_tensor->dimensions, kernel, strides, dilations, pads, 1u,
-        LW_PREPARED_CONSTANT_CONV1X1_PACKED4, conv->kernel, profile);
+        LW_PREPARED_CONSTANT_CONV1X1_PACKED4, conv->kernel, NULL, profile);
     if (status == LW_STATUS_OK) {
         return LW_STATUS_OK;
     }
@@ -967,6 +987,41 @@ static lw_status execute_bound_conv1x1(lw_session* session, const lw_bound_node*
                  input_tensor->dimensions, output_tensor->dimensions);
     return LW_STATUS_OK;
 }
+static lw_status execute_bound_conv3x3(lw_session* session, const lw_bound_node* bound,
+                                       uint32_t graph_input_index, const float* graph_input,
+                                       lw_execution_profile* profile) {
+    const lw_bound_conv3x3* conv = &bound->data.conv3x3;
+    const lw_runtime_tensor* input_tensor = &session->tensors[conv->input_index];
+    const lw_runtime_tensor* output_tensor = &session->tensors[conv->output_index];
+    const float* input = tensor_input_data(session, conv->input_index, graph_input_index, graph_input);
+    const float* bias = conv->bias_index == UINT32_MAX
+                           ? NULL
+                           : tensor_input_data(session, conv->bias_index, graph_input_index, graph_input);
+    float* output = tensor_output_data(session, conv->output_index);
+    int32_t weight_dimensions[4] = {output_tensor->dimensions[1], input_tensor->dimensions[1], 3, 3};
+    int32_t kernel[2] = {3, 3};
+    int32_t strides[2] = {2, 2};
+    int32_t dilations[2] = {1, 1};
+    int32_t pads[4] = {1, 1, 1, 1};
+    lw_status status;
+
+    if (input == NULL || output == NULL || conv->kernel == NULL ||
+        input_tensor->dtype != LW_DTYPE_F32 || output_tensor->dtype != LW_DTYPE_F32 ||
+        (conv->bias_index != UINT32_MAX && bias == NULL)) {
+        return LW_STATUS_UNSUPPORTED;
+    }
+    status = dispatch_parallel_conv(
+        session, input, conv->packed_weights, bias, output, input_tensor->dimensions,
+        weight_dimensions, output_tensor->dimensions, kernel, strides, dilations, pads, 1u,
+        LW_PREPARED_CONSTANT_CONV3X3_STRIDE2_PACKED8, NULL, conv->kernel, profile);
+    if (status == LW_STATUS_OK) {
+        return LW_STATUS_OK;
+    }
+    conv->kernel(input, conv->packed_weights, bias, output,
+                 input_tensor->dimensions, output_tensor->dimensions);
+    return LW_STATUS_OK;
+}
+
 static lw_status execute_session_nodes_f32(lw_session* session, const float* input,
                                            uint64_t input_element_count, uint32_t node_limit,
                                            lw_execution_profile* profile, lw_error* error) {
@@ -1031,28 +1086,44 @@ static lw_status execute_session_nodes_f32(lw_session* session, const float* inp
             session->execution_nodes[node_index].execution_kind == LW_BOUND_EXEC_CONV1X1_PACKED) {
             status = execute_bound_conv1x1(session, &session->execution_nodes[node_index],
                                           graph_input_index, input, profile);
-            if (profile != NULL) {
-                if (profile->prepared_binding_lookups != UINT64_MAX) {
-                    ++profile->prepared_binding_lookups;
-                }
-                if (profile->prepared_binding_hits != UINT64_MAX) {
-                    ++profile->prepared_binding_hits;
-                }
-                if (profile->prepared_node_invocations != UINT64_MAX) {
-                    ++profile->prepared_node_invocations;
-                }
+        } else if (session->execution_nodes != NULL &&
+                   node_index < session->execution_node_count &&
+                   session->execution_nodes[node_index].execution_kind == LW_BOUND_EXEC_CONV3X3_PACKED) {
+            status = execute_bound_conv3x3(session, &session->execution_nodes[node_index],
+                                          graph_input_index, input, profile);
+        } else {
+            status = dispatch_node(session, node, node_index, graph_input_index, input,
+                                   simd_level, profile);
+            if (profile != NULL && profile->generic_node_invocations != UINT64_MAX) {
+                ++profile->generic_node_invocations;
+            }
+        }
+        if (profile != NULL && session->execution_nodes != NULL &&
+            node_index < session->execution_node_count &&
+            session->execution_nodes[node_index].execution_kind != LW_BOUND_EXEC_GENERIC) {
+            if (profile->prepared_binding_lookups != UINT64_MAX) {
+                ++profile->prepared_binding_lookups;
+            }
+            if (profile->prepared_binding_hits != UINT64_MAX) {
+                ++profile->prepared_binding_hits;
+            }
+            if (profile->prepared_node_invocations != UINT64_MAX) {
+                ++profile->prepared_node_invocations;
+            }
+            if (session->execution_nodes[node_index].execution_kind == LW_BOUND_EXEC_CONV1X1_PACKED) {
                 if (profile->prepared_conv1x1_invocations != UINT64_MAX) {
                     ++profile->prepared_conv1x1_invocations;
                 }
                 if (profile->packed_conv1x1_invocations != UINT64_MAX) {
                     ++profile->packed_conv1x1_invocations;
                 }
-            }
-        } else {
-            status = dispatch_node(session, node, node_index, graph_input_index, input,
-                                   simd_level, profile);
-            if (profile != NULL && profile->generic_node_invocations != UINT64_MAX) {
-                ++profile->generic_node_invocations;
+            } else {
+                if (profile->prepared_conv3x3_invocations != UINT64_MAX) {
+                    ++profile->prepared_conv3x3_invocations;
+                }
+                if (profile->packed_conv3x3_stride2_invocations != UINT64_MAX) {
+                    ++profile->packed_conv3x3_stride2_invocations;
+                }
             }
         }
 #else
