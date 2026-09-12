@@ -115,3 +115,22 @@ memory increase is larger than the Conv1x1-only path. Before changing
 the default, repeat this matrix on the release performance runner and verify
 AVX2, SSE2, NEON, and LSX fallback behavior. The public API and LWM format are
 unchanged.
+
+## Reproducible x64 A/B workflow
+
+The manual `Native x64 OCR Performance` workflow now includes a separate
+`Native x64 Prepared Execution A/B` job. It downloads the same converted Tiny
+assets used by the default profile, builds two otherwise identical Windows x64
+Release trees, and runs:
+
+- `LW_EXPERIMENTAL_PREPARED_EXECUTION=OFF` as the baseline;
+- `LW_EXPERIMENTAL_PREPARED_EXECUTION=ON` as the candidate;
+- the `full_ocr_operator_profile` gate with `--expect-prepared` on the candidate;
+- three alternating paired runs of `full-ocr-intra-benchmark` at REC width 960,
+  four OCR workers, and four detector threads.
+
+The job uses `tools/compare_ocr_dispatch_profiles.py`, so every pair must keep
+the same 16-line result and text checksum. The Markdown and JSON comparison
+are uploaded as `lw-ppocr-x64-prepared-results-<commit>`. This job measures the
+candidate on a hosted AVX2 runner; it does not enable the option in the normal
+build and does not make a default-on recommendation by itself.
