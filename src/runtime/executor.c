@@ -953,6 +953,7 @@ static void profile_fused_gelu(lw_execution_profile* profile, const lw_session* 
     }
 }
 
+#if defined(LW_EXPERIMENTAL_PREPARED_EXECUTION)
 static lw_status execute_bound_conv1x1(lw_session* session, const lw_bound_node* bound,
                                        uint32_t graph_input_index, const float* graph_input,
                                        lw_execution_profile* profile) {
@@ -1021,6 +1022,8 @@ static lw_status execute_bound_conv3x3(lw_session* session, const lw_bound_node*
                  input_tensor->dimensions, output_tensor->dimensions);
     return LW_STATUS_OK;
 }
+
+#endif
 
 static lw_status execute_session_nodes_f32(lw_session* session, const float* input,
                                            uint64_t input_element_count, uint32_t node_limit,

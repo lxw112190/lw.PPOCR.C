@@ -9,6 +9,7 @@
 #include <stdint.h>
 #include <stdlib.h>
 
+#if defined(LW_EXPERIMENTAL_PREPARED_EXECUTION)
 static lw_packed_conv3x3_kernel_fn select_conv3x3_kernel(const lw_session* session,
                                                           uint16_t* kernel_id) {
     if (lw_simd_level_is_avx2(session->cpu.simd)) {
@@ -40,6 +41,8 @@ static lw_packed_conv1x1_kernel_fn select_conv1x1_kernel(const lw_session* sessi
     *kernel_id = LW_CONV1X1_KERNEL_SCALAR;
     return lw_scalar_packed_conv1x1_f32;
 }
+
+#endif
 
 void lw_free_execution_nodes(lw_session* session) {
     if (session == NULL) {
