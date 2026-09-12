@@ -953,7 +953,7 @@ void lw_avx2_packed_conv3x3_stride2_pad1_f32(
 #endif
 }
 
-#if defined(LW_EXPERIMENTAL_AVX2_FMA_DISPATCH)
+#if defined(LW_AVX2_FMA_CONV3X3_DISPATCH)
 #if LW_COMPILES_AVX2_CONV3X3 && (defined(__GNUC__) || defined(__clang__))
 __attribute__((target("avx2,fma")))
 #endif

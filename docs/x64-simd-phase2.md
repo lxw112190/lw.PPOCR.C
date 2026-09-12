@@ -197,3 +197,18 @@ If the candidate does not meet these gates, remove it and retain the current
 non-FMA AVX2 path. The shape-gated 8x8 kernel remains an x64 benchmark candidate only
 until the same shape-aware and end-to-end gates are met; it is not part of the
 production dispatcher. AVX512 remains a later, profile-driven experiment.
+
+## Promoted narrow Conv3x3 FMA dispatch
+
+The measured REC Node 6 Conv3x3 path is now controlled by the independent
+`LW_AVX2_FMA_CONV3X3_DISPATCH` option, which defaults to `ON` for native builds
+and remains disabled for WebAssembly. Runtime dispatch still requires AVX2+FMA
+capability and an exact Node 6 geometry (`24 -> 48` channels, input height 24,
+REC widths 320 or 960). All other Conv3x3 shapes continue to use the regular
+AVX2 or scalar packed kernel.
+
+This promotion is intentionally separate from
+`LW_EXPERIMENTAL_AVX2_FMA_DISPATCH`: the broader Conv1x1 and terminal MatMul FMA
+candidates remain opt-in because their shape matrix still contains regressions.
+The promoted path passed the x64 full-OCR A/B checksum and 100-image quality
+parity gates with no measurable RSS increase.

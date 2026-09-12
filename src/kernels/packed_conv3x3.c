@@ -146,7 +146,7 @@ void lw_packed_conv3x3_stride2_pad1_f32(
     const float* input, const float* packed_weights, const float* bias, float* output,
     const int32_t input_dimensions[4], const int32_t output_dimensions[4]) {
     const lw_simd_level simd_level = lw_detect_simd_level();
-#if defined(LW_EXPERIMENTAL_AVX2_FMA_DISPATCH)
+#if defined(LW_AVX2_FMA_CONV3X3_DISPATCH)
     const lw_cpu_capabilities capabilities = lw_get_cpu_capabilities();
     if (lw_simd_level_is_avx2(simd_level) && capabilities.has_avx2_fma &&
         input_dimensions[0] == 1 && input_dimensions[1] == 24 &&

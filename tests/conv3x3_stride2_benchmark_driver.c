@@ -86,7 +86,7 @@ static uint64_t checksum_bytes(const void* data, size_t bytes) {
     return hash;
 }
 
-#if defined(LW_EXPERIMENTAL_AVX2_FMA_DISPATCH)
+#if defined(LW_AVX2_FMA_CONV3X3_DISPATCH)
 static float max_abs_difference(const float* expected, const float* actual, uint64_t count) {
     uint64_t index;
     float maximum = 0.0f;
@@ -202,7 +202,7 @@ static int run_case(const benchmark_case* item, uint32_t target_width, uint32_t 
     }
     lw_packed_conv3x3_stride2_pad1_f32(
         input, packed_weights, bias, packed_output, input_dimensions, output_dimensions);
-#if defined(LW_EXPERIMENTAL_AVX2_FMA_DISPATCH)
+#if defined(LW_AVX2_FMA_CONV3X3_DISPATCH)
     if (!isfinite(max_abs_difference(reference, packed_output, output_count)) ||
         max_abs_difference(reference, packed_output, output_count) > 1.0e-2f) {
 #else
@@ -238,7 +238,7 @@ static int run_case(const benchmark_case* item, uint32_t target_width, uint32_t 
         dispatched_started <= 0.0 || dispatched_finished <= dispatched_started ||
         packed_started <= 0.0 || packed_finished <= packed_started ||
         memcmp(reference, output, output_bytes) != 0 ||
-#if defined(LW_EXPERIMENTAL_AVX2_FMA_DISPATCH)
+#if defined(LW_AVX2_FMA_CONV3X3_DISPATCH)
         !isfinite(max_abs_difference(reference, packed_output, output_count)) ||
         max_abs_difference(reference, packed_output, output_count) > 1.0e-2f) {
 #else
