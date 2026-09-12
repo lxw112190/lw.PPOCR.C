@@ -124,7 +124,10 @@ def summarize(
 
 
 def render_markdown(
-    summary: dict[str, Any], title: str, baseline_label: str, candidate_label: str
+    summary: dict[str, Any],
+    title: str,
+    baseline_label: str = "Default AVX2",
+    candidate_label: str = "Experimental AVX2+FMA",
 ) -> str:
     baseline = summary["baseline"]
     candidate = summary["candidate"]
