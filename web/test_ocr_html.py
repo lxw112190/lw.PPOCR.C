@@ -93,6 +93,7 @@ def main() -> int:
         )
         assert page.locator("#use-cls").is_enabled()
         assert page.locator("#status").get_attribute("data-loading") is None
+        assert page.locator("#clear").is_disabled()
 
         assert page.evaluate("typeof window.LwPpocr.create") == "function"
         assert page.evaluate("window.LwPpocr.webAbiVersion") == 1
@@ -268,8 +269,22 @@ def main() -> int:
             assert 0 <= line["rec_score"] <= 1
             assert 0 <= line["cls_score"] <= 1
 
+        # Clear restores the initial state and permits selecting the same file
+        # again without relying on a full page reload.
+        assert page.locator("#clear").is_enabled()
+        page.locator("#clear").click()
+        page.wait_for_function(
+            "() => document.querySelector('#clear').disabled && "
+            "document.querySelector('#run').disabled && "
+            "document.querySelector('#status').textContent.includes('请选择')",
+            timeout=180_000,
+        )
+        assert page.locator("#results .empty").is_visible()
+        cleared_snapshot = page.evaluate("window.__lwOcrTest.snapshot()")
+        assert not cleared_snapshot["hasResults"], cleared_snapshot
+        assert not cleared_snapshot["exportEnabled"], cleared_snapshot
+
         # A newly selected image invalidates old export data immediately.
-        page.locator("#file").set_input_files([])
         page.locator("#file").set_input_files(str(sample))
         page.wait_for_function(
             "() => !document.querySelector('#run').disabled && "

@@ -109,7 +109,10 @@ def main() -> int:
 
         with urllib.request.urlopen(base_url + "/", timeout=10) as response:
             page = response.read().decode("utf-8")
-            assert response.status == 200 and 'id="overlay"' in page
+            assert response.status == 200
+            assert 'id="overlay"' in page
+            assert 'id="clear"' in page
+            assert '>清空</button>' in page
 
         image = args.sample.read_bytes()
         status, binary = request_json(

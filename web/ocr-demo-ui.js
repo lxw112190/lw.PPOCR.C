@@ -23,6 +23,7 @@
   const readingOrderInput = document.getElementById("reading-order");
   const statusNode = document.getElementById("status");
   const statsNode = document.getElementById("stats");
+  const clearButton = document.getElementById("clear");
   const canvas = document.getElementById("canvas");
   const overlay = document.getElementById("overlay");
   const workspace = document.getElementById("workspace");
@@ -538,6 +539,7 @@
     clearPdfDiagnostics();
     runButton.disabled = true;
     setMobilePanel("image");
+    refreshSourceControls();
     updatePdfControls();
     await disposeSource(previous);
     if (!file) {
@@ -563,6 +565,7 @@
             prepared.width + "×" + prepared.height + "，点击“开始识别”。" :
           "图片已选择，正在等待 OCR 引擎就绪……";
         runButton.disabled = !engine;
+        refreshSourceControls();
         return preparedSource;
       } catch (error) {
         if (sequence === previewSequence) {
@@ -603,6 +606,7 @@
         '<div class="empty">PDF 已准备好，正在等待 OCR 引擎就绪。</div>';
       await renderPdfPreview(1);
       runButton.disabled = !engine;
+      refreshSourceControls();
       return source;
     } catch (error) {
       if (documentHandle) {
@@ -736,6 +740,7 @@
     cameraInput.disabled = disabled;
     if (pickFileButton) pickFileButton.disabled = disabled;
     if (pickCameraButton) pickCameraButton.disabled = disabled;
+    if (clearButton) clearButton.disabled = disabled || !source;
   }
   function openNativeFilePicker(input, sourceName) {
     if (!input || input.disabled) return;
@@ -992,6 +997,23 @@
     runButton.disabled = true;
     statusNode.textContent = "正在停止；若当前页已进入 OCR，将在本页完成后停止…";
   }
+  async function resetDemo() {
+    if (running) return;
+    try {
+      fileInput.value = "";
+      cameraInput.value = "";
+    } catch (_) {
+      // Keep resetting application state if an older browser rejects it.
+    }
+    await selectFile(null);
+    canvas.width = 0;
+    canvas.height = 0;
+    canvas.style.width = "0px";
+    canvas.style.height = "0px";
+    overlay.removeAttribute("viewBox");
+    if (engine) updateStats(engine.getStatus());
+    refreshSourceControls();
+  }
   async function navigatePdf(delta) {
     if (!source || source.kind !== "pdf" || running || pdfPreviewRunning) return;
     const pageNumber = Math.max(1, Math.min(source.pageCount, source.currentPage + delta));
@@ -1057,6 +1079,9 @@
     if (running) cancelPdfOcr();
     else runOcr().catch(() => {});
   });
+  clearButton.addEventListener("click", () => resetDemo().catch(error => {
+    statusNode.textContent = "清空失败：" + error;
+  }));
   pdfPrev.addEventListener("click", () => navigatePdf(-1).catch(console.error));
   pdfNext.addEventListener("click", () => navigatePdf(1).catch(console.error));
   copyTextButton.addEventListener("click", () => copyPlainText().catch(error => {
@@ -1146,7 +1171,8 @@
     selectClipboardImage,
     handlePaste,
     runOcr,
-    cancelPdfOcr
+    cancelPdfOcr,
+    resetDemo
   };
   window.addEventListener("beforeunload", () => {
     if (source && source.kind === "pdf") source.document.close();
