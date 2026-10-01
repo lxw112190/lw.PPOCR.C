@@ -336,6 +336,7 @@ jobs:
             if [[ ! -s "${model_dir}/runtime-assets.json" ]]; then
               python tools/prepare_ppocrv6_runtime_variant.py \
                 --variant "${variant}" --build-dir build-wasm \
+                --model-format onnx \
                 --output-dir "${model_dir}"
             fi
             iterations=5

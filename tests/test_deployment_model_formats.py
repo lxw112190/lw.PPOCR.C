@@ -8,12 +8,37 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 from pathlib import Path
+
+from tools.prepare_ppocrv6_runtime_variant import prepare
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
 class DeploymentModelFormatTests(unittest.TestCase):
+    def test_onnx_staging_needs_no_converted_build_models(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            missing_build = root / "no-build-models"
+            with patch("tools.prepare_ppocrv6_runtime_variant.executable_model") as lookup, \
+                    patch("tools.prepare_ppocrv6_runtime_variant.run_conversion") as convert:
+                for variant in ("tiny", "small"):
+                    with self.subTest(variant=variant):
+                        output = root / variant
+                        report = prepare(variant, missing_build, output, ROOT,
+                                         model_format="onnx")
+                        self.assertEqual(report["model_format"], "onnx")
+                        self.assertEqual(set(report["assets"]),
+                                         {"det.onnx", "cls.onnx", "rec.onnx", "ppocr_keys.txt"})
+                        for name, digest in report["assets"].items():
+                            self.assertEqual(digest, hashlib.sha256((output / name).read_bytes())
+                                             .hexdigest())
+                        self.assertFalse((output / "cls.lwm").exists())
+                lookup.assert_not_called()
+                convert.assert_not_called()
+            self.assertFalse(missing_build.exists())
+
     @unittest.skipUnless(shutil.which("node"), "Node.js is required for asset selection regression")
     def test_node_manifest_wins_over_stale_models(self):
         with tempfile.TemporaryDirectory() as temporary:

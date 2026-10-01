@@ -59,6 +59,7 @@ jobs:
           set -euo pipefail
           python tools/prepare_ppocrv6_runtime_variant.py \
             --variant small --build-dir build-wasm-pw4 \
+            --model-format onnx \
             --output-dir build-wasm-pw4/runtime-models/ppocrv6-small
 
       - name: Run paired Tiny and Small full OCR in 4/2/2/4 order
