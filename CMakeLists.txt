@@ -16,6 +16,8 @@ option(LW_WASM_COMPILED_REC
     "Experimentally run WASM REC on the compiled physical backend" OFF)
 option(LW_WASM_FINE_REC_WIDTHS
     "Use 64-pixel adaptive REC width buckets in compiled WASM OCR" OFF)
+option(LW_NATIVE_FINE_REC_WIDTHS
+    "Experimentally reduce native compiled REC padding with 64-pixel widths" OFF)
 option(LW_WASM_COMPILED_DET
     "Run WASM DET on the compiled NHWC backend when compiled REC is enabled" ON)
 option(LW_WASM_REC_SIMD_KERNELS
@@ -366,6 +368,10 @@ endif()
 if(LW_WASM_FINE_REC_WIDTHS AND NOT LW_WASM_COMPILED_REC_ENABLED)
     message(FATAL_ERROR "LW_WASM_FINE_REC_WIDTHS requires compiled SIMD128 WASM REC")
 endif()
+if(LW_NATIVE_FINE_REC_WIDTHS AND
+   (NOT LW_X64_REC_FAST_ENABLED OR NOT CMAKE_SIZEOF_VOID_P EQUAL 8))
+    message(FATAL_ERROR "LW_NATIVE_FINE_REC_WIDTHS requires compiled native x64 REC")
+endif()
 if(LW_X64_REC_FAST_ENABLED OR LW_WASM_COMPILED_REC_ENABLED)
     list(APPEND LW_PPOCR_C_SOURCES
         src/runtime/layout_planner.c
@@ -450,6 +456,9 @@ if(LW_SYSTEM_PROCESSOR_LOWER MATCHES "^(loongarch64|loong64)$")
 endif()
 
 function(lw_configure_runtime_target target)
+    if(LW_NATIVE_FINE_REC_WIDTHS AND LW_X64_REC_FAST_ENABLED)
+        target_compile_definitions(${target} PRIVATE LW_NATIVE_FINE_REC_WIDTHS=1)
+    endif()
     target_include_directories(${target}
         PUBLIC
             "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
@@ -1412,6 +1421,28 @@ if(BUILD_TESTING AND NOT EMSCRIPTEN)
             -Wall -Wextra -Wpedantic -Werror)
     endif()
     add_test(NAME nhwc_depthwise_portable COMMAND nhwc-depthwise-portable-driver)
+
+    foreach(policy IN ITEMS default fine)
+        add_executable(rec-width-policy-${policy} tests/rec_width_policy_driver.c)
+        target_include_directories(rec-width-policy-${policy} PRIVATE
+            "${CMAKE_CURRENT_SOURCE_DIR}/src/ppocr")
+        target_compile_features(rec-width-policy-${policy} PRIVATE c_std_11)
+        if(policy STREQUAL "fine")
+            target_compile_definitions(rec-width-policy-${policy} PRIVATE
+                LW_NATIVE_FINE_REC_WIDTHS=1 LW_TEST_FINE_WIDTHS=1)
+        endif()
+        if(MSVC)
+            target_compile_options(rec-width-policy-${policy} PRIVATE /W4 /WX /utf-8)
+        else()
+            target_compile_options(rec-width-policy-${policy} PRIVATE
+                -Wall -Wextra -Wpedantic -Werror)
+        endif()
+        add_test(NAME rec_width_policy_${policy} COMMAND rec-width-policy-${policy})
+    endforeach()
+    add_test(NAME onnx_e2e_comparison_contract
+        COMMAND "${Python3_EXECUTABLE}" -m unittest -v tests.test_onnx_e2e_comparison)
+    set_tests_properties(onnx_e2e_comparison_contract PROPERTIES
+        WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}" TIMEOUT 30)
 
     add_test(
         NAME source_final_newline_contract

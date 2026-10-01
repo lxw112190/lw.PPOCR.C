@@ -1,0 +1,63 @@
+name: Native x64 ONNX fine REC widths A/B
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  compare:
+    runs-on: windows-2022
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements-converter.txt
+      - name: Install validation dependencies
+        run: python -m pip install -r requirements-converter.txt
+      - name: Build identical source with default and fine widths
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $options = @('-G', 'Visual Studio 17 2022', '-A', 'x64',
+            '-DBUILD_TESTING=ON', '-DLW_BUILD_HTTP_DEMO=OFF',
+            '-DLW_BUILD_CSHARP_DEMOS=OFF', '-DLW_EXPERIMENTAL_AVX2_FAST_PATH=ON',
+            '-DLW_REC_RESIDENT_WIDTHS=OFF', "-DPython3_EXECUTABLE=$((Get-Command python).Source)")
+          cmake -S . -B build/default @options -DLW_NATIVE_FINE_REC_WIDTHS=OFF
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cmake -S . -B build/fine @options -DLW_NATIVE_FINE_REC_WIDTHS=ON
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cmake --build build/default --config Release --parallel 2 --target lw-ocr-benchmark lw-ocr-ppm lwm-inspect rec-graph-driver rec-width-policy-default rec-width-policy-fine
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cmake --build build/fine --config Release --parallel 2 --target lw-ocr-benchmark lw-ocr-ppm
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Gate unchanged production output and comparison contracts
+        run: ctest --test-dir build/default -C Release -R "^(native_onnx_import|rec_width_policy_default|rec_width_policy_fine|onnx_e2e_comparison_contract)$" --output-on-failure
+      - name: Three models, 1/4 workers, paired full OCR and text diffs
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          python tools/compare_onnx_e2e.py --baseline build/default/Release/lw-ocr-benchmark.exe --candidate build/fine/Release/lw-ocr-benchmark.exe --sample build/default/models/sample.ppm --rounds 3 --iterations 5 --report-text-differences --collect-text --output build/onnx-width-comparison
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Publish diagnostic summary
+        if: always()
+        shell: pwsh
+        run: |
+          if (Test-Path build/onnx-width-comparison/report.md) {
+            Get-Content build/onnx-width-comparison/report.md -Raw | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+          }
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: native-x64-onnx-width-comparison-${{ github.sha }}
+          path: |
+            build/onnx-width-comparison
+            build/default/onnx-import-report.json
+            build/default/Testing/Temporary/LastTest.log
+          if-no-files-found: warn

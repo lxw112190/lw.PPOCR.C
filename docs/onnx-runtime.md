@@ -129,3 +129,7 @@ error cap of 1e-3; OCR full text remains an exact SHA-256 gate.
 Browser SDK/HTML and Node lifecycle tests exercise the packaged ONNX assets
 through the same existing golden contracts. Android AAR/APK and other platform
 builds are verified by their CI workflows, not claimed from a local x64 test.
+
+Native x64 end-to-end padding experiments and their reproducible three-model
+1/4-worker A/B are documented in [finer REC widths](native-fine-rec-widths.md).
+That option remains off by default and does not weaken production golden tests.
