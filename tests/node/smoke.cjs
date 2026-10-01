@@ -88,7 +88,29 @@ async function createRuntime(root, useCls, modelRoot = root) {
   const factory = require(path.join(root, "runtime.cjs"));
   const runtime = await factory({});
   runtime.FS.mkdir("/models");
-  for (const name of ["det.lwm", "cls.lwm", "rec.lwm", "ppocr_keys.txt"]) {
+  const stagedManifest = path.join(modelRoot, "runtime-assets.json");
+  const packageManifest = path.join(modelRoot, "manifest.json");
+  const stagedAssets = fs.existsSync(stagedManifest) ?
+    JSON.parse(fs.readFileSync(stagedManifest, "utf8")).assets : null;
+  const packageAssets = !stagedAssets && fs.existsSync(packageManifest) ?
+    JSON.parse(fs.readFileSync(packageManifest, "utf8")).assets : null;
+  const names = ["det", "cls", "rec"].map(component => {
+    let name;
+    if (stagedAssets) {
+      name = Object.prototype.hasOwnProperty.call(stagedAssets, component + ".onnx") ?
+        component + ".onnx" : component + ".lwm";
+    } else if (packageAssets) {
+      name = packageAssets[component].path;
+    } else {
+      name = fs.existsSync(path.join(modelRoot, component + ".onnx")) ?
+        component + ".onnx" : component + ".lwm";
+    }
+    if (name !== component + ".onnx" && name !== component + ".lwm")
+      fail("unsupported model asset path: " + name);
+    return name;
+  });
+  names.push("ppocr_keys.txt");
+  for (const name of names) {
     runtime.FS.writeFile(`/models/${name}`, fs.readFileSync(path.join(modelRoot, name)));
   }
   const status = runtime._lw_web_init(useCls ? 1 : 0);

@@ -81,32 +81,12 @@ jobs:
             "ndk;27.2.12479018"
 
       # ----------------------------------------------------------------------
-      # Prepare PP-OCR LWM model assets.
+      # Ship official ONNX bytes. No Python ONNX conversion is required.
       # ----------------------------------------------------------------------
-      - name: Prepare LWM assets
+      - name: Prepare official ONNX assets
         run: |
-          python -m pip install \
-            --disable-pip-version-check \
-            -r requirements-converter.txt
-
-          cmake \
-            -S . \
-            -B build-android-models \
-            -G Ninja \
-            -DLW_BUILD_HTTP_DEMO=OFF \
-            -DLW_BUILD_CSHARP_DEMOS=OFF \
-            -DBUILD_TESTING=OFF
-
-          cmake \
-            --build build-android-models \
-            --target \
-              convert_det_model \
-              convert_cls_model \
-              convert_rec_model \
-            -j 2
-
           python tools/prepare_android_models.py \
-            --build-models build-android-models \
+            --onnx-models models/ppocrv6-tiny \
             --dictionary models/ppocrv6-tiny/ppocr_keys.txt \
             --output android/generated-model-assets/lw-ppocr/models
 
@@ -263,13 +243,13 @@ jobs:
             | grep -q 'jni/arm64-v8a/liblw_ppocr_android.so'
 
           unzip -l "$AAR" \
-            | grep -q 'assets/lw-ppocr/models/det.lwm'
+            | grep -q 'assets/lw-ppocr/models/det.onnx'
 
           unzip -l "$AAR" \
-            | grep -q 'assets/lw-ppocr/models/cls.lwm'
+            | grep -q 'assets/lw-ppocr/models/cls.onnx'
 
           unzip -l "$AAR" \
-            | grep -q 'assets/lw-ppocr/models/rec.lwm'
+            | grep -q 'assets/lw-ppocr/models/rec.onnx'
 
           unzip -l "$AAR" \
             | grep -q 'assets/lw-ppocr/models/ppocr_keys.txt'

@@ -329,7 +329,7 @@ namespace LwPpocrWinForms
         {
             using (FolderBrowserDialog dialog = new FolderBrowserDialog())
             {
-                dialog.Description = "选择包含 det.lwm、cls.lwm、rec.lwm 和 ppocr_keys.txt 的目录";
+                dialog.Description = "选择包含 det/cls/rec（ONNX 或 LWM）和 ppocr_keys.txt 的目录";
                 if (Directory.Exists(modelDirectoryInput.Text))
                     dialog.SelectedPath = modelDirectoryInput.Text;
                 if (dialog.ShowDialog(this) != DialogResult.OK) return;
@@ -371,9 +371,9 @@ namespace LwPpocrWinForms
                 return 0.0;
 
             ReleaseEngine();
-            string detector = Path.Combine(selectedDirectory, "det.lwm");
-            string classifier = Path.Combine(selectedDirectory, "cls.lwm");
-            string recognizer = Path.Combine(selectedDirectory, "rec.lwm");
+            string detector = ResolveModel(selectedDirectory, "det");
+            string classifier = ResolveModel(selectedDirectory, "cls");
+            string recognizer = ResolveModel(selectedDirectory, "rec");
             string dictionary = Path.Combine(selectedDirectory, "ppocr_keys.txt");
             Stopwatch watch = Stopwatch.StartNew();
             engine = new NativeOcr(detector, classifier, recognizer, dictionary,
@@ -384,6 +384,12 @@ namespace LwPpocrWinForms
             engineModelDirectory = selectedDirectory;
             UpdateRuntimeStatus();
             return watch.Elapsed.TotalMilliseconds;
+        }
+
+        private static string ResolveModel(string directory, string name)
+        {
+            string onnx = Path.Combine(directory, name + ".onnx");
+            return File.Exists(onnx) ? onnx : Path.Combine(directory, name + ".lwm");
         }
 
         private void StartRecognition(bool performanceTest)

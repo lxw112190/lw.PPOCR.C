@@ -149,6 +149,11 @@ def main() -> int:
     copy_native(native_dir, output / "native", args.platform)
     copy_tree_files(stage_dir / "examples" / "java-jni" / "java", output / "java", JAVA_FILES)
     copy_tree_files(stage_dir / "models", output / "models", MODEL_FILES)
+    # New runtime prefers official ONNX, while old consumers can keep LWM.
+    for name in ("det.onnx", "cls.onnx", "rec.onnx"):
+        source = stage_dir / "models" / name
+        if source.is_file():
+            copy_file(source, output / "models" / name)
     copy_file(repo / "LICENSE", output / "LICENSE")
     copy_file(repo / "THIRD-PARTY-NOTICES.md", output / "THIRD-PARTY-NOTICES.md")
     copy_file(repo / "licenses" / "PaddleOCR-models-APACHE-2.0.txt",

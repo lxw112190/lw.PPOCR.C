@@ -17,6 +17,7 @@
 
 #include <stddef.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #if defined(LW_NODE_WASM_PROFILE)
@@ -33,6 +34,13 @@
  * detail instead of shrinking those lines to 320. Short lines are still
  * aspect-ratio-preserved and padded on the right by the shared preprocessor. */
 #define LW_WEB_REC_TARGET_WIDTH 960u
+
+static const char* web_model_path(const char* onnx, const char* lwm) {
+    FILE* file = fopen(onnx, "rb");
+    if (file == NULL) return lwm;
+    fclose(file);
+    return onnx;
+}
 
 #if defined(LW_NODE_WASM_PROFILE)
 static uint64_t web_profile_now(void* context) {
@@ -208,8 +216,10 @@ LW_WEB_API int lw_web_init(int use_classifier) {
     lw_ocr_options_init(&options);
     options.use_direction_classification = use_classifier ? 1u : 0u;
     options.recognizer.target_width = LW_WEB_REC_TARGET_WIDTH;
-    status = lw_ocr_create("/models/det.lwm", use_classifier ? "/models/cls.lwm" : NULL,
-                           "/models/rec.lwm", "/models/ppocr_keys.txt", &options, &g_ocr,
+    status = lw_ocr_create(web_model_path("/models/det.onnx", "/models/det.lwm"),
+                           use_classifier ? web_model_path("/models/cls.onnx", "/models/cls.lwm") : NULL,
+                           web_model_path("/models/rec.onnx", "/models/rec.lwm"),
+                           "/models/ppocr_keys.txt", &options, &g_ocr,
                            &g_error);
     if (status != LW_STATUS_OK) {
         return (int)status;

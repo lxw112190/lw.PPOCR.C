@@ -5,6 +5,11 @@ Emscripten runtime, WebAssembly, DET/CLS/REC models, and dictionary in one
 JavaScript file. Images stay in the browser; using the SDK does not require the
 native HTTP Demo or a model download at runtime.
 
+Source builds embed official ONNX by default; the pure-C WASM runtime imports
+them locally at initialization. The `LwPpocr` API, single-file offline behavior
+and Worker/main-thread fallback remain unchanged. For old LWM packaging use
+`-DLW_DEPLOY_ONNX_MODELS=OFF`; see [model loading](onnx-runtime.md).
+
 The SDK is separate from **ocr-demo.html**: applications load the JavaScript
 SDK, while people who only need the ready-made interface can open the
 standalone HTML directly.

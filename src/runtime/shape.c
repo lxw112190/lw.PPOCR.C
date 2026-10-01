@@ -197,8 +197,8 @@ static int transposed_spatial_output(int32_t input, int32_t kernel, int32_t stri
     return 1;
 }
 
-static lw_status resolve_node(lw_session* session, const uint8_t* node, uint64_t max_tensor_size,
-                              lw_error* error) {
+lw_status lw_resolve_import_node(lw_session* session, const uint8_t* node,
+                                uint64_t max_tensor_size, lw_error* error) {
     const lw_model* model = session->model;
     uint16_t op = lwm_read_u16(node);
     uint16_t input_count = lwm_read_u16(node + 2);
@@ -576,7 +576,7 @@ lw_status lw_resolve_shapes(lw_session* session, uint64_t max_tensor_size, lw_er
     for (i = 0u; i < model->info.node_count; ++i) {
         const uint8_t* node =
             model->bytes + (size_t)model->node_offset + (size_t)i * LWM_V0_NODE_SIZE;
-        lw_status status = resolve_node(session, node, max_tensor_size, error);
+        lw_status status = lw_resolve_import_node(session, node, max_tensor_size, error);
         if (status != LW_STATUS_OK) {
             return status;
         }

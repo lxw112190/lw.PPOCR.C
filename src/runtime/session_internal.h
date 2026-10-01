@@ -144,6 +144,9 @@ struct lw_session {
 };
 
 lw_status lw_resolve_shapes(lw_session* session, uint64_t max_tensor_size, lw_error* error);
+/* Importer-only shape bridge: validated indices, no numeric execution. */
+lw_status lw_resolve_import_node(lw_session* session, const uint8_t* node,
+                                uint64_t max_tensor_size, lw_error* error);
 lw_status lw_plan_workspace(lw_session* session, uint64_t max_workspace_size, lw_error* error);
 void lw_session_set_intra_op_thread_count(lw_session* session, uint32_t thread_count);
 /* Borrow an external pool for the CTC head projection (worker_count <= 1 or

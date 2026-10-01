@@ -38,6 +38,8 @@ struct lw_model {
 };
 
 lw_status lw_validate_lwm_v0(lw_model* model, lw_error* error);
+#define LW_ONNX_MAX_BYTES (UINT64_C(256) * 1024u * 1024u)
+lw_status lw_import_onnx(lw_model* model, lw_error* error);
 void lw_model_retain(lw_model* model);
 
 #endif

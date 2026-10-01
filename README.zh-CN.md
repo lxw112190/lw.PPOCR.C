@@ -6,8 +6,13 @@
 Python、OpenCV、ONNX Runtime、OpenVINO、TensorRT 或 protobuf，适合将文字识别能力
 集成到桌面软件、嵌入式程序、本地服务和其他对依赖体积敏感的场景。
 
-> 本项目不是通用 ONNX 推理框架。当前目标是可靠、高效地运行已经转换为 LWM 格式的
+> 本项目不是通用 ONNX 推理框架。当前目标是可靠、高效地运行官方 ONNX 或兼容 LWM 格式的
 > PP-OCRv6 Tiny、Small 和 Medium；Tiny 为默认模型，Small/Medium 为可选 preview。
+
+当前源码已支持 C Runtime **直接加载仓库中的官方 ONNX**，不需要部署 Python、
+protobuf 或 ONNX Runtime。加载时转换为既有内部 IR，复用原来的执行器和优化后端；
+LWM 加载保持兼容。详见[直接加载 ONNX](docs/onnx-runtime.md)，不要将这项新能力
+理解为旧版已发布二进制也能加载 ONNX。
 
 ## 准备发布稳定版：v1.1.0
 
@@ -69,13 +74,11 @@ Android、Java/JNI、ARM64 和 LoongArch64 仍明确标记为 Preview。
 PP-OCR ONNX 模型
         │
         ▼
-开发期 ModelC 转换器
+纯 C ONNX 导入器 → 既有内部 IR
         │
+旧 .lwm ─┤
         ▼
-平台无关的 .lwm 模型
-        │
-        ▼
-纯 C 推理运行时
+同一个纯 C 推理运行时
         │
         ├── DET 文字检测
         ├── CLS 方向分类（可选）
@@ -321,7 +324,7 @@ Maven 构件、native 自动加载或模型下载。详见
 ### Node.js WASM 发行包
 
 Emscripten 构建同时提供官方 Node.js 原始发行包，包含 `runtime.cjs`、
-PP-OCRv6 tiny 的 DET/CLS/REC LWM 模型、字典、manifest 和校验文件，不需要
+PP-OCRv6 Tiny 的 DET/CLS/REC 模型、字典、manifest 和校验文件，不需要
 从单文件 HTML 中解析 Runtime，也不依赖 npm 运行时包：
 
 ```bash

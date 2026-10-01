@@ -2,7 +2,7 @@
 
 ## Release support matrix
 
-The project uses one pure-C Runtime and one LWM format for all three PP-OCRv6
+The project uses one pure-C Runtime with direct official ONNX loading and legacy LWM compatibility for all three PP-OCRv6
 profiles. Model support and default integration support are separate claims:
 
 | Variant | Native full OCR | Browser SDK / HTML | Runtime model pack | Release status |
@@ -20,6 +20,11 @@ All three profiles reuse the exact Tiny CLS model. Small and Medium share
 `PP-OCRv6_small_rec_dict.txt`; Tiny uses its own dictionary. The authoritative
 asset paths and hashes are in
 [`models/ppocrv6-models.json`](../models/ppocrv6-models.json).
+
+Source-build Web/Node packages now default to official ONNX. Use
+`-DLW_DEPLOY_ONNX_MODELS=OFF` to retain their old LWM assets. The existing
+versioned LWM runtime model-pack schema and converters remain unchanged for
+older consumers. See [ONNX import scope and commands](onnx-runtime.md).
 
 ## Choosing a variant
 

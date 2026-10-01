@@ -5,6 +5,10 @@
 直接使用标准库 `ImageIO`，JNI 只调用现有 `lw_ocr_*` C ABI，不修改 Runtime、
 LWM 格式或公共 C 头文件。
 
+当前模型目录构造器优先使用 det.onnx/cls.onnx/rec.onnx，缺少某个 ONNX 时才使用
+对应 LWM；ONNX 已存在但加载失败时会明确报错，不会静默换模型。
+显式路径构造器配合新版 Core 也可以直接使用两种格式。
+
 本示例不是 Android SDK、Maven 构件，也不会自动下载或加载 native 文件。
 请把 `lw_ppocr_java` 和匹配的 `lw_ppocr_c` 动态库放在同一个目录，并通过
 `-Djava.library.path` 指定该目录。

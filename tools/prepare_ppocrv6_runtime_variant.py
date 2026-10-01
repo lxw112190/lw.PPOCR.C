@@ -61,7 +61,13 @@ def prepare(
     output_dir: Path,
     repository_root: Path,
     converted_dir: Path | None = None,
+    model_format: str = "lwm",
 ) -> dict[str, Any]:
+    if model_format not in ("lwm", "onnx"):
+        raise ValueError("model_format must be lwm or onnx")
+    if converted_dir and model_format != "lwm":
+        raise ValueError("converted-dir is only valid for LWM")
+    names = tuple(name.replace(".lwm", "." + model_format) for name in ASSET_NAMES)
     if variant not in VARIANTS:
         raise ValueError(f"unsupported PP-OCRv6 variant: {variant}")
     build_dir = build_dir.resolve()
@@ -74,7 +80,11 @@ def prepare(
     output_dir.mkdir(parents=True, exist_ok=True)
     source_dir = converted_dir.resolve() if converted_dir else None
 
-    if source_dir is not None:
+    if model_format == "onnx":
+        source = {component + ".onnx": model_root / assets[component]
+                  for component in ("det", "cls", "rec")}
+        source["ppocr_keys.txt"] = model_root / assets["dictionary"]
+    elif source_dir is not None:
         source = {name: source_dir / name for name in ASSET_NAMES}
     elif variant == "tiny":
         source = {
@@ -147,22 +157,23 @@ def prepare(
         source["det.lwm"] = output_dir / "det.lwm"
         source["rec.lwm"] = output_dir / "rec.lwm"
 
-    for name in ASSET_NAMES:
+    for name in names:
         path = source[name]
         if not path.is_file():
             raise FileNotFoundError(f"runtime asset is missing: {path}")
         if path.resolve() != (output_dir / name).resolve():
             shutil.copyfile(path, output_dir / name)
 
-    checksums = {name: sha256(output_dir / name) for name in ASSET_NAMES}
+    checksums = {name: sha256(output_dir / name) for name in names}
     report = {
         "schema_version": 1,
         "status": "ok",
         "family": "PP-OCRv6",
         "variant": variant,
+        "model_format": model_format,
         "output_dir": str(output_dir),
         "assets": checksums,
-        "sources": {name: str(source[name]) for name in ASSET_NAMES},
+        "sources": {name: str(source[name]) for name in names},
     }
     (output_dir / "runtime-assets.json").write_text(
         json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
@@ -177,6 +188,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--variant", choices=VARIANTS, required=True)
     parser.add_argument("--build-dir", type=Path, required=True)
     parser.add_argument("--output-dir", type=Path, required=True)
+    parser.add_argument("--model-format", choices=("onnx", "lwm"), default="lwm")
     parser.add_argument(
         "--converted-dir",
         type=Path,
@@ -184,7 +196,8 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
     root = Path(__file__).resolve().parents[1]
-    report = prepare(args.variant, args.build_dir, args.output_dir, root, args.converted_dir)
+    report = prepare(args.variant, args.build_dir, args.output_dir, root,
+                     args.converted_dir, args.model_format)
     print(json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True))
     return 0
 

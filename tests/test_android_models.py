@@ -36,6 +36,24 @@ def file_metadata(path: Path) -> dict[str, object]:
 
 
 class AndroidModelManifestTest(unittest.TestCase):
+    def test_official_onnx_set_needs_no_converter(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "official"
+            source.mkdir()
+            for component in ("det", "cls", "rec"):
+                (source / (component + ".onnx")).write_bytes(component.encode("ascii"))
+            dictionary = root / "keys.txt"
+            dictionary.write_bytes(b"dictionary")
+            output = root / "output"
+            subprocess.run([sys.executable, str(PREPARE), "--onnx-models", str(source),
+                            "--dictionary", str(dictionary), "--output", str(output)], check=True)
+            manifest = json.loads((output / "manifest.json").read_text(encoding="utf-8"))
+            self.assertEqual(manifest["runtime_format"], "ONNX")
+            self.assertEqual(set(manifest["files"]),
+                             {"det.onnx", "cls.onnx", "rec.onnx", "ppocr_keys.txt"})
+            self.assertNotEqual(manifest["asset_set_id"], expected_asset_set_id(manifest["files"]))
+
     def prepare(self, build_models: Path, dictionary: Path, output: Path) -> dict:
         subprocess.run(
             [

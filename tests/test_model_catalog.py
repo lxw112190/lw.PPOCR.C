@@ -27,7 +27,7 @@ class ModelCatalogTests(unittest.TestCase):
         self.assertEqual(report["resolved"]["small"]["dictionary"], report["resolved"]["medium"]["dictionary"])
         self.assertEqual(
             report["runtime_status"],
-            {"tiny": "primary", "small": "analysis-only", "medium": "analysis-only"},
+            {"tiny": "primary", "small": "supported", "medium": "supported"},
         )
 
         catalog = json.loads(CATALOG.read_text(encoding="utf-8"))

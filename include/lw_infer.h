@@ -296,6 +296,9 @@ typedef struct lw_ocr lw_ocr;
 LW_API void lw_model_options_init(lw_model_options* options);
 LW_API void lw_model_info_init(lw_model_info* info);
 LW_API void lw_error_init(lw_error* error);
+/* Auto-detect LWM or the supported official PP-OCRv6 ONNX subset by content.
+ * ONNX is normalized to the existing IR; model_info describes that IR.
+ * This does not change ABI layout or promise general ONNX operator support. */
 LW_API lw_status lw_model_load(const char* path_utf8, const lw_model_options* options,
                                lw_model** out_model, lw_error* error);
 LW_API void lw_model_free(lw_model* model);

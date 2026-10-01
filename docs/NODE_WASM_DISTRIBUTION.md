@@ -3,7 +3,7 @@
 ## 定位
 
 `lw.PPOCR.C` 提供官方 Node.js/WASM 原始运行时发行包。它复用浏览器
-使用的同一套纯 C Runtime、LWM 模型和 WASM Host ABI v1，不是 Node.js
+使用的同一套纯 C Runtime、模型和 WASM Host ABI v1，不是 Node.js
 SDK、HTTP Server、图片解码器或 Worker Pool 框架。
 
 Node.js 用户下载并解压 Release 中的：
@@ -16,6 +16,11 @@ lw.PPOCR.C-<version>-node-wasm.zip
 不联网、不下载资源，也不依赖 npm、OpenCV、ONNX Runtime 或 Python。
 
 ## 包内容
+
+当前源码默认打包官方 ONNX，manifest 的 runtime.modelFormat 和 assets 路径
+记录实际格式。设置 -DLW_DEPLOY_ONNX_MODELS=OFF 可保留以下旧 LWM 布局；
+新 runtime 两种格式均支持，旧版已发布 runtime 不承诺支持 ONNX。
+详见[直接加载 ONNX](onnx-runtime.md)。
 
 ```text
 lw.PPOCR.C-<version>-node-wasm/
@@ -69,7 +74,7 @@ lw.PPOCR.C-<version>-node-wasm.zip
 lw.PPOCR.C-<version>-node-wasm.zip.sha256
 ```
 
-打包脚本只接受构建好的 Runtime、LWM、字典、许可证和版本参数，禁止
+打包脚本只接受构建好的 Runtime、同格式 ONNX/LWM、字典、许可证和版本参数，禁止
 解析 HTML、执行外部 JavaScript 或下载网络资源。
 
 ## 最小加载示例
@@ -78,11 +83,13 @@ lw.PPOCR.C-<version>-node-wasm.zip.sha256
 const fs = require("node:fs");
 const path = require("node:path");
 const LwPpocrModule = require("./runtime.cjs");
+const manifest = JSON.parse(fs.readFileSync(path.join(__dirname, "manifest.json"), "utf8"));
 
 async function main() {
   const runtime = await LwPpocrModule({});
   runtime.FS.mkdir("/models");
-  for (const name of ["det.lwm", "cls.lwm", "rec.lwm", "ppocr_keys.txt"]) {
+  for (const key of ["det", "cls", "rec", "dictionary"]) {
+    const name = manifest.assets[key].path;
     runtime.FS.writeFile(`/models/${name}`,
       fs.readFileSync(path.join(__dirname, name)));
   }

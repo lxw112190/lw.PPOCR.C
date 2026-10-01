@@ -39,11 +39,12 @@ def write_text(path: Path, value: str) -> None:
     path.write_text(value, encoding="utf-8", newline="\n")
 
 
-def package_readme(version: str, abi_version: int, lwm_version: str, backend: str) -> str:
+def package_readme(version: str, abi_version: int, lwm_version: str, backend: str,
+                   model_format: str = "lwm") -> str:
     return f"""# lw.PPOCR.C Node/WASM runtime ({version})
 
 This archive contains the standalone Emscripten runtime and the bundled
-PP-OCRv6 tiny LWM assets. It has no npm runtime dependencies and does not
+PP-OCRv6 tiny {model_format.upper()} assets. It has no npm runtime dependencies and does not
 decode JPEG/PNG files. Applications should provide BGR8 pixels to the WASM
 Host ABI.
 
@@ -65,7 +66,7 @@ const LwPpocrModule = require("./runtime.cjs");
 async function main() {{
   const runtime = await LwPpocrModule({{}});
   runtime.FS.mkdir("/models");
-  for (const name of ["det.lwm", "cls.lwm", "rec.lwm", "ppocr_keys.txt"]) {{
+  for (const name of ["det.{model_format}", "cls.{model_format}", "rec.{model_format}", "ppocr_keys.txt"]) {{
     runtime.FS.writeFile(`/models/${{name}}`,
       fs.readFileSync(path.join(__dirname, name)));
   }}
@@ -119,6 +120,13 @@ def main() -> int:
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--archive", type=Path, required=True)
     args = parser.parse_args()
+    formats = {path.suffix.lower() for path in (args.det, args.cls, args.rec)}
+    if formats not in ({".onnx"}, {".lwm"}):
+        raise SystemExit("Node models must be one consistent ONNX or LWM set")
+    model_format = next(iter(formats))[1:]
+    assets = dict(ASSETS)
+    for component in ("det", "cls", "rec"):
+        assets[component] = component + "." + model_format
     if args.wasm_host_abi_version <= 0:
         raise SystemExit("WASM Host ABI version must be positive")
 
@@ -137,14 +145,14 @@ def main() -> int:
         "rec": args.rec,
         "dictionary": args.dictionary,
     }
-    for key, name in ASSETS.items():
+    for key, name in assets.items():
         copy_asset(inputs[key], staging / name)
     copy_asset(args.license, staging / "LICENSE")
     copy_asset(args.notices, staging / "THIRD-PARTY-NOTICES.md")
     copy_asset(args.model_license, staging / "licenses" / "PaddleOCR-APACHE-2.0.txt")
 
     asset_hashes = {
-        name: sha256(staging / name) for name in ASSETS.values()
+        name: sha256(staging / name) for name in assets.values()
     }
     manifest = {
         "schemaVersion": 1,
@@ -153,6 +161,7 @@ def main() -> int:
             "target": "node-wasm",
             "wasmHostAbiVersion": args.wasm_host_abi_version,
             "lwmVersion": args.lwm_version,
+            "modelFormat": model_format,
             "backend": args.wasm_backend,
             "simd": {"wasm128": args.wasm_backend == "wasm128"},
             "threading": "single-threaded",
@@ -166,13 +175,13 @@ def main() -> int:
             "adaptiveRecWidth": True,
         },
         "assets": {
-            "runtime": {"path": ASSETS["runtime"], "sha256": asset_hashes[ASSETS["runtime"]]},
-            "det": {"path": ASSETS["det"], "sha256": asset_hashes[ASSETS["det"]]},
-            "cls": {"path": ASSETS["cls"], "sha256": asset_hashes[ASSETS["cls"]]},
-            "rec": {"path": ASSETS["rec"], "sha256": asset_hashes[ASSETS["rec"]]},
+            "runtime": {"path": assets["runtime"], "sha256": asset_hashes[assets["runtime"]]},
+            "det": {"path": assets["det"], "sha256": asset_hashes[assets["det"]]},
+            "cls": {"path": assets["cls"], "sha256": asset_hashes[assets["cls"]]},
+            "rec": {"path": assets["rec"], "sha256": asset_hashes[assets["rec"]]},
             "dictionary": {
-                "path": ASSETS["dictionary"],
-                "sha256": asset_hashes[ASSETS["dictionary"]],
+                "path": assets["dictionary"],
+                "sha256": asset_hashes[assets["dictionary"]],
             },
         },
     }
@@ -184,17 +193,18 @@ def main() -> int:
             args.wasm_host_abi_version,
             args.lwm_version,
             args.wasm_backend,
+            model_format,
         ),
     )
 
     checksum_names = [
         "LICENSE",
         "THIRD-PARTY-NOTICES.md",
-        "cls.lwm",
-        "det.lwm",
+        assets["cls"],
+        assets["det"],
         "manifest.json",
         "ppocr_keys.txt",
-        "rec.lwm",
+        assets["rec"],
         "runtime.cjs",
         "README.md",
         "licenses/PaddleOCR-APACHE-2.0.txt",

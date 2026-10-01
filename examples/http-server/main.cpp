@@ -154,6 +154,29 @@ std::string JoinPath(const std::string& parent, const std::string& child) {
     return parent + ((last == '/' || last == '\\') ? "" : "/") + child;
 }
 
+// Choose by presence, not by a failed import: a damaged ONNX must report its
+// error instead of silently falling back to a different model.
+std::string ModelPath(const std::string& directory, const std::string& name) {
+    const std::string onnx = JoinPath(directory, name + ".onnx");
+#if defined(_WIN32)
+    const int count = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS,
+                                        onnx.c_str(), -1, NULL, 0);
+    if (count > 0) {
+        std::vector<wchar_t> wide(static_cast<size_t>(count));
+        if (MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, onnx.c_str(), -1,
+                               wide.data(), count) > 0) {
+            const DWORD attributes = GetFileAttributesW(wide.data());
+            if (attributes != INVALID_FILE_ATTRIBUTES &&
+                (attributes & FILE_ATTRIBUTE_DIRECTORY) == 0u) return onnx;
+        }
+    }
+#else
+    std::ifstream file(onnx.c_str(), std::ios::binary);
+    if (file.good()) return onnx;
+#endif
+    return JoinPath(directory, name + ".lwm");
+}
+
 #if defined(_WIN32)
 std::string WideToUtf8(const wchar_t* value) {
     if (value == NULL || *value == L'\0') return std::string();
@@ -511,9 +534,9 @@ public:
         options.worker_count = config.ocr_workers;
         options.recognizer.target_width = config.rec_max_width;
         lw_error_init(&error);
-        const std::string detector = JoinPath(config.models, "det.lwm");
-        const std::string classifier = JoinPath(config.models, "cls.lwm");
-        const std::string recognizer = JoinPath(config.models, "rec.lwm");
+        const std::string detector = ModelPath(config.models, "det");
+        const std::string classifier = ModelPath(config.models, "cls");
+        const std::string recognizer = ModelPath(config.models, "rec");
         const std::string dictionary = JoinPath(config.models, "ppocr_keys.txt");
         const lw_status status = lw_ocr_create(
             detector.c_str(), config.use_classifier ? classifier.c_str() : NULL,

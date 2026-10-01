@@ -1,6 +1,6 @@
 #include "lw_infer.h"
 
-/* Load an LWM through the public validator and print its deployment metadata. */
+/* Print normalized IR metadata for an LWM or supported official ONNX model. */
 
 #include <inttypes.h>
 #include <stdio.h>
@@ -51,7 +51,7 @@ int main(void) {
     char* path_utf8;
     int result;
     if (argv == NULL || argc != 2) {
-        fprintf(stderr, "usage: lwm-inspect <model.lwm>\n");
+        fprintf(stderr, "usage: lwm-inspect <model.onnx|model.lwm>\n");
         if (argv != NULL) {
             LocalFree(argv);
         }
@@ -85,7 +85,7 @@ int main(void) {
 #else
 int main(int argc, char** argv) {
     if (argc != 2) {
-        fprintf(stderr, "usage: lwm-inspect <model.lwm>\n");
+        fprintf(stderr, "usage: lwm-inspect <model.onnx|model.lwm>\n");
         return 2;
     }
     return inspect_model(argv[1]);

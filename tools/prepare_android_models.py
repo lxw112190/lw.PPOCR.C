@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Stage one deterministic LWM model set for the Android AAR."""
+"""Stage a deterministic official ONNX or legacy LWM set for the Android AAR."""
 
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ MODEL_NAME = "PP-OCRv6 tiny"
 RUNTIME_FORMAT = "LWM 0.1"
 
 
-def asset_set_id(files: dict[str, dict[str, object]]) -> str:
+def asset_set_id(files: dict[str, dict[str, object]], runtime_format: str = RUNTIME_FORMAT) -> str:
     """Return the stable content identity used by Android's model cache.
 
     Keep this payload independent from ``asset_set_id`` itself so the value is
@@ -22,7 +22,7 @@ def asset_set_id(files: dict[str, dict[str, object]]) -> str:
     """
     canonical = {
         "model": MODEL_NAME,
-        "runtime_format": RUNTIME_FORMAT,
+        "runtime_format": runtime_format,
         "files": {name: files[name] for name in sorted(files)},
     }
     payload = json.dumps(
@@ -41,13 +41,17 @@ def sha256(path: Path) -> str:
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--build-models", type=Path, required=True)
+    inputs = parser.add_mutually_exclusive_group(required=True)
+    inputs.add_argument("--build-models", type=Path, help="legacy build directory containing models/*.lwm")
+    inputs.add_argument("--onnx-models", type=Path, help="official directory containing det/cls/rec.onnx")
     parser.add_argument("--dictionary", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
-    source = args.build_models / "models"
+    extension = "onnx" if args.onnx_models else "lwm"
+    runtime_format = "ONNX" if args.onnx_models else RUNTIME_FORMAT
+    source = args.onnx_models if args.onnx_models else args.build_models / "models"
     args.output.mkdir(parents=True, exist_ok=True)
-    files = list(MODEL_FILES) + ["ppocr_keys.txt"]
+    files = [component + "." + extension for component in ("det", "cls", "rec")] + ["ppocr_keys.txt"]
     for name in files:
         source_path = source / name if name != "ppocr_keys.txt" else args.dictionary
         if not source_path.is_file():
@@ -62,9 +66,9 @@ def main() -> int:
     }
     manifest = {
         "schema_version": 1,
-        "asset_set_id": asset_set_id(file_metadata),
+        "asset_set_id": asset_set_id(file_metadata, runtime_format),
         "model": MODEL_NAME,
-        "runtime_format": RUNTIME_FORMAT,
+        "runtime_format": runtime_format,
         "files": file_metadata,
     }
     (args.output / "manifest.json").write_text(

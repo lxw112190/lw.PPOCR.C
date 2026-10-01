@@ -3,8 +3,8 @@
 
 /*
  * Model handle lifecycle and platform-specific UTF-8 file opening.
- * A model is not published to the caller until the entire untrusted LWM byte
- * stream has passed validate.c, so later runtime code may rely on its bounds.
+ * A model is published only after the untrusted LWM/ONNX stream is validated.
+ * ONNX import normalizes to the same checked IR consumed by validate.c.
  */
 
 #include <stdio.h>
@@ -96,6 +96,7 @@ lw_status lw_model_load(const char* path_utf8, const lw_model_options* options,
     lw_model* model;
     size_t read_count;
     lw_status status;
+    uint8_t magic[4];
 
     if (out_model != NULL) {
         *out_model = NULL;
@@ -131,8 +132,19 @@ lw_status lw_model_load(const char* path_utf8, const lw_model_options* options,
     }
     if ((uint64_t)length < LWM_V0_HEADER_SIZE) {
         fclose(file);
-        lw_set_error(error, LW_STATUS_INVALID_FORMAT, "model file is smaller than the LWM header");
+        lw_set_error(error, LW_STATUS_INVALID_FORMAT, "model file is smaller than the minimum supported size");
         return LW_STATUS_INVALID_FORMAT;
+    }
+    if (fread(magic, 1u, sizeof(magic), file) != sizeof(magic) ||
+        fseek(file, 0, SEEK_SET) != 0) {
+        fclose(file);
+        lw_set_error(error, LW_STATUS_IO_ERROR, "unable to read model signature");
+        return LW_STATUS_IO_ERROR;
+    }
+    if (memcmp(magic, "LWM0", sizeof(magic)) != 0 && (uint64_t)length > LW_ONNX_MAX_BYTES) {
+        fclose(file);
+        lw_set_error(error, LW_STATUS_OUT_OF_BOUNDS, "ONNX file exceeds importer size limit");
+        return LW_STATUS_OUT_OF_BOUNDS;
     }
     model = (lw_model*)calloc(1u, sizeof(*model));
     if (model == NULL) {
@@ -158,7 +170,8 @@ lw_status lw_model_load(const char* path_utf8, const lw_model_options* options,
     }
     /* Do not expose even a successfully read file until its complete binary
      * structure, operator subset, checksums and table ranges are trusted. */
-    status = lw_validate_lwm_v0(model, error);
+    status = memcmp(model->bytes, "LWM0", 4u) == 0
+                 ? lw_validate_lwm_v0(model, error) : lw_import_onnx(model, error);
     if (status != LW_STATUS_OK) {
         lw_model_free(model);
         return status;

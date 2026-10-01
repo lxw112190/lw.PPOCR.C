@@ -118,10 +118,8 @@ public class LwPpocrEngine private constructor(
         private const val CACHE_ROOT = "lw-ppocr/models"
         private const val MODEL_ID = "ppocrv6-tiny"
         private const val MODEL_NAME = "PP-OCRv6 tiny"
-        private const val RUNTIME_FORMAT = "LWM 0.1"
         private const val MANIFEST_NAME = "manifest.json"
         private const val MARKER_NAME = "installed.asset-set-id"
-        private val MODEL_FILES = listOf("det.lwm", "cls.lwm", "rec.lwm", "ppocr_keys.txt")
         private val ASSET_ID_PATTERN = Regex("[0-9a-f]{64}")
 
         @JvmStatic
@@ -147,10 +145,11 @@ public class LwPpocrEngine private constructor(
             }
             val manifest = readAssetManifest(context)
             val directory = installModels(context, manifest)
+            val extension = if ("det.onnx" in manifest.files) "onnx" else "lwm"
             val handle = NativeBridge.nativeCreate(
-                File(directory, "det.lwm").absolutePath,
-                File(directory, "cls.lwm").absolutePath,
-                File(directory, "rec.lwm").absolutePath,
+                File(directory, "det.$extension").absolutePath,
+                File(directory, "cls.$extension").absolutePath,
+                File(directory, "rec.$extension").absolutePath,
                 File(directory, "ppocr_keys.txt").absolutePath,
                 options.useCls,
                 options.workerCount,
@@ -194,9 +193,12 @@ public class LwPpocrEngine private constructor(
             require(root.optString("model", "") == MODEL_NAME) {
                 "$source has unsupported model"
             }
-            require(root.optString("runtime_format", "") == RUNTIME_FORMAT) {
+            val runtimeFormat = root.optString("runtime_format", "")
+            require(runtimeFormat == "LWM 0.1" || runtimeFormat == "ONNX") {
                 "$source has unsupported runtime format"
             }
+            val extension = if (runtimeFormat == "ONNX") "onnx" else "lwm"
+            val modelFiles = listOf("det.$extension", "cls.$extension", "rec.$extension", "ppocr_keys.txt")
             val assetSetId = root.optString("asset_set_id", "")
             require(ASSET_ID_PATTERN.matches(assetSetId)) {
                 "$source has invalid asset_set_id"
@@ -206,10 +208,10 @@ public class LwPpocrEngine private constructor(
             val keys = mutableSetOf<String>()
             val iterator = filesObject.keys()
             while (iterator.hasNext()) keys += iterator.next()
-            require(keys == MODEL_FILES.toSet()) {
+            require(keys == modelFiles.toSet()) {
                 "$source has an unexpected model file set"
             }
-            val files = MODEL_FILES.associateWith { name ->
+            val files = modelFiles.associateWith { name ->
                 val entry = filesObject.optJSONObject(name)
                     ?: error("$source has invalid entry for $name")
                 val bytesValue = entry.opt("bytes")
@@ -244,7 +246,7 @@ public class LwPpocrEngine private constructor(
             temporary.deleteRecursively()
             check(temporary.mkdirs()) { "Unable to create model cache directory" }
             try {
-                for (name in MODEL_FILES) {
+                for (name in manifest.files.keys) {
                     copyAssetVerified(
                         context = context,
                         assetPath = "$ASSET_ROOT/$name",
@@ -278,7 +280,7 @@ public class LwPpocrEngine private constructor(
                     "cached model manifest",
                 )
                 if (cached != manifest) return false
-                MODEL_FILES.all { name ->
+                manifest.files.keys.all { name ->
                     val file = File(directory, name)
                     file.isFile && file.length() == manifest.files.getValue(name).bytes
                 }

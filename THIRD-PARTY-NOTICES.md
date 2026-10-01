@@ -16,8 +16,17 @@ HTTP executable; it is not linked into the pure-C OCR libraries.
 
 The ONNX model files, dictionary, and sample image under
 `models/ppocrv6-tiny/` are derived from the PP-OCR/PaddleOCR ecosystem and are
-included for converter development and reproducible analysis under the Apache
+included for direct runtime loading, converter development and reproducible analysis under the Apache
 License 2.0. See `licenses/PaddleOCR-models-APACHE-2.0.txt`.
+
+## Native ONNX importer reference
+
+The bounded-reader approach was studied in `lxw112190/lw.PPOCR.Vulkan`
+(`src/onnx_import.cpp`, Apache-2.0). The implementation in this repository is
+written in C for our existing semantic IR; it does not include Vulkan's C++
+graph/shader backend or link a protobuf library. Model bytes and upstream
+licenses are unchanged. Small/Medium assets use the same PaddleOCR model
+license as Tiny.
 
 ## Converter-only Python dependencies
 

@@ -4,6 +4,7 @@ import java.awt.image.DataBufferByte;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Path;
+import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
@@ -145,6 +146,10 @@ public final class NativeOcr implements AutoCloseable {
             throw new NullPointerException("modelDirectory");
         }
         Path path = Paths.get(directory).resolve(name);
+        if (name.endsWith(".lwm")) {
+            Path onnx = Paths.get(directory).resolve(name.substring(0, name.length() - 4) + ".onnx");
+            if (Files.isRegularFile(onnx)) return onnx.toString();
+        }
         return path.toString();
     }
 

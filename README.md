@@ -9,6 +9,12 @@ TensorRT, protobuf, or any other deployment-time runtime dependency.
 
 > This is not a general-purpose ONNX Runtime.
 
+Current source builds can also load the bundled **official ONNX files directly**
+through the unchanged C ABI, without Python/protobuf or ONNX Runtime.
+The supported PP-OCRv6 subset is normalized once to the existing internal IR;
+legacy LWM remains compatible. See [direct ONNX loading](docs/onnx-runtime.md).
+This new source capability is not a claim about older released binaries.
+
 ## Preparing stable release: v1.1.0
 
 The latest published stable release is `v1.0.0`. The `v1.1.0` release
@@ -255,7 +261,7 @@ across repeated OCR runs. See the [Browser JavaScript SDK](docs/web-sdk.md),
 ## Node.js WASM distribution
 
 The Emscripten build also provides an official raw Node.js package. It contains
-`runtime.cjs`, the PP-OCRv6 tiny LWM models, the dictionary, a manifest, and
+`runtime.cjs`, the PP-OCRv6 Tiny models, the dictionary, a manifest, and
 checksums; it does not depend on the standalone HTML demo or any npm runtime
 package:
 
@@ -276,7 +282,7 @@ instances for concurrency. The manifest records whether the build used
 
 The repository includes an experimental Android Native SDK under `android/`.
 The preview targets `arm64-v8a` with `minSdk 21`, bundles the offline PP-OCRv6
-tiny LWM models, and exposes Kotlin and Java APIs over the existing pure-C runtime.
+Tiny official ONNX models, and exposes Kotlin and Java APIs over the existing pure-C runtime.
 The demo is an offline image OCR workbench: choose an image, preview it, select
 CLS and reading order, run OCR, inspect/highlight detection boxes, and copy,
 share, or save TXT/JSON results. It uses the system media picker and requests
@@ -355,9 +361,8 @@ runtime.
 
 ```text
 PP-OCR ONNX
-    -> development-time ModelC converter
-    -> platform-independent .lwm
-    -> pure-C runtime
+    -> pure-C bounded ONNX importer -> existing internal IR
+Legacy .lwm ------------------------> same pure-C runtime
     -> REC / CLS / DET / full OCR
 ```
 

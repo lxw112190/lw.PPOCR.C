@@ -8,6 +8,8 @@ option(LW_BUILD_CSHARP_DEMOS
     "Build the .NET Framework 3.5 WinForms Demo on Windows" OFF)
 option(LW_RUNTIME_ONLY
     "Build only the dependency-free native runtime for an embedding target" OFF)
+option(LW_DEPLOY_ONNX_MODELS
+    "Deploy official ONNX assets in Web/Node packages (LWM remains supported)" ON)
 option(LW_WASM_SIMD128
     "Enable portable WebAssembly SIMD128 for the standalone OCR HTML" ON)
 option(LW_WASM_COMPILED_REC
@@ -160,6 +162,17 @@ set(LW_PPOCR_C_DET_LWM
     "${CMAKE_CURRENT_BINARY_DIR}/models/det.lwm")
 set(LW_PPOCR_C_DET_LWM_METADATA
     "${CMAKE_CURRENT_BINARY_DIR}/models/det-lwm.json")
+if(LW_DEPLOY_ONNX_MODELS)
+    set(LW_DEPLOY_MODEL_FORMAT onnx)
+    set(LW_DEPLOY_DET "${LW_PPOCR_C_DET_ONNX}")
+    set(LW_DEPLOY_CLS "${LW_PPOCR_C_CLS_ONNX}")
+    set(LW_DEPLOY_REC "${LW_PPOCR_C_REC_ONNX}")
+else()
+    set(LW_DEPLOY_MODEL_FORMAT lwm)
+    set(LW_DEPLOY_DET "${LW_PPOCR_C_DET_LWM}")
+    set(LW_DEPLOY_CLS "${LW_PPOCR_C_CLS_LWM}")
+    set(LW_DEPLOY_REC "${LW_PPOCR_C_REC_LWM}")
+endif()
 
 add_custom_target(analyze_models
     COMMAND "${Python3_EXECUTABLE}"
@@ -291,6 +304,7 @@ set(LW_PPOCR_C_SOURCES
     src/runtime/execution_plan.c
     src/runtime/memory.c
     src/runtime/model.c
+    src/runtime/onnx_import.c
     src/runtime/parallel.c
     src/runtime/ctc_head_parallel_internal.c
     src/runtime/prepared_execution.c
@@ -649,7 +663,9 @@ if(EMSCRIPTEN)
         "-sEXPORTED_FUNCTIONS=['_lw_web_init','_lw_web_shutdown','_lw_web_info_size','_lw_web_get_info','_lw_web_set_reading_order','_lw_web_run','_lw_web_last_error','_lw_web_malloc','_lw_web_free']"
         "--no-entry")
     set_target_properties(lw_ppocr_web PROPERTIES OUTPUT_NAME "lw_ppocr_web")
-    add_dependencies(lw_ppocr_web convert_det_model convert_cls_model convert_rec_model)
+    if(NOT LW_DEPLOY_ONNX_MODELS)
+        add_dependencies(lw_ppocr_web convert_det_model convert_cls_model convert_rec_model)
+    endif()
 
     # The generated runtime remains a normal Emscripten module. The browser
     # SDK is a separate deterministic artifact layered on top of that module,
@@ -723,8 +739,8 @@ if(EMSCRIPTEN)
         COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/web/package_ocr_sdk.py"
             --template "${CMAKE_CURRENT_SOURCE_DIR}/web/lw_ppocr_sdk.template.js"
             --runtime "${LW_PPOCR_C_WEB_RUNTIME_FOR_PACKAGE}"
-            --det "${LW_PPOCR_C_DET_LWM}" --cls "${LW_PPOCR_C_CLS_LWM}"
-            --rec "${LW_PPOCR_C_REC_LWM}"
+            --det "${LW_DEPLOY_DET}" --cls "${LW_DEPLOY_CLS}"
+            --rec "${LW_DEPLOY_REC}"
             --dictionary "${CMAKE_CURRENT_SOURCE_DIR}/models/ppocrv6-tiny/ppocr_keys.txt"
             --model-family "PP-OCRv6"
             --model-variant "tiny"
@@ -741,7 +757,7 @@ if(EMSCRIPTEN)
             ${LW_PPOCR_C_WEB_RUNTIME_DEPENDS}
             "${CMAKE_CURRENT_SOURCE_DIR}/web/lw_ppocr_sdk.template.js"
             "${CMAKE_CURRENT_SOURCE_DIR}/web/package_ocr_sdk.py"
-            "${LW_PPOCR_C_DET_LWM}" "${LW_PPOCR_C_CLS_LWM}" "${LW_PPOCR_C_REC_LWM}"
+            "${LW_DEPLOY_DET}" "${LW_DEPLOY_CLS}" "${LW_DEPLOY_REC}"
             "${CMAKE_CURRENT_SOURCE_DIR}/models/ppocrv6-tiny/ppocr_keys.txt"
         COMMENT "Packaging the browser OCR SDK"
         VERBATIM)
@@ -823,6 +839,10 @@ if(EMSCRIPTEN)
             "${CMAKE_CURRENT_SOURCE_DIR}/tools/validate_model_catalog.py")
 
         function(lw_add_web_model_variant variant display_name)
+            set(_variant_conversion_deps)
+            if(NOT LW_DEPLOY_ONNX_MODELS)
+                set(_variant_conversion_deps convert_cls_model)
+            endif()
             set(_variant_root
                 "${LW_WEB_VARIANT_ROOT}/ppocrv6-${variant}")
             set(_variant_stage_stamp
@@ -832,9 +852,10 @@ if(EMSCRIPTEN)
                 COMMAND "${Python3_EXECUTABLE}"
                         "${CMAKE_CURRENT_SOURCE_DIR}/tools/prepare_ppocrv6_runtime_variant.py"
                         --variant "${variant}"
+                        --model-format "${LW_DEPLOY_MODEL_FORMAT}"
                         --build-dir "${CMAKE_CURRENT_BINARY_DIR}"
                         --output-dir "${_variant_root}"
-                DEPENDS convert_cls_model
+                DEPENDS ${_variant_conversion_deps}
                         ${LW_WEB_VARIANT_COMMON_DEPS}
                 WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
                 COMMENT "Staging PP-OCRv6 ${display_name} browser model"
@@ -848,9 +869,9 @@ if(EMSCRIPTEN)
                         "${CMAKE_CURRENT_SOURCE_DIR}/web/package_ocr_sdk.py"
                         --template "${CMAKE_CURRENT_SOURCE_DIR}/web/lw_ppocr_sdk.template.js"
                         --runtime "$<TARGET_FILE_DIR:lw_ppocr_web>/lw_ppocr_web.js"
-                        --det "${_variant_root}/det.lwm"
-                        --cls "${_variant_root}/cls.lwm"
-                        --rec "${_variant_root}/rec.lwm"
+                        --det "${_variant_root}/det.${LW_DEPLOY_MODEL_FORMAT}"
+                        --cls "${_variant_root}/cls.${LW_DEPLOY_MODEL_FORMAT}"
+                        --rec "${_variant_root}/rec.${LW_DEPLOY_MODEL_FORMAT}"
                         --dictionary "${_variant_root}/ppocr_keys.txt"
                         --model-family "PP-OCRv6"
                         --model-variant "${variant}"
@@ -934,7 +955,9 @@ if(EMSCRIPTEN)
         "-sEXPORTED_FUNCTIONS=['_lw_web_init','_lw_web_shutdown','_lw_web_info_size','_lw_web_get_info','_lw_web_set_reading_order','_lw_web_run','_lw_web_last_error','_lw_web_malloc','_lw_web_free']"
         "--no-entry")
     set_target_properties(lw_ppocr_node PROPERTIES OUTPUT_NAME "lw_ppocr_node")
-    add_dependencies(lw_ppocr_node convert_det_model convert_cls_model convert_rec_model)
+    if(NOT LW_DEPLOY_ONNX_MODELS)
+        add_dependencies(lw_ppocr_node convert_det_model convert_cls_model convert_rec_model)
+    endif()
 
     if(LW_WASM_SIMD128)
         set(LW_NODE_WASM_BACKEND wasm128)
@@ -967,9 +990,9 @@ if(EMSCRIPTEN)
         COMMAND "${Python3_EXECUTABLE}"
                 "${CMAKE_CURRENT_SOURCE_DIR}/tools/package_node_wasm.py"
                 --runtime "${LW_PPOCR_C_NODE_RUNTIME}"
-                --det "${LW_PPOCR_C_DET_LWM}"
-                --cls "${LW_PPOCR_C_CLS_LWM}"
-                --rec "${LW_PPOCR_C_REC_LWM}"
+                --det "${LW_DEPLOY_DET}"
+                --cls "${LW_DEPLOY_CLS}"
+                --rec "${LW_DEPLOY_REC}"
                 --dictionary
                 "${CMAKE_CURRENT_SOURCE_DIR}/models/ppocrv6-tiny/ppocr_keys.txt"
                 --license "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE"
@@ -983,7 +1006,7 @@ if(EMSCRIPTEN)
                 --output-dir "${LW_PPOCR_C_NODE_PACKAGE_DIR}"
                 --archive "${LW_PPOCR_C_NODE_PACKAGE_ARCHIVE}"
         DEPENDS lw-node-wasm "${LW_PPOCR_C_NODE_RUNTIME}"
-                "${LW_PPOCR_C_DET_LWM}" "${LW_PPOCR_C_CLS_LWM}" "${LW_PPOCR_C_REC_LWM}"
+                "${LW_DEPLOY_DET}" "${LW_DEPLOY_CLS}" "${LW_DEPLOY_REC}"
                 "${CMAKE_CURRENT_SOURCE_DIR}/tools/package_node_wasm.py"
                 "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE"
                 "${CMAKE_CURRENT_SOURCE_DIR}/licenses/PaddleOCR-models-APACHE-2.0.txt"
@@ -1337,6 +1360,7 @@ if(LW_BUILD_CSHARP_DEMOS)
         COMMAND "${CMAKE_COMMAND}" -E copy_if_different
                 "${LW_PPOCR_C_DET_LWM}" "${LW_PPOCR_C_CLS_LWM}"
                 "${LW_PPOCR_C_REC_LWM}"
+                "${LW_PPOCR_C_DET_ONNX}" "${LW_PPOCR_C_CLS_ONNX}" "${LW_PPOCR_C_REC_ONNX}"
                 "${CMAKE_CURRENT_SOURCE_DIR}/models/ppocrv6-tiny/ppocr_keys.txt"
                 "${CMAKE_CURRENT_SOURCE_DIR}/models/ppocrv6-tiny/model.json"
                 "${CMAKE_CURRENT_SOURCE_DIR}/models/ppocrv6-tiny/sample.jpg"
@@ -2027,6 +2051,20 @@ if(BUILD_TESTING AND NOT EMSCRIPTEN)
     set_tests_properties(rec_graph_reference PROPERTIES
         WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
         TIMEOUT 360)
+    add_test(NAME native_onnx_import
+        COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_onnx_import.py"
+            --inspect "$<TARGET_FILE:lwm-inspect>"
+            --rec-driver "$<TARGET_FILE:rec-graph-driver>"
+            --ocr-driver "$<TARGET_FILE:lw-ocr-ppm>"
+            --root "${CMAKE_CURRENT_SOURCE_DIR}"
+            --sample "${LW_PPOCR_C_DET_DEMO_PPM}"
+            --report "${CMAKE_CURRENT_BINARY_DIR}/onnx-import-report.json")
+    set_tests_properties(native_onnx_import PROPERTIES
+        WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}" TIMEOUT 600)
+    add_test(NAME deployment_model_formats
+        COMMAND "${Python3_EXECUTABLE}" -m unittest -v tests.test_deployment_model_formats)
+    set_tests_properties(deployment_model_formats PROPERTIES
+        WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}" TIMEOUT 120)
 
     add_executable(cls-graph-driver tests/cls_graph_driver.c)
     target_link_libraries(cls-graph-driver PRIVATE lw_ppocr_c)
@@ -2819,6 +2857,7 @@ install(FILES
     "${LW_PPOCR_C_REC_LWM}"
     "${LW_PPOCR_C_CLS_LWM}"
     "${LW_PPOCR_C_DET_LWM}"
+    "${LW_PPOCR_C_REC_ONNX}" "${LW_PPOCR_C_CLS_ONNX}" "${LW_PPOCR_C_DET_ONNX}"
     "${CMAKE_CURRENT_SOURCE_DIR}/models/ppocrv6-tiny/ppocr_keys.txt"
     "${CMAKE_CURRENT_SOURCE_DIR}/models/ppocrv6-tiny/model.json"
     "${LW_PPOCR_C_REC_DEMO_PPM}"

@@ -25,7 +25,7 @@
       "dictionary": {"path": "ppocrv6-tiny/ppocr_keys.txt", "sha256": "46e1b34ef45684cb46d75ac76d355341fe7f0a2c38d6ee02e63ae6b3878019fc"}
     },
     "small": {
-      "runtime_status": "analysis-only",
+      "runtime_status": "supported",
       "sources": {
         "det": "https://huggingface.co/PaddlePaddle/PP-OCRv6_small_det_onnx",
         "rec": "https://huggingface.co/PaddlePaddle/PP-OCRv6_small_rec_onnx"
@@ -36,7 +36,7 @@
       "dictionary": "shared:small_rec_dictionary"
     },
     "medium": {
-      "runtime_status": "analysis-only",
+      "runtime_status": "supported",
       "sources": {
         "det": "https://huggingface.co/PaddlePaddle/PP-OCRv6_medium_det_onnx",
         "rec": "https://huggingface.co/PaddlePaddle/PP-OCRv6_medium_rec_onnx"

@@ -6,6 +6,10 @@
 SDK 模块为 lw-ppocr-android，Kotlin Demo 模块为 demo，纯 Java Demo 模块为
 demo-java。generated-model-assets 是 CI 生成的模型 assets，不提交到 Git。
 
+当前 CI 直接将官方 Tiny ONNX 放入 AAR，无需先转换 LWM。缓存仍由 manifest 的
+asset_set_id/文件 SHA-256 管理；SDK 同时接受旧的 LWM manifest，不会复用旧模型集合
+的缓存。Android SDK/NDK 编译与 APK 集成验证继续由 CI 执行。
+
 API 基本用法：
 
     val engine = LwPpocrEngine.create(context, OcrOptions(useCls = false))

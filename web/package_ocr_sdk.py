@@ -32,8 +32,16 @@ def main() -> int:
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
 
+    formats = {path.suffix.lower() for path in (args.det, args.cls, args.rec)}
+    if formats not in ({".onnx"}, {".lwm"}):
+        raise SystemExit("SDK models must be one consistent ONNX or LWM set")
+
     runtime = args.runtime.read_text(encoding="utf-8")
     wrapper = args.template.read_text(encoding="utf-8")
+    # Rewrite both Worker and main-thread FS names; modelInfo stays compatible.
+    if formats == {".onnx"}:
+        for component in ("det", "cls", "rec"):
+            wrapper = wrapper.replace(component + ".lwm", component + ".onnx")
     if "LwPpocrModule" not in runtime:
         raise SystemExit("runtime does not contain LwPpocrModule")
     values = {

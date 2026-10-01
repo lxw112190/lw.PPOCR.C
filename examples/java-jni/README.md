@@ -7,6 +7,11 @@ calls the existing
 `lw_ocr_*` C ABI; it does not change the runtime, LWM format, or public C
 header.
 
+Model-directory construction prefers `det.onnx`, `cls.onnx` and `rec.onnx`
+when present, otherwise it uses the legacy `.lwm` file for each component.
+A present but invalid ONNX reports an error; it is not silently replaced by LWM.
+Explicit-path constructors support either format with the new core library.
+
 This example is not an Android SDK, Maven artifact, or automatic native-loader
 library. Put `lw_ppocr_java` and the matching `lw_ppocr_c` shared library in
 the same native directory and pass that directory through

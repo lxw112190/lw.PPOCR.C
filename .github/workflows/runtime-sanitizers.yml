@@ -49,5 +49,5 @@ jobs:
         run: >-
           ctest --test-dir build-sanitizers
           -C RelWithDebInfo
-          -R "^(lwm_loader|lwm_corruption|abi_layout_contract|full_ocr_pipeline_reference|full_ocr_golden_corpus)$"
+          -R "^(lwm_loader|lwm_corruption|abi_layout_contract|native_onnx_import|full_ocr_pipeline_reference|full_ocr_golden_corpus)$"
           --output-on-failure

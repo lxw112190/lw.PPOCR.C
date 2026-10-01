@@ -21,12 +21,18 @@ namespace LwPpocrWinForms
             while (directory != null)
             {
                 string direct = Path.Combine(directory.FullName, "models");
-                if (File.Exists(Path.Combine(direct, "det.lwm"))) return direct;
-                if (File.Exists(Path.Combine(directory.FullName, "det.lwm")))
+                if (HasDetector(direct)) return direct;
+                if (HasDetector(directory.FullName))
                     return directory.FullName;
                 directory = directory.Parent;
             }
             return Path.Combine(Application.StartupPath, "models");
+        }
+
+        private static bool HasDetector(string directory)
+        {
+            return File.Exists(Path.Combine(directory, "det.onnx")) ||
+                File.Exists(Path.Combine(directory, "det.lwm"));
         }
     }
 }
