@@ -4,7 +4,7 @@
 int main(void) {
 #ifdef LW_TEST_FINE_WIDTHS
     static const uint32_t expected[] = {
-        192u, 256u, 320u, 384u, 448u, 512u, 576u,
+        192u, 256u, 320u, 384u, 448u, 480u, 512u, 576u,
         640u, 704u, 768u, 832u, 896u, 960u
     };
 #else
@@ -23,5 +23,22 @@ int main(void) {
             return 1;
         }
     }
+#ifdef LW_TEST_FINE_WIDTHS
+    /* Finer native buckets must never round a line above its old bucket. */
+    {
+        static const uint32_t production[] = {192u, 320u, 480u, 640u, 960u};
+        uint32_t content;
+        for (content = 1u; content <= 960u; ++content) {
+            uint32_t old_index = 0u;
+            uint32_t fine_index = 0u;
+            while (production[old_index] < content) ++old_index;
+            while (lw_rec_adaptive_widths[fine_index] < content) ++fine_index;
+            if (lw_rec_adaptive_widths[fine_index] > production[old_index]) {
+                fprintf(stderr, "fine policy increases padding at %u\n", (unsigned)content);
+                return 1;
+            }
+        }
+    }
+#endif
     return 0;
 }

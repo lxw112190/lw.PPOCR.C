@@ -63,6 +63,19 @@ class ComparisonTest(unittest.TestCase):
                             report["binaries"]["candidate"]["sha256"])
         self.assertNotIn("LW_X64REC_PROFILE", self.calls[0][2])
         self.assertNotIn("LW_WASM_DET_DEBUG", self.calls[0][2])
+        markdown = (self.root / "report/report.md").read_text()
+        self.assertIn("Paired speedup (range)", markdown)
+        self.assertIn("2.000x (2.000-2.000)", markdown)
+
+    def test_unresolved_latency_direction_is_visible(self):
+        def mutate(label, workers, result):
+            if label == "candidate" and len(self.calls) % 4 == 3:
+                result["ocr_ms"]["mean"] = 40
+        self.mutate = mutate
+        report = self.evaluate()
+        self.assertEqual(report["cases"][0]["ratio_range"], [0.5, 2.0])
+        self.assertIn("direction of the latency change is unresolved",
+                      (self.root / "report/report.md").read_text())
 
     def test_text_diff_is_explicit_and_visible(self):
         def mutate(label, workers, result):

@@ -114,6 +114,7 @@ def rejection_tests(inspect: Path, directory: Path) -> int:
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--inspect", type=Path, required=True)
+    parser.add_argument("--fine-rec-widths", action="store_true")
     parser.add_argument("--rec-driver", type=Path, required=True)
     parser.add_argument("--ocr-driver", type=Path, required=True)
     parser.add_argument("--root", type=Path, required=True)
@@ -161,7 +162,8 @@ def main() -> int:
             assert "lines=16" in text or "lines: 16" in text, text
             texts = re.findall(r"^\d+ text=(.*?) rec=", text, re.MULTILINE)
             digest = hashlib.sha256("\n".join(texts).encode("utf-8")).hexdigest()
-            golden = json.loads((args.root / "ci" / ("web-ppocrv6-" + variant + ".json"))
+            prefix = "native-fine-" if args.fine_rec_widths and variant == "small" else "web-"
+            golden = json.loads((args.root / "ci" / (prefix + "ppocrv6-" + variant + ".json"))
                                 .read_text(encoding="utf-8"))
             assert len(texts) == golden["expected_line_count"], text
             assert digest == golden["expected_text_sha256"], (variant, digest, texts)

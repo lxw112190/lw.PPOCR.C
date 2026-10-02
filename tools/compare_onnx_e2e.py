@@ -155,17 +155,22 @@ def compare(baseline: Path, candidate: Path, sample: Path, rounds: int,
     (output / "report.json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
     lines = ["# Official ONNX full OCR A/B", "",
              "Same machine; CLS enabled; REC max width 960; two warm-ups; alternating fresh processes.",
-             "", "| Model | Workers | Before ms | After ms | Speedup | Before peak MiB | After peak MiB | Text |",
+             "", "| Model | Workers | Before ms | After ms | Paired speedup (range) | Before peak MiB | After peak MiB | Text |",
              "|---|---:|---:|---:|---:|---:|---:|---|"]
     for case in cases:
         lines.append(f"| {case['variant']} | {case['workers']} | {case['baseline_ms']:.2f} | "
-                     f"{case['candidate_ms']:.2f} | {case['paired_speedup']:.3f}x | "
+                     f"{case['candidate_ms']:.2f} | {case['paired_speedup']:.3f}x "
+                     f"({case['ratio_range'][0]:.3f}-{case['ratio_range'][1]:.3f}) | "
                      f"{case['baseline_peak_mib']:.1f} | {case['candidate_peak_mib']:.1f} | "
                      f"{'same' if case['text_matches'] else 'DIFFERENT'} |")
     lines += ["", ("All paired full-text checksums match." if report["text_contract_pass"]
                    else "Text differs: accuracy experiment, NOT an output-equivalent speedup claim."),
               "Peak includes model initialization and",
               "the benchmark's extra standalone detector. Timing is informational, not a CI gate."]
+    for case in cases:
+        if case["ratio_range"][0] < 1.0 < case["ratio_range"][1]:
+            lines += ["", f"{case['variant']}/{case['workers']} workers: paired ratios "
+                      "straddle 1.0; the direction of the latency change is unresolved."]
     for variant, detail in quality.items():
         for change in detail["changed_lines"]:
             lines += ["", f"{variant} line {change['index']}: "

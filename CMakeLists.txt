@@ -17,7 +17,7 @@ option(LW_WASM_COMPILED_REC
 option(LW_WASM_FINE_REC_WIDTHS
     "Use 64-pixel adaptive REC width buckets in compiled WASM OCR" OFF)
 option(LW_NATIVE_FINE_REC_WIDTHS
-    "Experimentally reduce native compiled REC padding with 64-pixel widths" OFF)
+    "Experimentally reduce native compiled REC padding with finer widths (including 480)" OFF)
 option(LW_WASM_COMPILED_DET
     "Run WASM DET on the compiled NHWC backend when compiled REC is enabled" ON)
 option(LW_WASM_REC_SIMD_KERNELS
@@ -1443,6 +1443,10 @@ if(BUILD_TESTING AND NOT EMSCRIPTEN)
         COMMAND "${Python3_EXECUTABLE}" -m unittest -v tests.test_onnx_e2e_comparison)
     set_tests_properties(onnx_e2e_comparison_contract PROPERTIES
         WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}" TIMEOUT 30)
+    add_test(NAME native_rec_quality_contract
+        COMMAND "${Python3_EXECUTABLE}" -m unittest -v tests.test_native_rec_quality)
+    set_tests_properties(native_rec_quality_contract PROPERTIES
+        WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}" TIMEOUT 30)
 
     add_test(
         NAME source_final_newline_contract
@@ -2082,6 +2086,10 @@ if(BUILD_TESTING AND NOT EMSCRIPTEN)
     set_tests_properties(rec_graph_reference PROPERTIES
         WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
         TIMEOUT 360)
+    set(LW_ONNX_WIDTH_TEST_ARGS)
+    if(LW_NATIVE_FINE_REC_WIDTHS)
+        list(APPEND LW_ONNX_WIDTH_TEST_ARGS --fine-rec-widths)
+    endif()
     add_test(NAME native_onnx_import
         COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_onnx_import.py"
             --inspect "$<TARGET_FILE:lwm-inspect>"
@@ -2089,6 +2097,7 @@ if(BUILD_TESTING AND NOT EMSCRIPTEN)
             --ocr-driver "$<TARGET_FILE:lw-ocr-ppm>"
             --root "${CMAKE_CURRENT_SOURCE_DIR}"
             --sample "${LW_PPOCR_C_DET_DEMO_PPM}"
+            ${LW_ONNX_WIDTH_TEST_ARGS}
             --report "${CMAKE_CURRENT_BINARY_DIR}/onnx-import-report.json")
     set_tests_properties(native_onnx_import PROPERTIES
         WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}" TIMEOUT 600)

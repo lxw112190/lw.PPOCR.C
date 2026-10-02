@@ -9,7 +9,7 @@ permissions:
 jobs:
   compare:
     runs-on: windows-2022
-    timeout-minutes: 45
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v7
         with:
@@ -35,15 +35,36 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           cmake --build build/default --config Release --parallel 2 --target lw-ocr-benchmark lw-ocr-ppm lwm-inspect rec-graph-driver rec-width-policy-default rec-width-policy-fine
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          cmake --build build/fine --config Release --parallel 2 --target lw-ocr-benchmark lw-ocr-ppm
+          cmake --build build/fine --config Release --parallel 2 --target lw-ocr-benchmark lw-ocr-ppm lwm-inspect rec-graph-driver
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Gate unchanged production output and comparison contracts
-        run: ctest --test-dir build/default -C Release -R "^(native_onnx_import|rec_width_policy_default|rec_width_policy_fine|onnx_e2e_comparison_contract)$" --output-on-failure
+        run: ctest --test-dir build/default -C Release -R "^(native_onnx_import|rec_width_policy_default|rec_width_policy_fine|onnx_e2e_comparison_contract|native_rec_quality_contract)$" --output-on-failure
+      - name: Gate fine-width output including approved Small spacing correction
+        run: ctest --test-dir build/fine -C Release -R "^native_onnx_import$" --output-on-failure
       - name: Three models, 1/4 workers, paired full OCR and text diffs
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
           python tools/compare_onnx_e2e.py --baseline build/default/Release/lw-ocr-benchmark.exe --candidate build/fine/Release/lw-ocr-benchmark.exe --sample build/default/models/sample.ppm --rounds 3 --iterations 5 --report-text-differences --collect-text --output build/onnx-width-comparison
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Generate project-owned multi-size CJK corpus
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $fontArgs = @()
+          foreach ($font in @('C:\Windows\Fonts\msyh.ttc', 'C:\Windows\Fonts\simsun.ttc')) {
+            if (Test-Path -LiteralPath $font) { $fontArgs += @('--font', $font) }
+          }
+          if ($fontArgs.Count -eq 0) { throw 'no CJK font found for generated OCR corpus' }
+          python tools/generate_ocr_dataset.py --output build/onnx-width-corpus --count 100 --seed 20260907 --format jpg @fontArgs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      # This is an opt-in shape-policy experiment, not a production promotion.
+      # Report accuracy changes explicitly; structural/golden contracts gate above.
+      - name: Compare three-model corpus quality (experimental, informational)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          python tools/compare_native_rec_quality.py --baseline build/default/Release/lw-ocr-ppm.exe --candidate build/fine/Release/lw-ocr-ppm.exe --dataset build/onnx-width-corpus/metadata.json --output build/onnx-width-quality --report-quality-differences
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Publish diagnostic summary
         if: always()
@@ -51,6 +72,9 @@ jobs:
         run: |
           if (Test-Path build/onnx-width-comparison/report.md) {
             Get-Content build/onnx-width-comparison/report.md -Raw | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+          }
+          if (Test-Path build/onnx-width-quality/quality.md) {
+            Get-Content build/onnx-width-quality/quality.md -Raw | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
           }
       - uses: actions/upload-artifact@v7
         if: always()
@@ -60,4 +84,8 @@ jobs:
             build/onnx-width-comparison
             build/default/onnx-import-report.json
             build/default/Testing/Temporary/LastTest.log
+            build/fine/onnx-import-report.json
+            build/fine/Testing/Temporary/LastTest.log
+            build/onnx-width-quality
+            build/onnx-width-corpus/metadata.json
           if-no-files-found: warn
