@@ -29,7 +29,11 @@ class ComparisonTest(unittest.TestCase):
         self.mutate = lambda label, workers, result: None
 
     def run_process(self, args, **kwargs):
-        label = "baseline" if Path(args[0]) == self.old else "candidate"
+        # resolve() expands Windows TEMP short names/junctions, just as the
+        # real harness does before launching its benchmark executable.
+        driver = Path(args[0]).resolve()
+        self.assertIn(driver, (self.old.resolve(), self.new.resolve()))
+        label = "baseline" if driver == self.old.resolve() else "candidate"
         workers = int(args[-2])
         self.calls.append((label, workers, kwargs["env"]))
         result = {"workers": workers, "rec_target_width": 960, "lines": 16,
@@ -45,6 +49,9 @@ class ComparisonTest(unittest.TestCase):
                                           "dictionary": "dict"}}}
         with patch.object(comparison, "ROOT", self.root), \
              patch("tools.validate_model_catalog.validate_catalog", return_value=catalog), \
+             patch.object(comparison.platform, "platform", return_value="test-platform"), \
+             patch.object(comparison.platform, "processor", return_value="test-processor"), \
+             patch.object(comparison.os, "cpu_count", return_value=4), \
              patch.object(comparison.subprocess, "run", side_effect=self.run_process), \
              patch.dict(comparison.os.environ, {"LW_X64REC_PROFILE": "1", "LW_WASM_DET_DEBUG": "1"}), \
              contextlib.redirect_stdout(io.StringIO()):
@@ -53,6 +60,11 @@ class ComparisonTest(unittest.TestCase):
 
     def test_pairing_identity_and_environment(self):
         report = self.evaluate()
+        # Host discovery is independent of the fake benchmark subprocess:
+        # on Linux platform.processor() otherwise launches `uname -p`.
+        self.assertEqual(len(self.calls), 8)
+        self.assertEqual(report["environment"], {
+            "platform": "test-platform", "processor": "test-processor", "logical_cpus": 4})
         self.assertEqual([x[0] for x in self.calls[:4]],
                          ["baseline", "candidate", "candidate", "baseline"])
         self.assertTrue(report["text_contract_pass"])
@@ -66,6 +78,11 @@ class ComparisonTest(unittest.TestCase):
         markdown = (self.root / "report/report.md").read_text()
         self.assertIn("Paired speedup (range)", markdown)
         self.assertIn("2.000x (2.000-2.000)", markdown)
+
+    def test_resolved_driver_alias_is_baseline(self):
+        alias = self.old.parent / ".." / self.old.parent.name / self.old.name
+        self.run_process([str(alias), "2", "3", "1", "960"], env={})
+        self.assertEqual(self.calls[0][0], "baseline")
 
     def test_unresolved_latency_direction_is_visible(self):
         def mutate(label, workers, result):
