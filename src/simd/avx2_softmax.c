@@ -263,10 +263,26 @@ void lw_avx2_ctc_row_probabilities_f32(
                             ? columns - column_base
                             : LW_PACKED_MATMUL_COLUMN_TILE;
                     if (bias != NULL) {
+                        __m256 bias_low;
+                        __m256 bias_high;
+                        if (valid_columns == LW_PACKED_MATMUL_COLUMN_TILE) {
+                            bias_low = _mm256_loadu_ps(bias + column_base);
+                            bias_high = _mm256_loadu_ps(bias + column_base + 8u);
+                        } else {
+                            /* Packed weights are padded to 16 lanes, but
+                             * model bias tensors contain only real classes. */
+                            float bias_values[LW_PACKED_MATMUL_COLUMN_TILE] = {0.0f};
+                            uint32_t lane;
+                            for (lane = 0u; lane < valid_columns; ++lane) {
+                                bias_values[lane] = bias[column_base + lane];
+                            }
+                            bias_low = _mm256_loadu_ps(bias_values);
+                            bias_high = _mm256_loadu_ps(bias_values + 8u);
+                        }
                         accumulator_low = _mm256_add_ps(
-                            accumulator_low, _mm256_loadu_ps(bias + column_base));
+                            accumulator_low, bias_low);
                         accumulator_high = _mm256_add_ps(
-                            accumulator_high, _mm256_loadu_ps(bias + column_base + 8u));
+                            accumulator_high, bias_high);
                     }
                     if (valid_columns == LW_PACKED_MATMUL_COLUMN_TILE) {
                         float lanes[8];

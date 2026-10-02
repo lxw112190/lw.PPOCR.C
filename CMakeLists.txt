@@ -1405,6 +1405,22 @@ if(BUILD_TESTING AND NOT EMSCRIPTEN)
     endif()
     add_test(NAME wasm_ctc_projection COMMAND wasm-ctc-projection-driver)
 
+    add_executable(avx2-ctc-projection-driver tests/test_avx2_ctc_projection.c)
+    target_link_libraries(avx2-ctc-projection-driver PRIVATE lw_ppocr_c)
+    target_include_directories(avx2-ctc-projection-driver PRIVATE
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/kernels"
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/simd")
+    target_compile_features(avx2-ctc-projection-driver PRIVATE c_std_11)
+    if(MSVC)
+        target_compile_options(avx2-ctc-projection-driver PRIVATE /W4 /WX /utf-8)
+    else()
+        target_compile_options(avx2-ctc-projection-driver PRIVATE
+            -Wall -Wextra -Wpedantic -Werror)
+        target_link_libraries(avx2-ctc-projection-driver PRIVATE m)
+    endif()
+    add_test(NAME avx2_ctc_projection_tails COMMAND avx2-ctc-projection-driver)
+    set_tests_properties(avx2_ctc_projection_tails PROPERTIES SKIP_RETURN_CODE 77)
+
     add_executable(nhwc-depthwise-portable-driver
         tests/test_nhwc_depthwise_portable.c
         src/simd/avx2_nhwc_depthwise.c)
