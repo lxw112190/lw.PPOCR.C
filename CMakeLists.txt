@@ -18,6 +18,13 @@ option(LW_WASM_FINE_REC_WIDTHS
     "Use 64-pixel adaptive REC width buckets in compiled WASM OCR" OFF)
 option(LW_NATIVE_FINE_REC_WIDTHS
     "Experimentally reduce native compiled REC padding with finer widths (including 480)" OFF)
+option(LW_EXPERIMENTAL_REC_FFN_TILING
+    "Experimental cache-local Pointwise/GELU/Pointwise scheduling (no arithmetic changes)" OFF)
+set(LW_REC_FFN_TILE_PIXELS "96" CACHE STRING "Experimental FFN pixel block (12, 48 or 96)")
+set_property(CACHE LW_REC_FFN_TILE_PIXELS PROPERTY STRINGS 12 48 96)
+if(NOT LW_REC_FFN_TILE_PIXELS MATCHES "^(12|48|96)$")
+    message(FATAL_ERROR "LW_REC_FFN_TILE_PIXELS must be 12, 48 or 96")
+endif()
 option(LW_WASM_COMPILED_DET
     "Run WASM DET on the compiled NHWC backend when compiled REC is enabled" ON)
 option(LW_WASM_REC_SIMD_KERNELS
@@ -456,6 +463,10 @@ if(LW_SYSTEM_PROCESSOR_LOWER MATCHES "^(loongarch64|loong64)$")
 endif()
 
 function(lw_configure_runtime_target target)
+    if(LW_EXPERIMENTAL_REC_FFN_TILING)
+        target_compile_definitions(${target} PRIVATE LW_EXPERIMENTAL_REC_FFN_TILING=1
+            LW_REC_FFN_TILE_PIXELS=${LW_REC_FFN_TILE_PIXELS})
+    endif()
     if(LW_NATIVE_FINE_REC_WIDTHS AND LW_X64_REC_FAST_ENABLED)
         target_compile_definitions(${target} PRIVATE LW_NATIVE_FINE_REC_WIDTHS=1)
     endif()
@@ -2550,6 +2561,23 @@ if(BUILD_TESTING AND NOT EMSCRIPTEN)
         set_tests_properties(x64_rec_backend_contract PROPERTIES TIMEOUT 120)
         add_executable(x64-rec-backend-execution-driver
             tests/x64_rec_backend_execution_driver.c)
+        if(LW_EXPERIMENTAL_REC_FFN_TILING)
+            add_executable(rec-ffn-contract-driver tests/rec_ffn_contract_driver.c)
+            target_link_libraries(rec-ffn-contract-driver PRIVATE lw_ppocr_c)
+            target_include_directories(rec-ffn-contract-driver PRIVATE src/runtime src/kernels src/simd)
+            target_compile_features(rec-ffn-contract-driver PRIVATE c_std_11)
+            if(MSVC)
+                target_compile_options(rec-ffn-contract-driver PRIVATE /W4 /WX /utf-8)
+            else()
+                target_compile_options(rec-ffn-contract-driver PRIVATE -Wall -Wextra -Wpedantic -Werror)
+            endif()
+            foreach(variant tiny small medium)
+                add_test(NAME rec_ffn_contract_${variant}
+                    COMMAND rec-ffn-contract-driver
+                        "${CMAKE_CURRENT_SOURCE_DIR}/models/ppocrv6-${variant}/rec.onnx")
+                set_tests_properties(rec_ffn_contract_${variant} PROPERTIES TIMEOUT 180)
+            endforeach()
+        endif()
         target_link_libraries(x64-rec-backend-execution-driver PRIVATE lw_ppocr_c)
         target_include_directories(x64-rec-backend-execution-driver PRIVATE
             src/runtime

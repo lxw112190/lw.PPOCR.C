@@ -45,6 +45,7 @@ def binary_identity(driver: Path) -> dict:
         cache = driver.parent / "CMakeCache.txt"
     if cache.is_file():
         keys = {"LW_EXPERIMENTAL_AVX2_FAST_PATH", "LW_NATIVE_FINE_REC_WIDTHS",
+                "LW_EXPERIMENTAL_REC_FFN_TILING", "LW_REC_FFN_TILE_PIXELS",
                 "LW_REC_RESIDENT_WIDTHS", "CMAKE_GENERATOR", "CMAKE_BUILD_TYPE"}
         result["cmake"] = {line.split(":", 1)[0]: line.split("=", 1)[1]
                            for line in cache.read_text(encoding="utf-8").splitlines()

@@ -14,6 +14,9 @@
 #include <stddef.h>
 #include <stdint.h>
 
+/* Keep the individual physical ops for diagnostic/reference execution. */
+#define LW_X64_REC_OP_FFN_BEGIN 1u
+
 typedef enum lw_x64_rec_compile_result {
     LW_X64_REC_COMPILE_OK = 0,
     LW_X64_REC_COMPILE_UNSUPPORTED = 1,
@@ -385,6 +388,8 @@ typedef struct lw_x64_rec_profile {
     uint64_t transpose_ns;
     uint64_t matmul_ns;
     uint64_t ctc_ns;
+    uint64_t ffn_ns;
+    uint32_t ffn_calls;
     /* Pointwise epilogue diagnostics; populated only when REC profiling is on. */
     uint64_t pw_epi_ns[7];
     uint64_t pw_epi_calls[7];
@@ -456,5 +461,8 @@ lw_status lw_x64_rec_instance_run(lw_x64_rec_instance* instance, lw_error* error
 lw_status lw_x64_rec_instance_run_backbone(lw_x64_rec_instance* instance, lw_error* error);
 /* Test-only internal hook: execute one compiled physical op. */
 lw_status lw_x64_rec_instance_run_op(lw_x64_rec_instance* instance, uint32_t op_index, lw_error* error);
+/* Private contract hook: execute an eligible adjacent pair in cache-local tiles. */
+lw_status lw_x64_rec_instance_run_ffn_pair(lw_x64_rec_instance* instance,
+                                           uint32_t op_index, lw_error* error);
 
 #endif

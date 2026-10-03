@@ -1026,6 +1026,51 @@ static lw_x64_rec_compile_result lower_ops(const lw_model* model, const lw_sessi
                                            lw_x64_rec_program* program, uint32_t limit,
                                            lw_error* error);
 
+#if defined(LW_EXPERIMENTAL_REC_FFN_TILING)
+/* Discover pairs before placing tensors, then reproduce the same flags after
+ * offsets are embedded. Scheduling the second op early extends the first
+ * input's lifetime: the projected output must not reuse unread input pixels. */
+static void mark_ffn_pairs(lw_x64_rec_program* program) {
+    uint32_t i;
+    if (program->backend_layout != LW_X64_REC_BACKEND_NHWC || !program->ctc_fused) return;
+    for (i = 0u; i + 1u < program->op_count; ++i) {
+        lw_x64_rec_op* first = &program->ops[i];
+        const lw_x64_rec_op* second = &program->ops[i + 1u];
+        const lw_x64_rec_conv_op* a = &first->data.conv;
+        const lw_x64_rec_conv_op* b = &second->data.conv;
+        uint32_t middle, input, output;
+        int is_output = 0;
+        if (first->kind != LW_X64_REC_OP_POINTWISE ||
+            second->kind != LW_X64_REC_OP_POINTWISE ||
+            a->scalar_fallback || b->scalar_fallback || a->has_residual ||
+            a->activation != LW_NHWC_ACT_GELU || b->activation != LW_NHWC_ACT_NONE ||
+            a->output_channels != b->input_channels ||
+            a->input_height != b->input_height || a->input_width != b->input_width ||
+            a->input_height != a->output_height || a->input_width != a->output_width ||
+            b->input_height != b->output_height || b->input_width != b->output_width ||
+            first->semantic_count == 0u) continue;
+        middle = lwm_read_u32(node_bytes(program->model,
+            first->semantic_begin + first->semantic_count - 1u) + 40u);
+        if (middle != lwm_read_u32(node_bytes(program->model, second->semantic_begin) + 8u) ||
+            !tensor_single_consumer(program->model, middle, second->semantic_begin) ||
+            program->values[middle].alias ||
+            program->values[middle].last_use != (int32_t)(i + 1u)) continue;
+        for (output = 0u; output < program->model->info.output_count; ++output) {
+            if (middle == lwm_read_u32(program->model->bytes +
+                (size_t)program->model->output_offset + (size_t)output * sizeof(uint32_t))) {
+                is_output = 1;
+            }
+        }
+        if (is_output || middle == program->ctc.activation_value) continue;
+        input = lwm_read_u32(node_bytes(program->model, first->semantic_begin) + 8u);
+        if (program->values[input].last_use < (int32_t)(i + 1u))
+            program->values[input].last_use = (int32_t)(i + 1u);
+        first->flags |= LW_X64_REC_OP_FFN_BEGIN;
+        ++i;
+    }
+}
+#endif
+
 static lw_x64_rec_compile_result rec_backend_compile_input_impl(const lw_model* model, uint32_t input_height,
                                                                  uint32_t target_width,
                                                                  lw_x64_rec_compile_strategy strategy,
@@ -1044,11 +1089,17 @@ static lw_x64_rec_compile_result rec_backend_compile_input_impl(const lw_model* 
     for(i=0u;i<program->value_count;++i){fill_value(session,i,&program->values[i],strategy);if((session->tensors[i].flags&LWM_V0_TENSOR_FLAG_INPUT)!=0u)program->input_value=i;}
     lowered=lower_ops(model,session,program,limit,error);
     if(lowered!=LW_X64_REC_COMPILE_OK){lw_session_free(session);lw_x64_rec_program_free(program);return lowered;}
+#if defined(LW_EXPERIMENTAL_REC_FFN_TILING)
+    mark_ffn_pairs(program);
+#endif
     status=plan_arena_offsets(program,error);
     if(status!=LW_STATUS_OK){lw_session_free(session);lw_x64_rec_program_free(program);return status==LW_STATUS_OUT_OF_MEMORY?LW_X64_REC_COMPILE_OUT_OF_MEMORY:LW_X64_REC_COMPILE_INVALID_GRAPH;}
     reset_lowering(program,limit);
     lowered=lower_ops(model,session,program,limit,error);
     if(lowered!=LW_X64_REC_COMPILE_OK){lw_session_free(session);lw_x64_rec_program_free(program);return lowered;}
+#if defined(LW_EXPERIMENTAL_REC_FFN_TILING)
+    mark_ffn_pairs(program);
+#endif
     program->semantic_consumed+=program->semantic_elided; if(program->ctc_fused){
         uint64_t ctc_count = 0u;
         status=lw_x64_rec_ctc_prepare_shared(model,session,packed_source == NULL ? NULL : &packed_source->ctc,&program->ctc,error);

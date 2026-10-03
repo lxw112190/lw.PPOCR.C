@@ -51,3 +51,18 @@ jobs:
           -C RelWithDebInfo
           -R "^(lwm_loader|lwm_corruption|abi_layout_contract|avx2_ctc_projection_tails|native_onnx_import|full_ocr_pipeline_reference|full_ocr_golden_corpus)$"
           --output-on-failure
+      - name: Configure experimental REC FFN lifetime contracts
+        run: >-
+          cmake -S . -B build-ffn-sanitizers -G Ninja
+          -DCMAKE_BUILD_TYPE=RelWithDebInfo -DBUILD_TESTING=ON
+          -DLW_BUILD_HTTP_DEMO=OFF -DLW_EXPERIMENTAL_REC_FFN_TILING=ON
+          -DLW_REC_FFN_TILE_PIXELS=96 -DLW_NATIVE_FINE_REC_WIDTHS=OFF
+          -DCMAKE_C_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer"
+          -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address,undefined"
+          -DCMAKE_SHARED_LINKER_FLAGS="-fsanitize=address,undefined"
+      - name: Build experimental REC FFN contracts
+        run: cmake --build build-ffn-sanitizers --parallel 2 --target rec-ffn-contract-driver
+      - name: Check three models and five widths with ASan and UBSan
+        run: >-
+          ctest --test-dir build-ffn-sanitizers -C RelWithDebInfo
+          -R "^rec_ffn_contract_(tiny|small|medium)$" --output-on-failure

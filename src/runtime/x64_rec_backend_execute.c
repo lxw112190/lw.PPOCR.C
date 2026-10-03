@@ -182,6 +182,122 @@ static uint32_t pointwise_shard_workers(const lw_x64_rec_instance* instance,
     return workers <= 1u ? 1u : workers;
 }
 
+/* Cache-local FFN scheduling. A tile boundary must divide every supported
+ * Pointwise row tile (2/3/4/6); channel accumulation and epilogues stay in the
+ * existing kernels. Reuse the planned intermediate slot: no new allocation. */
+#ifndef LW_REC_FFN_TILE_PIXELS
+#define LW_REC_FFN_TILE_PIXELS 96u
+#endif
+typedef struct lw_rec_ffn_shard {
+    lw_rec_pointwise_shard expansion;
+    lw_rec_pointwise_shard projection;
+} lw_rec_ffn_shard;
+
+static void ffn_shard_entry(void* context_void, uint32_t worker_index,
+                             uint32_t worker_count) {
+    const lw_rec_ffn_shard* pair = (const lw_rec_ffn_shard*)context_void;
+    uint32_t begin = pointwise_shard_begin(pair->expansion.pixels, worker_count, worker_index);
+    uint32_t end = pointwise_shard_begin(pair->expansion.pixels, worker_count, worker_index + 1u);
+    while (begin < end) {
+        uint32_t count = end - begin;
+        if (count > LW_REC_FFN_TILE_PIXELS) count = LW_REC_FFN_TILE_PIXELS;
+        pointwise_run_range(&pair->expansion, begin, count);
+        pointwise_run_range(&pair->projection, begin, count);
+        begin += count;
+    }
+}
+
+static int ffn_span_valid(uint64_t offset, uint64_t bytes, uint64_t capacity) {
+    return offset <= capacity && bytes <= capacity - offset;
+}
+
+static int ffn_disjoint(uint64_t a, uint64_t a_bytes, uint64_t b, uint64_t b_bytes) {
+    return a <= b ? a_bytes <= b - a : b_bytes <= a - b;
+}
+
+static void ffn_init_shard(lw_x64_rec_instance* instance,
+                            const lw_x64_rec_conv_op* conv, uint32_t pixels,
+                            lw_rec_pointwise_shard* shard) {
+    memset(shard, 0, sizeof(*shard));
+    shard->input = offset_ptr(instance, conv->input_offset);
+    shard->output = offset_ptr(instance, conv->output_offset);
+    shard->packed_weights = conv->packed_weights;
+    shard->pixels = pixels;
+    shard->input_channels = conv->input_channels;
+    shard->output_channels = conv->output_channels;
+    shard->kernel = conv->pointwise_kernel;
+    shard->epilogue.bias = conv->bias;
+    shard->epilogue.post_bias = conv->post_bias;
+    shard->epilogue.activation = conv->activation;
+    if (conv->has_residual)
+        shard->epilogue.residual = offset_ptr(instance, conv->residual_offset);
+}
+
+lw_status lw_x64_rec_instance_run_ffn_pair(lw_x64_rec_instance* instance,
+                                           uint32_t op_index, lw_error* error) {
+    const lw_x64_rec_program* program;
+    const lw_x64_rec_op* first;
+    const lw_x64_rec_op* second;
+    const lw_x64_rec_conv_op *a, *b;
+    uint64_t pixels64, input_bytes, middle_bytes, output_bytes;
+    uint32_t pixels, workers;
+    lw_rec_ffn_shard pair;
+    if (instance == NULL || instance->program == NULL || instance->arena == NULL ||
+        op_index >= instance->program->op_count ||
+        instance->program->op_count - op_index < 2u) goto invalid;
+    program = instance->program;
+    if (program->arena_bytes > SIZE_MAX) goto invalid;
+    first = &program->ops[op_index];
+    second = &program->ops[op_index + 1u];
+    a = &first->data.conv;
+    b = &second->data.conv;
+    if (!(first->flags & LW_X64_REC_OP_FFN_BEGIN) ||
+        first->kind != LW_X64_REC_OP_POINTWISE || second->kind != LW_X64_REC_OP_POINTWISE ||
+        a->scalar_fallback || b->scalar_fallback || a->has_residual ||
+        a->kernel_h != 1u || a->kernel_w != 1u || b->kernel_h != 1u || b->kernel_w != 1u ||
+        a->stride_h != 1u || a->stride_w != 1u || b->stride_h != 1u || b->stride_w != 1u ||
+        a->groups != 1u || b->groups != 1u ||
+        a->activation != LW_NHWC_ACT_GELU || b->activation != LW_NHWC_ACT_NONE ||
+        a->packed_weights == NULL || b->packed_weights == NULL ||
+        a->output_offset != b->input_offset || a->output_channels != b->input_channels ||
+        a->input_channels == 0u || a->output_channels == 0u || b->output_channels == 0u ||
+        a->input_height != b->input_height || a->input_width != b->input_width ||
+        a->input_height != a->output_height || a->input_width != a->output_width ||
+        b->input_height != b->output_height || b->input_width != b->output_width) goto invalid;
+    pixels64 = (uint64_t)a->input_height * a->input_width;
+    if (pixels64 == 0u || pixels64 > UINT32_MAX) goto invalid;
+    pixels = (uint32_t)pixels64;
+    if (pixels64 > UINT64_MAX / ((uint64_t)a->input_channels * sizeof(float)) ||
+        pixels64 > UINT64_MAX / ((uint64_t)a->output_channels * sizeof(float)) ||
+        pixels64 > UINT64_MAX / ((uint64_t)b->output_channels * sizeof(float))) goto invalid;
+    input_bytes = pixels64 * a->input_channels * sizeof(float);
+    middle_bytes = pixels64 * a->output_channels * sizeof(float);
+    output_bytes = pixels64 * b->output_channels * sizeof(float);
+    if (!ffn_span_valid(a->input_offset, input_bytes, program->arena_bytes) ||
+        !ffn_span_valid(a->output_offset, middle_bytes, program->arena_bytes) ||
+        !ffn_span_valid(b->output_offset, output_bytes, program->arena_bytes) ||
+        !ffn_disjoint(a->input_offset, input_bytes, a->output_offset, middle_bytes) ||
+        !ffn_disjoint(a->input_offset, input_bytes, b->output_offset, output_bytes) ||
+        !ffn_disjoint(a->output_offset, middle_bytes, b->output_offset, output_bytes)) goto invalid;
+    if (b->has_residual &&
+        (!ffn_span_valid(b->residual_offset, output_bytes, program->arena_bytes) ||
+         !ffn_disjoint(b->residual_offset, output_bytes, a->output_offset, middle_bytes) ||
+         !ffn_disjoint(b->residual_offset, output_bytes, b->output_offset, output_bytes))) goto invalid;
+    ffn_init_shard(instance, a, pixels, &pair.expansion);
+    ffn_init_shard(instance, b, pixels, &pair.projection);
+    workers = pointwise_shard_workers(instance, pixels, a->input_channels, a->output_channels);
+    if (workers > 1u) {
+        lw_thread_pool_run(instance->thread_pool, workers, ffn_shard_entry, &pair);
+    } else {
+        ffn_shard_entry(&pair, 0u, 1u);
+    }
+    lw_set_error(error, LW_STATUS_OK, "");
+    return LW_STATUS_OK;
+invalid:
+    lw_set_error(error, LW_STATUS_INVALID_ARGUMENT, "REC FFN pair/lifetime is invalid");
+    return LW_STATUS_INVALID_ARGUMENT;
+}
+
 /* Intra-op sharding for dense convs along output rows.  The kernel accepts an
  * output_row_offset and computes every output pixel with the same tap order
  * as the serial run, so row splits are bit-identical.  Each worker gets its
@@ -1353,17 +1469,29 @@ static lw_status run_backbone_ops(lw_x64_rec_instance* instance, lw_error* error
         memset(&instance->profile, 0, sizeof(instance->profile));
     }
     for (i = 0u; i < instance->program->op_count; ++i) {
+        int paired = 0;
+#if defined(LW_EXPERIMENTAL_REC_FFN_TILING)
+        paired = (instance->program->ops[i].flags & LW_X64_REC_OP_FFN_BEGIN) != 0u;
+#endif
+#if defined(__EMSCRIPTEN__)
+        /* Detailed one-op traces retain the unfused diagnostic execution. */
+        if (detailed) paired = 0;
+#endif
         if (profiling) {
             uint64_t started = rec_profile_now_ns();
             uint64_t* slot;
-            status = execute_op(instance, &instance->program->ops[i], error);
+            status = paired ? lw_x64_rec_instance_run_ffn_pair(instance, i, error)
+                            : execute_op(instance, &instance->program->ops[i], error);
             slot = rec_profile_slot(&instance->profile, instance->program->ops[i].kind);
             {
                 uint64_t finished = rec_profile_now_ns();
                 uint64_t elapsed = finished >= started ? finished - started : 0u;
                 if (slot != NULL) *slot += elapsed;
                 instance->profile.total_ns += elapsed;
-                if (instance->program->ops[i].kind == LW_X64_REC_OP_POINTWISE) {
+                if (paired) {
+                    instance->profile.ffn_ns += elapsed;
+                    ++instance->profile.ffn_calls;
+                } else if (instance->program->ops[i].kind == LW_X64_REC_OP_POINTWISE) {
                     record_rec_pointwise_epilogue(&instance->profile,
                                                    &instance->program->ops[i], elapsed);
                 }
@@ -1372,7 +1500,8 @@ static lw_status run_backbone_ops(lw_x64_rec_instance* instance, lw_error* error
 #endif
             }
         } else {
-            status = execute_op(instance, &instance->program->ops[i], error);
+            status = paired ? lw_x64_rec_instance_run_ffn_pair(instance, i, error)
+                            : execute_op(instance, &instance->program->ops[i], error);
         }
         if (status != LW_STATUS_OK) {
             if (error != NULL && error->message[0] == '\0') {
@@ -1382,6 +1511,7 @@ static lw_status run_backbone_ops(lw_x64_rec_instance* instance, lw_error* error
             }
             return status;
         }
+        if (paired) ++i;
     }
 #if defined(__EMSCRIPTEN__)
     if (detailed) fprintf(stderr, "WASM_REC_OP_END width=%u invocation=%llu\n",
@@ -1428,6 +1558,10 @@ lw_status lw_x64_rec_instance_run(lw_x64_rec_instance* instance, lw_error* error
             p->binary_ns / 1e6, p->unary_ns / 1e6, p->reduce_ns / 1e6,
             p->pool_ns / 1e6, p->transpose_ns / 1e6, p->matmul_ns / 1e6,
             p->ctc_ns / 1e6);
+        if (p->ffn_calls != 0u)
+            fprintf(stderr, "REC_FFN width=%u pairs=%u elapsed=%.3f tile=%u\n",
+                instance->program->target_width, p->ffn_calls, p->ffn_ns / 1e6,
+                LW_REC_FFN_TILE_PIXELS);
 #if defined(__EMSCRIPTEN__)
         {
             static const char* const names[REC_PW_EPI_COUNT] = {

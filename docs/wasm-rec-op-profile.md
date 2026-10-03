@@ -61,10 +61,12 @@ exact GELU followed by Pointwise projection with residual:
 | Tiny | 46,47 | 127,134 | 160 -> 320 -> 160 | 22.267 / 9 |
 | Small | 83,84 | 201,208 | 384 -> 768 -> 384 | 80.049 / 6 |
 
-Both operate on 3x160 pixels and include post-bias. This identifies the next
-candidate, not an implemented fusion. Verify dataflow, single-consumer ownership
-and physical lifetime first. Exact GELU prevents simply multiplying the weight
-matrices. No DW->PW fusion or expanded operator coverage was added.
+Both operate on 3x160 pixels and include post-bias. Exact GELU prevents simply
+multiplying the weight matrices. The subsequent cache-local FFN scheduling
+experiment verified dataflow, single-consumer ownership and physical lifetime,
+but found no useful Tiny/Small HTML speedup and remains default-OFF. See
+[the implementation, contracts and A/B results](rec-ffn-tiling.md).
+No DW->PW fusion or expanded operator coverage was added.
 
 ## Integration and validation
 
