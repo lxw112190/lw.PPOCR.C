@@ -25,7 +25,7 @@ class VersionConsistencyTest(unittest.TestCase):
 
     def test_product_metadata_uses_the_cmake_version(self) -> None:
         version = self.project_version()
-        self.assertEqual(version, "1.1.0")
+        self.assertEqual(version, "1.2.0")
 
         assembly = (
             ROOT / "examples" / "csharp-winforms" / "Properties" / "AssemblyInfo.cs"
@@ -38,7 +38,7 @@ class VersionConsistencyTest(unittest.TestCase):
             "android/demo-java/build.gradle.kts",
         ):
             gradle = (ROOT / relative).read_text(encoding="utf-8")
-            self.assertIn("versionCode = 3", gradle)
+            self.assertIn("versionCode = 4", gradle)
             self.assertIn(f'versionName = "{version}-preview.1"', gradle)
 
         sbom = json.loads((ROOT / "sbom.cdx.json").read_text(encoding="utf-8"))
@@ -59,6 +59,23 @@ class VersionConsistencyTest(unittest.TestCase):
         self.assertIn('packages: "platform-tools"', setup_block)
         self.assertNotIn('packages: "tools platform-tools"', setup_block)
         self.assertNotIn('"tools"', setup_block)
+
+    def test_sbom_covers_official_onnx_and_shared_dictionary(self) -> None:
+        sbom = json.loads((ROOT / "sbom.cdx.json").read_text(encoding="utf-8"))
+        catalog = json.loads((ROOT / "models/ppocrv6-models.json").read_text(encoding="utf-8"))
+        components = {item["bom-ref"]: item for item in sbom["components"]}
+        dependencies = set(sbom["dependencies"][0]["dependsOn"])
+        assets = [(f"lw-model:ppocrv6-{variant}-{kind}:official-onnx", value[kind])
+                  for variant, value in catalog["variants"].items() for kind in ("det", "rec")]
+        assets += [("lw-model:ppocrv6-shared-cls:official-onnx", catalog["shared_assets"]["cls"]),
+                   ("lw-file:ppocrv6-small-medium-dictionary", catalog["shared_assets"]["small_rec_dictionary"])]
+        for identity, asset in assets:
+            with self.subTest(identity=identity):
+                self.assertIn(identity, dependencies)
+                component = components[identity]
+                self.assertEqual(component["hashes"], [{"alg": "SHA-256", "content": asset["sha256"]}])
+                self.assertEqual(component["licenses"][0]["license"]["id"], "Apache-2.0")
+                self.assertIn({"name": "lw.asset.path", "value": "models/" + asset["path"]}, component["properties"])
 
     def test_runtime_contract_snapshot_matches_sources(self) -> None:
         snapshot = json.loads(
@@ -180,6 +197,7 @@ class VersionConsistencyTest(unittest.TestCase):
         workflow = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
         wasm_job = workflow.split("  wasm:", 1)[1].split("  android:", 1)[0]
         self.assertNotIn("compiled_rec: true", wasm_job)
+        self.assertIn("release_web_profile: true", wasm_job)
 
     def test_preview_release_documentation_matches_supported_outputs(self) -> None:
         version = self.project_version()

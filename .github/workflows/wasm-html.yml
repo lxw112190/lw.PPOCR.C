@@ -7,6 +7,11 @@ on:
     branches: [main]
   workflow_dispatch:
     inputs:
+      release_web_profile:
+        description: "Release profile: compiled Tiny/Small Web, canonical Medium/Node"
+        required: false
+        default: false
+        type: boolean
       build_web_variants:
         description: "Build PP-OCRv6 Small and Medium standalone Web artifacts"
         required: false
@@ -19,6 +24,10 @@ on:
         type: boolean
   workflow_call:
     inputs:
+      release_web_profile:
+        required: false
+        default: false
+        type: boolean
       build_web_variants:
         required: false
         default: false
@@ -58,6 +67,7 @@ jobs:
           python -m unittest discover -s tests -p test_summarize_wasm_rec_memory.py
           python -m unittest discover -s tests -p test_summarize_wasm_pointwise_epilogue.py
           python -m unittest discover -s tests -p test_web_compiled_diagnostics.py
+          python -m unittest discover -s tests -p test_web_release_profile.py
 
       - name: Cache Playwright Chromium
         uses: actions/cache@v5
@@ -160,7 +170,7 @@ jobs:
           --golden ci/web-ppocrv6-tiny.json
 
       - name: Compare canonical and compiled WASM full OCR
-        if: github.event_name == 'push' || github.event_name == 'pull_request' || inputs.compiled_rec == true
+        if: github.event_name == 'push' || github.event_name == 'pull_request' || inputs.compiled_rec == true || inputs.release_web_profile == true
         shell: bash
         run: |
           set -euo pipefail
@@ -319,7 +329,7 @@ jobs:
           exit "$report_status"
 
       - name: Compare Small canonical and compiled WASM full OCR
-        if: github.event_name == 'push' || github.event_name == 'pull_request' || inputs.compiled_rec == true
+        if: github.event_name == 'push' || github.event_name == 'pull_request' || inputs.compiled_rec == true || inputs.release_web_profile == true
         shell: bash
         run: |
           set -euo pipefail
@@ -464,19 +474,81 @@ jobs:
           --html build-wasm/ocr-demo.html
           --sample models/ppocrv6-tiny/sample.jpg
 
+      # Test the exact release profile on normal main/PR CI as well as tag builds.
+      # Reuse the compiled runtime from A/B; never overwrite canonical Medium/Node.
+      - name: Build and test release Tiny and Small browser profile
+        if: inputs.release_web_profile == true || github.event_name == 'push' || github.event_name == 'pull_request'
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${{ inputs.compiled_rec || false }}" == "true" ]]; then
+            echo "release_web_profile requires a canonical primary build" >&2
+            exit 1
+          fi
+          emcmake cmake -S . -B build-wasm-compiled -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release -DLW_BUILD_HTTP_DEMO=OFF \
+            -DLW_BUILD_CSHARP_DEMOS=OFF -DBUILD_TESTING=OFF \
+            -DLW_DEPLOY_ONNX_MODELS=ON -DLW_WEB_PDF=ON \
+            -DLW_BUILD_WEB_MODEL_VARIANTS=ON -DLW_WASM_SIMD128=ON \
+            -DLW_WASM_COMPILED_REC=ON -DLW_WASM_COMPILED_DET=ON \
+            -DLW_WASM_REC_SIMD_KERNELS=ON -DLW_WASM_REC_LAZY_FALLBACK=ON \
+            -DLW_WASM_POINTWISE_ROWS=2 -DLW_WASM_FINE_REC_WIDTHS=OFF \
+            -DLW_EXPERIMENTAL_REC_FFN_TILING=OFF -DLW_EXPERIMENTAL_CTC_TILED=OFF
+          cmake --build build-wasm-compiled \
+            --target lw-ocr-html lw-ocr-html-small wasm-pointwise-contract wasm-erf-contract --parallel
+          node build-wasm-compiled/wasm-pointwise-contract.js
+          node build-wasm-compiled/wasm-erf-contract.js
+          python web/test_ocr_sdk.py --sdk build-wasm-compiled/lw-ppocr.js \
+            --sample models/ppocrv6-tiny/sample.jpg --golden ci/web-ppocrv6-tiny.json
+          python web/test_ocr_html.py --html build-wasm-compiled/ocr-demo.html \
+            --sample models/ppocrv6-tiny/sample.jpg --golden ci/web-ppocrv6-tiny.json
+          python web/test_web_browser_fallbacks.py --html build-wasm-compiled/ocr-demo.html \
+            --sample models/ppocrv6-tiny/sample.jpg
+          python web/test_pdf_html.py --html build-wasm-compiled/ocr-demo.html \
+            --sample models/ppocrv6-tiny/sample.jpg
+          python web/test_ocr_sdk.py --sdk build-wasm-compiled/lw-ppocr-v6-small.js \
+            --sample models/ppocrv6-tiny/sample.jpg --golden ci/web-ppocrv6-small.json --variant-contract-only
+          python web/test_ocr_html.py --html build-wasm-compiled/ocr-demo-small.html \
+            --sample models/ppocrv6-tiny/sample.jpg --golden ci/web-ppocrv6-small.json --variant-contract-only
+
+      - name: Stage exact tested browser distribution
+        shell: bash
+        run: |
+          set -euo pipefail
+          options=()
+          if [[ "${{ inputs.release_web_profile || false }}" == "true" || \
+                "${{ github.event_name }}" == "push" || "${{ github.event_name }}" == "pull_request" ]]; then
+            options+=(--fast-dir build-wasm-compiled)
+          fi
+          if [[ "${{ inputs.build_web_variants || false }}" == "true" ]]; then
+            options+=(--include-variants)
+          fi
+          version="$(python -c 'from tools.check_release_readiness import project_version; print(project_version([]))')"
+          python tools/stage_web_release_artifacts.py --primary-dir build-wasm \
+            --output-dir build/web-distribution --version "$version" \
+            --report build/web-release-profile.json "${options[@]}"
+
       - name: Upload browser artifacts
         uses: actions/upload-artifact@v7
         with:
           name: lw.PPOCR.C-browser-${{ github.sha }}
           path: |
-            build-wasm/lw-ppocr.js
-            build-wasm/ocr-demo.html
-            build-wasm/lw-ppocr-v6-small.js
-            build-wasm/lw-ppocr-v6-medium.js
-            build-wasm/ocr-demo-small.html
-            build-wasm/ocr-demo-medium.html
-            build-wasm/lw.PPOCR.C-*-node-wasm.zip
-            build-wasm/lw.PPOCR.C-*-node-wasm.zip.sha256
+            build/web-distribution/lw-ppocr.js
+            build/web-distribution/ocr-demo.html
+            build/web-distribution/lw-ppocr-v6-small.js
+            build/web-distribution/lw-ppocr-v6-medium.js
+            build/web-distribution/ocr-demo-small.html
+            build/web-distribution/ocr-demo-medium.html
+            build/web-distribution/lw.PPOCR.C-*-node-wasm.zip
+            build/web-distribution/lw.PPOCR.C-*-node-wasm.zip.sha256
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload browser distribution audit
+        uses: actions/upload-artifact@v7
+        with:
+          name: web-release-profile-${{ github.sha }}
+          path: build/web-release-profile.json
           if-no-files-found: error
           retention-days: 14
 
@@ -490,7 +562,7 @@ jobs:
           retention-days: 14
 
       - name: Upload compiled REC comparison
-        if: always() && (github.event_name == 'push' || github.event_name == 'pull_request' || inputs.compiled_rec == true)
+        if: always() && (github.event_name == 'push' || github.event_name == 'pull_request' || inputs.compiled_rec == true || inputs.release_web_profile == true)
         uses: actions/upload-artifact@v7
         with:
           name: wasm-compiled-rec-comparison-${{ github.sha }}

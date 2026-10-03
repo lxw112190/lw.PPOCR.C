@@ -79,7 +79,7 @@ def main() -> int:
     parser.add_argument("--dictionary", type=Path, required=True)
     parser.add_argument("--build-dir", type=Path, required=True)
     parser.add_argument("--output-dir", type=Path, required=True)
-    parser.add_argument("--runtime-version", default="1.1.0")
+    parser.add_argument("--runtime-version", default="1.2.0")
     parser.add_argument(
         "--rec-max-width",
         type=int,

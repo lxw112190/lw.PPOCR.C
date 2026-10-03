@@ -40,7 +40,7 @@ class RuntimeModelPackTests(unittest.TestCase):
             with zipfile.ZipFile(first) as archive:
                 manifest = json.loads(archive.read("ppocrv6-small/manifest.json"))
                 self.assertEqual(manifest["model_id"], "ppocrv6-small")
-                self.assertEqual(manifest["model_revision"], "1.1.0")
+                self.assertEqual(manifest["model_revision"], "1.2.0")
                 self.assertEqual(manifest["runtime_status"], "production")
                 self.assertEqual(manifest["minimum_runtime_version"], "1.0.0")
                 self.assertEqual(manifest["lwm_format_version"], "0.1")

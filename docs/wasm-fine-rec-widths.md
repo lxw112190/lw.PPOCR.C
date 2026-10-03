@@ -6,6 +6,10 @@ SIMD arithmetic, or CTC algorithm. `LW_WASM_FINE_REC_WIDTHS` defaults to OFF
 and requires compiled SIMD128 WASM REC. `LW_WASM_COMPILED_REC` also remains
 OFF globally. Native, canonical WASM, and Legacy builds retain five buckets.
 
+v1.2.0 release Tiny/Small HTML and SDK opt into compiled SIMD128 but still
+keep this fine-width experiment OFF: their release policy also has five
+buckets. The thirteen-bucket timings/text policy below remain experimental.
+
 | Policy | Width buckets (pixels) |
 | --- | --- |
 | Existing | 192, 320, 480, 640, 960 |

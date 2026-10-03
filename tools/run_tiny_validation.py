@@ -58,7 +58,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--build-dir", type=Path, required=True)
     parser.add_argument("--output-dir", type=Path, required=True)
-    parser.add_argument("--runtime-version", default="1.1.0")
+    parser.add_argument("--runtime-version", default="1.2.0")
     parser.add_argument("--expected-lines", type=int, default=16)
     args = parser.parse_args(argv)
 

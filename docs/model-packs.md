@@ -1,6 +1,6 @@
 # PP-OCRv6 Runtime Model Packs
 
-`v1.1.0` preserves the same model-pack boundary without creating a separate
+`v1.2.0` preserves the same model-pack boundary without creating a separate
 Runtime binary for every model. A pack contains the converted LWM assets
 required by one PP-OCRv6 variant and a manifest that identifies the exact asset
 set. Tiny is stable; Small and Medium packs remain Preview attachments.
@@ -33,10 +33,10 @@ python tools/package_ppocrv6_runtime.py `
   --input-dir build/runtime-models/ppocrv6-small `
   --variant small `
   --runtime-status analysis-only `
-  --output dist/lw-ppocr-model-ppocrv6-small-1.1.0.zip
+  --output dist/lw-ppocr-model-ppocrv6-small-1.2.0.zip
 
 python tools/validate_runtime_model_pack.py `
-  dist/lw-ppocr-model-ppocrv6-small-1.1.0.zip
+  dist/lw-ppocr-model-ppocrv6-small-1.2.0.zip
 ```
 
 The input directory must contain `det.lwm`, `cls.lwm`, `rec.lwm` and `ppocr_keys.txt`. Use `tools/prepare_ppocrv6_runtime_variant.py` to produce the canonical directory from a native build before packaging. The same command works for `tiny`, `small` and `medium`. The ZIP is deterministic and stored without compression so its checksum is stable across CI runners.
@@ -76,9 +76,9 @@ python tools/prepare_ppocrv6_runtime_variant.py `
 python tools/package_ppocrv6_runtime.py `
   --input-dir build/runtime-models/ppocrv6-tiny `
   --variant tiny `
-  --runtime-version 1.1.0 `
+  --runtime-version 1.2.0 `
   --minimum-runtime-version 1.0.0 `
-  --output dist/lw-ppocr-model-ppocrv6-tiny-1.1.0.zip
+  --output dist/lw-ppocr-model-ppocrv6-tiny-1.2.0.zip
 ```
 
 Tiny remains the default model in the C/HTTP, Web, Android, Desktop Java and Node/WASM packages. Small and Medium are opt-in preview assets and do not replace those defaults. On a tagged release, the workflow publishes `lw.PPOCR.C-<version>-ppocrv6-tiny-runtime.zip`, `lw.PPOCR.C-<version>-ppocrv6-small-runtime.zip` and `lw.PPOCR.C-<version>-ppocrv6-medium-runtime.zip` only after the Windows and Linux validation packs have identical SHA-256 values.

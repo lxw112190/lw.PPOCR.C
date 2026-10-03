@@ -10,6 +10,13 @@ them locally at initialization. The `LwPpocr` API, single-file offline behavior
 and Worker/main-thread fallback remain unchanged. For old LWM packaging use
 `-DLW_DEPLOY_ONNX_MODELS=OFF`; see [model loading](onnx-runtime.md).
 
+v1.2.0 tagged modern Tiny/Small SDK and HTML files use compiled SIMD128,
+Pointwise 2×16 and lazy REC fallback, with the same public API and five REC
+width buckets. Medium SDK/HTML and the Node package remain canonical;
+Legacy remains scalar. Global `LW_WASM_COMPILED_REC` is still OFF, so a
+default source build is not the optimized release profile. Fine widths and
+FFN tiling remain OFF in release files. See [release profiles](release-notes-v1.2.0.md).
+
 The SDK is separate from **ocr-demo.html**: applications load the JavaScript
 SDK, while people who only need the ready-made interface can open the
 standalone HTML directly.
@@ -127,7 +134,7 @@ a high-water mark and are reused by later calls.
 The script defines one frozen global object:
 
 ~~~javascript
-LwPpocr.version;       // SDK package version, for example "1.1.0"
+LwPpocr.version;       // SDK package version, for example "1.2.0"
 LwPpocr.webAbiVersion; // low-level Web ABI used by this SDK; currently 1
 LwPpocr.Error;         // error class
 LwPpocr.create;        // async factory

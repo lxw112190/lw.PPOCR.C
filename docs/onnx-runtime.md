@@ -1,6 +1,6 @@
 # Direct official ONNX loading
 
-Current source builds load the repository's official PP-OCRv6 Tiny, Small and
+Introduced in v1.2.0: source builds load the official PP-OCRv6 Tiny, Small and
 Medium ONNX models through the existing C ABI. LWM v0.1 loading remains
 compatible. This feature does **not** imply that older release binaries accept
 ONNX, nor does it turn this project into a general-purpose ONNX runtime.

@@ -11,6 +11,7 @@ from pathlib import Path
 
 from PIL import Image
 from playwright.sync_api import ConsoleMessage, Request, sync_playwright
+from compiled_diagnostics import is_compiled_status
 
 
 EXPECTED_FIRST_LINE = "纯臻营养护发素"
@@ -146,7 +147,7 @@ def main() -> int:
             page = browser.new_page(viewport={"width": 1180, "height": 900})
 
             def capture_console(message: ConsoleMessage) -> None:
-                if message.type == "error":
+                if message.type == "error" and not is_compiled_status(message.text):
                     browser_messages.append(f"{message.type}: {message.text}")
 
             def capture_request(request: Request) -> None:

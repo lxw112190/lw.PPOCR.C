@@ -252,16 +252,22 @@ hardware.
 
 ## Publish a tagged release
 
+v1.2.0 modern Tiny/Small HTML and SDK use compiled SIMD128, Pointwise 2×16
+and lazy REC fallback. Medium browser and Node remain canonical; Legacy stays
+scalar. Global compiled REC remains OFF. CI sets `release_web_profile: true`,
+tests the final files, then stages them flat with SHA-256 identity checks.
+Audit reports stay CI-only. Follow [the v1.2 checklist](release-readiness-v1.2.md).
+
 Pushing a tag whose base version matches the CMake project version starts the
 release workflow. Stable and prerelease suffixes are accepted. Before creating
 the stable release, run `python -m unittest tests.test_versioning` and
-`python tools/check_release_readiness.py --mode stable --version 1.1.0`. Then
+`python tools/check_release_readiness.py --mode stable --version 1.2.0`. Then
 create an annotated tag:
 
 ```bash
-git tag -a v1.1.0 -m "lw.PPOCR.C v1.1.0: native x64 performance and memory"
-git show --no-patch v1.1.0
-git push origin v1.1.0
+git tag -a v1.2.0 -m "lw.PPOCR.C v1.2.0: direct ONNX and faster Tiny/Small browser OCR"
+git show --no-patch v1.2.0
+git push origin v1.2.0
 ```
 
 Do not replace or move an existing public tag. If a release must be corrected,

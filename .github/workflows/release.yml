@@ -22,6 +22,7 @@ jobs:
     uses: ./.github/workflows/wasm-html.yml
     with:
       build_web_variants: true
+      release_web_profile: true
     permissions:
       contents: read
 

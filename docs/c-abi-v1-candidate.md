@@ -1,7 +1,7 @@
 # C ABI v1 frozen contract
 
 The C ABI v1 contract is frozen for the approved 1.0 scope and is shipped by
-the `v1.0.0` stable package; v1.1.0 preserves it unchanged. The historical
+the `v1.0.0` stable package; v1.2.0 preserves it unchanged. The historical
 `*-candidate` filenames are
 retained so existing package and documentation paths remain valid.
 

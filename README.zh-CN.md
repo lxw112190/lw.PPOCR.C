@@ -9,17 +9,21 @@ Python、OpenCV、ONNX Runtime、OpenVINO、TensorRT 或 protobuf，适合将文
 > 本项目不是通用 ONNX 推理框架。当前目标是可靠、高效地运行官方 ONNX 或兼容 LWM 格式的
 > PP-OCRv6 Tiny、Small 和 Medium；Tiny 为默认模型，Small/Medium 为可选 preview。
 
-当前源码已支持 C Runtime **直接加载仓库中的官方 ONNX**，不需要部署 Python、
+v1.2.0 源码已支持 C Runtime **直接加载仓库中的官方 ONNX**，不需要部署 Python、
 protobuf 或 ONNX Runtime。加载时转换为既有内部 IR，复用原来的执行器和优化后端；
 LWM 加载保持兼容。详见[直接加载 ONNX](docs/onnx-runtime.md)，不要将这项新能力
 理解为旧版已发布二进制也能加载 ONNX。
 
-## 准备发布稳定版：v1.1.0
+## 准备发布稳定版：v1.2.0
 
-当前已发布的最新稳定版仍是 `v1.0.0`。`v1.1.0` 聚焦原生 x64 端到端耗时和
-compiled REC 常驻内存优化，不扩大冻结的支持范围。详见
-[v1.1.0 发布说明](docs/release-notes-v1.1.0.md)和
-[发布检查清单](docs/release-readiness-v1.1.md)。
+当前已发布的最新稳定版是 `v1.1.0`。本源码准备发布 `v1.2.0`：官方 ONNX 直接加载、
+LWM 兼容，以及 Tiny/Small 现代浏览器端 OCR 提速；不扩大冻结的支持范围。详见
+[v1.2.0 发布说明](docs/release-notes-v1.2.0.md)和
+[发布检查清单](docs/release-readiness-v1.2.md)。
+
+tag 发行的 Tiny/Small 现代 HTML 和 SDK 使用 compiled SIMD128、Pointwise 2×16
+和 REC lazy fallback；Medium 浏览器与 Node 包保持 canonical，Legacy 保持 scalar。
+`LW_WASM_COMPILED_REC` 全局默认仍为 OFF；细分 REC 宽度、实验 FFN tiling 不进入发行配置。
 
 本稳定版对 Tiny 模型承诺冻结的 C ABI v1 和 WASM Host ABI v1。Tiny 是唯一纳入稳定
 支持范围的模型；Small 和 Medium 仍作为可选 Preview 变体，通过独立 Runtime Model
@@ -43,7 +47,7 @@ Pack 与自包含浏览器文件提供。LWM v0.1 仍是内部 Preview 格式。
 从 `0.1.x` 升级时应整体替换同一版本的配套文件，并重新编译 Native/Managed 调用方，
 因为 LWM 仍是内部 Preview 格式。详见[开发包说明](docs/package.md)和
 [模型选型矩阵](docs/supported-models.md)。正式版门槛见
-[v1.1 发布准备清单](docs/release-readiness-v1.1.md)。
+[v1.2 发布准备清单](docs/release-readiness-v1.2.md)。
 已批准的 1.0 稳定范围记录在
 [`ci/stable-release-scope.json`](ci/stable-release-scope.json)；Small、Medium、
 Android、Java/JNI、ARM64 和 LoongArch64 仍明确标记为 Preview。

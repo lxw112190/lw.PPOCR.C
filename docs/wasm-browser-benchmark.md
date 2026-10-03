@@ -1,5 +1,11 @@
 # Local standalone HTML A/B
 
+v1.2.0 release CI selects the compiled SIMD128 / 2×16 / lazy-fallback profile
+for Tiny/Small modern HTML and SDK only; global compiled REC remains OFF.
+Medium and Node remain canonical. Measurements below are historical local
+A/B evidence, not tagged v1.2.0-v1.1.0 timings or current ONNX import heap
+claims. Fine widths and FFN tiling are not enabled in the release profile.
+
 For the subsequent Tiny/Small thirteen-bucket experiment, its reviewed Small
 text difference and strict A/B commands, see
 [fine-grained WASM REC widths](wasm-fine-rec-widths.md).

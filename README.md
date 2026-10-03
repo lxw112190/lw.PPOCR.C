@@ -9,19 +9,24 @@ TensorRT, protobuf, or any other deployment-time runtime dependency.
 
 > This is not a general-purpose ONNX Runtime.
 
-Current source builds can also load the bundled **official ONNX files directly**
+The v1.2.0 source supports loading bundled **official ONNX files directly**
 through the unchanged C ABI, without Python/protobuf or ONNX Runtime.
 The supported PP-OCRv6 subset is normalized once to the existing internal IR;
 legacy LWM remains compatible. See [direct ONNX loading](docs/onnx-runtime.md).
 This new source capability is not a claim about older released binaries.
 
-## Preparing stable release: v1.1.0
+## Preparing stable release: v1.2.0
 
-The latest published stable release is `v1.0.0`. The `v1.1.0` release
-preparation concentrates on native x64 end-to-end latency and compiled REC
-memory reduction, without expanding the frozen support scope. See the
-[v1.1.0 release notes](docs/release-notes-v1.1.0.md) and
-[release checklist](docs/release-readiness-v1.1.md).
+The latest published stable release is `v1.1.0`. This source prepares `v1.2.0`:
+direct official ONNX loading with LWM compatibility, and faster Tiny/Small
+modern browser OCR, without expanding the frozen support scope. See the
+[v1.2.0 release notes](docs/release-notes-v1.2.0.md) and
+[release checklist](docs/release-readiness-v1.2.md).
+
+Tagged Tiny/Small modern HTML and SDK assets use compiled SIMD128, Pointwise
+2×16 and lazy REC fallback. Medium browser and Node assets remain canonical;
+Legacy remains scalar. `LW_WASM_COMPILED_REC` stays OFF globally; fine REC
+widths and experimental FFN tiling are not enabled in release assets.
 
 This stable release makes PP-OCRv6 Tiny available through the frozen v1 C
 Runtime and WASM Host ABI. Tiny is the only stable model promise. Small and
@@ -52,7 +57,7 @@ the complete matching set and rebuild native/managed consumers because LWM
 remains an internal Preview format.
 See the [package guide](docs/package.md) and
 [model selection matrix](docs/supported-models.md). The stable-release gate is
-tracked in the [v1.1 readiness checklist](docs/release-readiness-v1.1.md).
+tracked in the [v1.2 readiness checklist](docs/release-readiness-v1.2.md).
 The approved stable scope is recorded in
 [`ci/stable-release-scope.json`](ci/stable-release-scope.json); Small, Medium,
 Android, Java/JNI, ARM64, and LoongArch64 remain explicitly Preview.

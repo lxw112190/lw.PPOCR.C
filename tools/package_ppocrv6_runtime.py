@@ -13,7 +13,7 @@ from typing import Any
 ASSET_NAMES = ("det.lwm", "cls.lwm", "rec.lwm", "ppocr_keys.txt")
 SCHEMA_VERSION = 1
 DEFAULT_LWM_VERSION = "0.1"
-DEFAULT_RUNTIME_VERSION = "1.1.0"
+DEFAULT_RUNTIME_VERSION = "1.2.0"
 DEFAULT_MINIMUM_RUNTIME_VERSION = "1.0.0"
 RUNTIME_VERSION_RE = re.compile(
     r"^[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z][0-9A-Za-z.-]*)?$"
