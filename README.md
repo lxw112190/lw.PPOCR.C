@@ -86,6 +86,9 @@ The project currently provides:
 The WinForms and standalone browser Demos can copy recognized text and export
 UTF-8 TXT or versioned JSON using the shared
 [OCR result export schema](docs/ocr-export-schema.md).
+WinForms also exposes a configurable source pixel limit (40 million by
+default; x64 can opt into larger images). See [C# large-image policy](docs/managed-demos.md#large-image-pixel-policy--大图像素上限)
+for the API overload, independent crop limit and memory considerations.
 The standalone browser Demo can select, drag-and-drop, or paste clipboard
 images directly for OCR. It also opens local image-based PDFs, recognizes the
 current page or all pages sequentially, and exports page-aware schema v2 JSON.

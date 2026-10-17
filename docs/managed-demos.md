@@ -76,6 +76,64 @@ native handle. The six-argument `NativeOcr` constructor additionally accepts
 effective native value, while the internal decoded-image path lets the Demo
 benchmark native OCR without repeatedly timing `System.Drawing` decoding.
 
+### Large-image pixel policy / 大图像素上限
+
+The existing five/six-argument constructors retain the 40,000,000-pixel
+default. The new seven-argument overload sets the decoded-image and native
+DET source limit together; this is an instance policy, not a process-global
+setting. Both encoded input and the internal predecoded benchmark path enforce
+it. No C ABI, model, preprocessing or export-schema change is required.
+
+```csharp
+using (var ocr = new NativeOcr(detPath, clsPath, recPath, dictionaryPath,
+    true, 4u, 100000000UL)) // maxImagePixels: 100 million, not bytes
+{
+    OcrResponse result = ocr.RecognizeFile(imagePath);
+}
+```
+
+`MaxImagePixels` reports the selected value. Zero is invalid (not unlimited).
+This managed wrapper accepts 1..200,000,000 pixels on x64, and at most the
+original 40,000,000 on x86. These are policy bounds, not a guarantee that the
+machine or GDI+ can decode every image below the cap. Width, height, total
+pixels and the selected limit appear in dimension failures. The separate
+native `max_crop_pixels=16,000,000` is unchanged: a huge detected text crop
+may still fail even if the original image is allowed.
+
+WinForms exposes **原图上限(百万像素)**, default **40**. For an ordinary
+image above 40 MP, set **100** before selecting it or running OCR. The setting
+is disabled while busy and changing it causes the next initialization/run to
+rebuild the engine. Preview checks the same bound before making Bitmap copies;
+an over-limit selection leaves the previous preview intact. No automatic
+resize, tiling or change to original coordinates occurs.
+
+The displayed memory estimate is **BGR only**, not total process memory.
+100 MP needs about 300 MB for BGR alone, plus encoded data, GDI+ decode,
+preview copies, models and OCR workspace. Restrict simultaneous large-image
+requests; the native handle lock does not stop different threads decoding
+images before inference. The encoded-image decoder may allocate before size
+validation, so this is not a hardened decoder for untrusted image bombs.
+For dense long screenshots, prefer an application-level tiled pipeline rather
+than blindly raising this limit. HTTP, Web/WASM and Android limits are not
+changed by this C# option.
+
+中文：这是可配置的内存保护，不是“支持任意大图”的承诺。默认4000万不变，x64界面可按需
+提高到1亿等值；单位为百万像素，100代表100,000,000像素。单框1600万限制不变，
+不会自动跳过异常框。界面提示仅估算BGR，真实内存还需加上预览、模型和工作区。
+
+Windows x64 CTest runs `csharp_image_limits_contract` with Visual Studio's
+Roslyn compiler and the .NET 4.8 targeting pack. It checks the old constructor,
+exact/invalid bounds, native DET synchronization, preview rejection/recovery,
+busy controls and engine rebuilding, and generates a temporary 41.6 MP image
+containing the bundled sample for real full OCR. Generated images are not
+committed. The original WinForms sources also compile against .NET 3.5.
+This change does not claim compatibility with untested customer codecs or
+machines. Generic OpenCV/HTTP-service preflight requirements (OpenCV version,
+web assets and service configuration) do not apply to the pure-C WinForms
+portable package; its `.exe.config`, model hashes, DLL dependency closure and
+actual extracted-package OCR checks are the relevant gates. Cached files in
+ignored `build-*` trees are not package inputs or tracked source.
+
 ## Native HTTP and browser Demo
 
 Run on Windows:

@@ -302,6 +302,10 @@ SDK 会按照 Runtime 返回的真实容量分配并复用输入/输出缓冲区
 [`docs/standalone-html.md`](docs/standalone-html.md)，导出字段见
 [`docs/ocr-export-schema.md`](docs/ocr-export-schema.md)。
 
+大图可在界面的“原图上限(百万像素)”中按需调高，例如100表示1亿像素；默认仍为40。
+C# 新构造重载会同步解码和原生 DET 上限，x64 允许配置至2亿，x86 保持最多4000万。
+单个文字框裁剪仍限制1600万，调高上限不保证内存足够，详见[大图接入说明](docs/managed-demos.md#large-image-pixel-policy--大图像素上限)。
+
 ### Android ARM64 Native Preview
 
 仓库现在提供实验性的 Android Native SDK，位于 android/，仅支持 arm64-v8a 和

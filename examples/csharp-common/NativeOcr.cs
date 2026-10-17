@@ -137,7 +137,11 @@ namespace LwPpocrCSharp
     public sealed class NativeOcr : IDisposable
     {
         private const string DllName = "lw_ppocr_c.dll";
-        private const long MaxDecodedPixels = 40000000L;
+        public const ulong DefaultMaxImagePixels = 40000000UL;
+        // This managed wrapper deliberately bounds large Bitmap/array allocations.
+        // Raising this is not a promise that GDI+ or available RAM can decode every image.
+        public const ulong MaximumConfigurableImagePixels = 200000000UL;
+        private readonly ulong maxImagePixels;
         private readonly object syncRoot = new object();
         private IntPtr handle;
         private LwOcrInfo info;
@@ -204,7 +208,25 @@ namespace LwPpocrCSharp
             string dictionaryPath,
             bool useDirectionClassification,
             uint workerCount)
+            : this(detectorPath, classifierPath, recognizerPath, dictionaryPath,
+                useDirectionClassification, workerCount, DefaultMaxImagePixels)
         {
+        }
+
+        /// <summary>Configure the decoded source pixel limit (width * height).
+        /// Defaults remain unchanged through the existing constructors. This does
+        /// not increase the separate native 16-million-pixel text-crop limit.</summary>
+        public NativeOcr(
+            string detectorPath,
+            string classifierPath,
+            string recognizerPath,
+            string dictionaryPath,
+            bool useDirectionClassification,
+            uint workerCount,
+            ulong maxImagePixels)
+        {
+            ValidateMaxImagePixels(maxImagePixels);
+            this.maxImagePixels = maxImagePixels;
             if (workerCount > 16u)
                 throw new ArgumentOutOfRangeException("workerCount", "workerCount必须在0到16之间");
             ValidateAbi();
@@ -235,6 +257,8 @@ namespace LwPpocrCSharp
                 options.Recognizer.Reserved1 = 0u;
                 options.UseDirectionClassification = useDirectionClassification ? 1u : 0u;
                 options.Recognizer.TargetWidth = OcrRecognitionDefaults.LongTextTargetWidth;
+                options.Detector.StructSize = (uint)Marshal.SizeOf(typeof(LwDetectorOptions));
+                options.Detector.MaxImagePixels = maxImagePixels;
                 if (workerCount != 0u) options.WorkerCount = workerCount;
                 LwError error = CreateError();
                 int status = lw_ocr_create(detector, classifier, recognizer, dictionary,
@@ -270,7 +294,7 @@ namespace LwPpocrCSharp
 
         public OcrResponse RecognizeEncoded(byte[] encodedImage)
         {
-            DecodedBgrImage decoded = DecodeToBgr(encodedImage);
+            DecodedBgrImage decoded = DecodeToBgr(encodedImage, maxImagePixels);
             return RecognizeDecoded(decoded);
         }
 
@@ -289,6 +313,7 @@ namespace LwPpocrCSharp
                 image.Stride < checked(image.Width * 3) ||
                 image.Pixels.LongLength < checked((long)image.Stride * image.Height))
                 throw new ArgumentException("BGR图片数据无效", "image");
+            ValidateImageDimensions(image.Width, image.Height, maxImagePixels);
             lock (syncRoot)
             {
                 ThrowIfDisposed();
@@ -311,7 +336,10 @@ namespace LwPpocrCSharp
                         linesPin.AddrOfPinnedObject(), info.MaxLineCapacity,
                         textPin.AddrOfPinnedObject(), info.MaxTextCapacity,
                         ref nativeResult, ref error);
-                    if (status != 0) throw NativeFailure("OCR识别失败", status, error);
+                    if (status != 0) throw NativeFailure("OCR识别失败 [原图 " +
+                        image.Width + " x " + image.Height + "，" +
+                        ((long)image.Width * image.Height) + " 像素，上限 " +
+                        maxImagePixels + "]", status, error);
                     if (nativeResult.LineCount > info.MaxLineCapacity ||
                         nativeResult.RequiredTextCapacity > info.MaxTextCapacity)
                         throw new InvalidOperationException("原生OCR返回了无效容量");
@@ -362,14 +390,46 @@ namespace LwPpocrCSharp
 
         internal static DecodedBgrImage DecodeToBgr(byte[] encodedImage)
         {
+            return DecodeToBgr(encodedImage, DefaultMaxImagePixels);
+        }
+
+        public ulong MaxImagePixels { get { return maxImagePixels; } }
+
+        private static void ValidateMaxImagePixels(ulong value)
+        {
+            ulong maximum = IntPtr.Size == 8 ? MaximumConfigurableImagePixels : DefaultMaxImagePixels;
+            if (value == 0UL || value > maximum)
+                throw new ArgumentOutOfRangeException("maxImagePixels", value,
+                    "原图像素上限必须为 1 到 " + maximum + "；超过4000万请使用x64并确认可用内存");
+        }
+
+        // Shared by OCR decoding and WinForms preview, before allocating copies.
+        internal static long ValidateImageDimensions(int width, int height, ulong limit)
+        {
+            ValidateMaxImagePixels(limit);
+            long pixels = (long)width * height;
+            if (width <= 0 || height <= 0 || (ulong)pixels > limit)
+                throw new InvalidOperationException("图片尺寸无效或超过原图像素上限：实际 " +
+                    width + " x " + height + " = " + pixels + " 像素，上限 " + limit +
+                    " 像素。请调高原图上限、缩小或分块处理图片。");
+            // Pixel count alone is not enough to prove row/array sizes fit.
+            long bgrStride = (long)width * 3;
+            long bitmapStride = (bgrStride + 3) & ~3L;
+            if (bgrStride > Int32.MaxValue || bitmapStride * height > Int32.MaxValue)
+                throw new InvalidOperationException("图片缓冲超过.NET数组或步长限制：" +
+                    width + " x " + height + "，原图像素上限 " + limit);
+            return pixels;
+        }
+
+        internal static DecodedBgrImage DecodeToBgr(byte[] encodedImage, ulong limit)
+        {
+            ValidateMaxImagePixels(limit);
             if (encodedImage == null || encodedImage.Length == 0)
                 throw new ArgumentException("图片数据为空", "encodedImage");
             using (MemoryStream stream = new MemoryStream(encodedImage, false))
             using (Image source = Image.FromStream(stream, true, true))
             {
-                long pixels = checked((long)source.Width * source.Height);
-                if (source.Width <= 0 || source.Height <= 0 || pixels > MaxDecodedPixels)
-                    throw new InvalidOperationException("解码后的图片尺寸无效或超过4000万像素");
+                ValidateImageDimensions(source.Width, source.Height, limit);
                 using (Bitmap bitmap = new Bitmap(
                     source.Width, source.Height, PixelFormat.Format24bppRgb))
                 {

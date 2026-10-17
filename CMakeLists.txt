@@ -1470,6 +1470,14 @@ if(BUILD_TESTING AND NOT EMSCRIPTEN)
         COMMAND "${Python3_EXECUTABLE}" -m unittest -v tests.test_onnx_e2e_comparison)
     set_tests_properties(onnx_e2e_comparison_contract PROPERTIES
         WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}" TIMEOUT 30)
+    if(WIN32 AND MSVC AND CMAKE_SIZEOF_VOID_P EQUAL 8 AND
+       MSVC_C_ARCHITECTURE_ID MATCHES "^(x64|X86)$")
+        add_test(NAME csharp_image_limits_contract
+            COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_csharp_image_limits.py"
+                --native "$<TARGET_FILE:lw_ppocr_c_shared>")
+        set_tests_properties(csharp_image_limits_contract PROPERTIES
+            WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}" TIMEOUT 240)
+    endif()
     add_test(NAME web_release_profile_contract
         COMMAND "${Python3_EXECUTABLE}" -m unittest -v tests.test_web_release_profile)
     set_tests_properties(web_release_profile_contract PROPERTIES

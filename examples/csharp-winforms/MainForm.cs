@@ -49,6 +49,8 @@ namespace LwPpocrWinForms
         private readonly NumericUpDown workerCountInput = new NumericUpDown();
         private readonly NumericUpDown warmupCountInput = new NumericUpDown();
         private readonly NumericUpDown iterationCountInput = new NumericUpDown();
+        private readonly NumericUpDown maxImageMegapixelsInput = new NumericUpDown();
+        private readonly Label imageMemoryHint = new Label();
         private readonly TextBox modelDirectoryInput = new TextBox();
         private readonly PictureBox picture = new PictureBox();
         private readonly RichTextBox output = new RichTextBox();
@@ -102,7 +104,7 @@ namespace LwPpocrWinForms
         {
             Panel toolbar = new Panel();
             toolbar.Dock = DockStyle.Top;
-            toolbar.Height = 88;
+            toolbar.Height = 124;
             toolbar.Padding = new Padding(8, 6, 8, 4);
 
             FlowLayoutPanel actions = new FlowLayoutPanel();
@@ -165,8 +167,38 @@ namespace LwPpocrWinForms
             modelRow.Controls.Add(modelDirectoryInput, 1, 0);
             modelRow.Controls.Add(browseModelsButton, 2, 0);
             toolbar.Controls.Add(modelRow);
+            FlowLayoutPanel limits = new FlowLayoutPanel();
+            limits.Dock = DockStyle.Bottom;
+            limits.Height = 32;
+            limits.WrapContents = false;
+            limits.Controls.Add(CreateToolbarLabel("原图上限(百万像素)"));
+            ConfigureNumeric(maxImageMegapixelsInput, 1, IntPtr.Size == 8 ? 200 : 40, 40, 65);
+            maxImageMegapixelsInput.Increment = 10;
+            maxImageMegapixelsInput.ValueChanged += delegate { UpdateImageMemoryHint(); };
+            limits.Controls.Add(maxImageMegapixelsInput);
+            imageMemoryHint.AutoSize = true;
+            imageMemoryHint.Margin = new Padding(8, 7, 0, 3);
+            limits.Controls.Add(imageMemoryHint);
+            toolbar.Controls.Add(limits);
             toolbar.Controls.Add(actions);
+            UpdateImageMemoryHint();
             return toolbar;
+        }
+
+        private ulong SelectedMaxImagePixels
+        {
+            get { return (ulong)maxImageMegapixelsInput.Value * 1000000UL; }
+        }
+
+        private void UpdateImageMemoryHint()
+        {
+            ulong pixels = originalImage == null ? SelectedMaxImagePixels :
+                (ulong)originalImage.Width * (ulong)originalImage.Height;
+            imageMemoryHint.Text = (originalImage == null ? "按上限" : "当前图") +
+                "仅BGR约 " + ((double)pixels * 3 / 1048576.0).ToString("F0") +
+                " MiB；另需预览/模型内存，大图请减少并发";
+            imageMemoryHint.ForeColor = SelectedMaxImagePixels > NativeOcr.DefaultMaxImagePixels
+                ? Color.DarkOrange : SystemColors.ControlText;
         }
 
         private static void ConfigureNumeric(
@@ -312,7 +344,10 @@ namespace LwPpocrWinForms
             using (FileStream stream = new FileStream(path, FileMode.Open,
                 FileAccess.Read, FileShare.ReadWrite))
             using (Image loaded = Image.FromStream(stream, true, true))
+            {
+                NativeOcr.ValidateImageDimensions(loaded.Width, loaded.Height, SelectedMaxImagePixels);
                 nextImage = new Bitmap(loaded);
+            }
 
             DisposeImages();
             originalImage = nextImage;
@@ -323,6 +358,7 @@ namespace LwPpocrWinForms
             output.Clear();
             statusLabel.Text = "已选择: " + path + " | " + originalImage.Width + "x" +
                 originalImage.Height;
+            UpdateImageMemoryHint();
         }
 
         private void BrowseModelDirectory(object sender, EventArgs e)
@@ -364,8 +400,10 @@ namespace LwPpocrWinForms
             string selectedDirectory = Path.GetFullPath(modelDirectoryInput.Text.Trim());
             uint selectedWorkers = (uint)workerCountInput.Value;
             bool selectedClassifier = classifierCheck.Checked;
+            ulong selectedMaxImagePixels = SelectedMaxImagePixels;
             if (engine != null && engineUsesClassifier == selectedClassifier &&
                 engineWorkerCount == selectedWorkers &&
+                engine.MaxImagePixels == selectedMaxImagePixels &&
                 String.Equals(engineModelDirectory, selectedDirectory,
                     StringComparison.OrdinalIgnoreCase))
                 return 0.0;
@@ -377,7 +415,7 @@ namespace LwPpocrWinForms
             string dictionary = Path.Combine(selectedDirectory, "ppocr_keys.txt");
             Stopwatch watch = Stopwatch.StartNew();
             engine = new NativeOcr(detector, classifier, recognizer, dictionary,
-                selectedClassifier, selectedWorkers);
+                selectedClassifier, selectedWorkers, selectedMaxImagePixels);
             watch.Stop();
             engineUsesClassifier = selectedClassifier;
             engineWorkerCount = engine.WorkerCount;
@@ -459,7 +497,8 @@ namespace LwPpocrWinForms
             uint selectedWorkers, bool selectedClassifier)
         {
             Stopwatch watch = Stopwatch.StartNew();
-            DecodedBgrImage decoded = NativeOcr.DecodeToBgr(File.ReadAllBytes(selectedPath));
+            DecodedBgrImage decoded = NativeOcr.DecodeToBgr(File.ReadAllBytes(selectedPath),
+                selectedEngine.MaxImagePixels);
             watch.Stop();
 
             string expectedSignature = null;
@@ -537,6 +576,8 @@ namespace LwPpocrWinForms
             StringBuilder summary = new StringBuilder();
             summary.AppendLine("图片: " + imagePath);
             summary.AppendLine("尺寸: " + response.image_width + " x " + response.image_height);
+            summary.AppendLine("原图像素上限: " + engine.MaxImagePixels +
+                "；单框裁剪上限仍为1600万像素");
             summary.AppendLine("工作器: " + test.WorkerCount +
                 "    方向分类: " + (test.ClassifierEnabled ? "开启" : "关闭"));
             if (initializationMilliseconds > 0.0)
@@ -740,6 +781,7 @@ namespace LwPpocrWinForms
             workerCountInput.Enabled = !value;
             warmupCountInput.Enabled = !value;
             iterationCountInput.Enabled = !value;
+            maxImageMegapixelsInput.Enabled = !value;
             modelDirectoryInput.Enabled = !value;
             browseModelsButton.Enabled = !value;
             UpdateExportButtons();
