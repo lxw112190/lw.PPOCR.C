@@ -256,18 +256,21 @@ v1.2.0 modern Tiny/Small HTML and SDK use compiled SIMD128, Pointwise 2×16
 and lazy REC fallback. Medium browser and Node remain canonical; Legacy stays
 scalar. Global compiled REC remains OFF. CI sets `release_web_profile: true`,
 tests the final files, then stages them flat with SHA-256 identity checks.
-Audit reports stay CI-only. Follow [the v1.2 checklist](release-readiness-v1.2.md).
+Audit reports stay CI-only. v1.2.1 preserves this profile and adds the
+`*-winforms-windows-x64-net48.zip` portable Demo with three embedded model
+directories. It requires Windows 10/11 x64 and .NET Framework 4.8; the original
+.NET 3.5 source project is retained. Follow [the v1.2.1 checklist](release-readiness-v1.2.1.md).
 
 Pushing a tag whose base version matches the CMake project version starts the
 release workflow. Stable and prerelease suffixes are accepted. Before creating
 the stable release, run `python -m unittest tests.test_versioning` and
-`python tools/check_release_readiness.py --mode stable --version 1.2.0`. Then
+`python tools/check_release_readiness.py --mode stable --version 1.2.1`. Then
 create an annotated tag:
 
 ```bash
-git tag -a v1.2.0 -m "lw.PPOCR.C v1.2.0: direct ONNX and faster Tiny/Small browser OCR"
-git show --no-patch v1.2.0
-git push origin v1.2.0
+git tag -a v1.2.1 -m "lw.PPOCR.C v1.2.1: C# large-image support and portable WinForms Demo"
+git show --no-patch v1.2.1
+git push origin v1.2.1
 ```
 
 Do not replace or move an existing public tag. If a release must be corrected,
@@ -278,12 +281,12 @@ build-provenance attestations remain release gates.
 
 The tag rebuilds and tests native Windows/Linux packages, browser/Node WASM,
 Android ARM64, Desktop Java/JNI, and the Tiny/Small/Medium runtime model packs.
-The publish job runs only after all seven reusable jobs succeed. A prerelease
+The publish job runs only after all eight reusable jobs succeed. A prerelease
 suffix automatically marks the GitHub Release as a prerelease; a stable tag is
 marked latest.
 
 The release asset contract is machine-readable in
-[`ci/release-assets.json`](../ci/release-assets.json). It currently contains 18
+[`ci/release-assets.json`](../ci/release-assets.json). It currently contains 19
 primary downloads:
 
 The approved stable support scope is machine-readable in
@@ -292,6 +295,7 @@ as Small, Medium, Android, or Java/JNI remain Preview until that scope is
 approved and the corresponding contracts are frozen.
 
 - Windows x64 and Linux x86_64 native archives;
+- the tested Windows x64 .NET 4.8 WinForms portable ZIP (Tiny/Small/Medium);
 - Tiny, Small, and Medium standalone HTML and browser SDK files;
 - the raw Node.js/WASM package;
 - Android ARM64 AAR and signed preview APK;
@@ -306,7 +310,7 @@ outside this public Release directory.
 
 For tags created from a commit containing the attestation-enabled workflow,
 the publish job also creates signed GitHub build-provenance attestations for
-all 18 primary downloads after strict manifest verification and before upload.
+all 19 primary downloads after strict manifest verification and before upload.
 Verify a downloaded asset with GitHub CLI:
 
 ```bash

@@ -20,7 +20,10 @@ internal static class WinFormsPackageSmoke
             Application.SetCompatibleTextRenderingDefault(false);
             // Load the actual packaged assembly, not a duplicate compile of its sources.
             Assembly assembly = typeof(NativeOcr).Assembly;
-            if (assembly.GetName().Version.ToString() != "1.2.0.0")
+            string version = System.Text.RegularExpressions.Regex.Match(
+                File.ReadAllText(Path.Combine(package, "BUILD-INFO.txt")),
+                @"Product: lw\.PPOCR\.C ([0-9]+\.[0-9]+\.[0-9]+)").Groups[1].Value;
+            if (version.Length == 0 || assembly.GetName().Version.ToString() != version + ".0")
                 throw new InvalidOperationException("unexpected demo version");
             Type formType = assembly.GetType("LwPpocrWinForms.MainForm", true);
             using (Form form = (Form)Activator.CreateInstance(formType, new object[] { Path.Combine(package, "models") }))

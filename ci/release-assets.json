@@ -2,6 +2,7 @@
   "schema_version": 1,
   "required_assets": [
     {"name": "lw.PPOCR.C-{version}-windows-x64-msvc.zip", "checksum": "sidecar"},
+    {"name": "lw.PPOCR.C-{version}-winforms-windows-x64-net48.zip", "checksum": "sidecar"},
     {"name": "lw.PPOCR.C-{version}-linux-x86_64.tar.gz", "checksum": "sidecar"},
     {"name": "lw.PPOCR.C-{version}-ocr-demo.html", "checksum": "sidecar"},
     {"name": "lw.PPOCR.C-{version}-web-sdk.js", "checksum": "sidecar"},

@@ -14,12 +14,12 @@ protobuf 或 ONNX Runtime。加载时转换为既有内部 IR，复用原来的�
 LWM 加载保持兼容。详见[直接加载 ONNX](docs/onnx-runtime.md)，不要将这项新能力
 理解为旧版已发布二进制也能加载 ONNX。
 
-## 准备发布稳定版：v1.2.0
+## 准备发布稳定版：v1.2.1
 
-当前已发布的最新稳定版是 `v1.1.0`。本源码准备发布 `v1.2.0`：官方 ONNX 直接加载、
-LWM 兼容，以及 Tiny/Small 现代浏览器端 OCR 提速；不扩大冻结的支持范围。详见
-[v1.2.0 发布说明](docs/release-notes-v1.2.0.md)和
-[发布检查清单](docs/release-readiness-v1.2.md)。
+当前已发布的最新稳定版是 `v1.2.0`。本源码准备发布 `v1.2.1`：C# 可配置原图像素上限，
+以及内置三模型、解压可运行的 WinForms 便携包；不改变推理计算或扩大冻结的支持范围。详见
+[v1.2.1 发布说明](docs/release-notes-v1.2.1.md)和
+[发布检查清单](docs/release-readiness-v1.2.1.md)。
 
 tag 发行的 Tiny/Small 现代 HTML 和 SDK 使用 compiled SIMD128、Pointwise 2×16
 和 REC lazy fallback；Medium 浏览器与 Node 包保持 canonical，Legacy 保持 scalar。
@@ -37,6 +37,7 @@ Pack 与自包含浏览器文件提供。LWM v0.1 仍是内部 Preview 格式。
 | 体验更大浏览器模型 | `*-ocr-demo-small.html` / `*-ocr-demo-medium.html` | Preview 附属产物；Small 按需选择；Medium 桌面优先 |
 | 网页集成 OCR | `*-web-sdk.js` / `*-web-sdk-small.js` / `*-web-sdk-medium.js` | `LwPpocr` API 相同，内嵌模型不同 |
 | 原生 C/C++ | `*-windows-x64-msvc.zip` / `*-linux-x86_64.tar.gz` | 默认内置 Tiny |
+| 直接测试 C# WinForms | `*-winforms-windows-x64-net48.zip` | Windows 10/11 x64、.NET Framework 4.8，内置三模型 |
 | Android ARM64 | `*-android-arm64.aar` / `*-android-arm64-demo.apk` | Preview 附属产物；`arm64-v8a`、`minSdk 21`、Tiny |
 | 桌面 Java/JNI | `*-java-jni-windows-x64.zip` / `*-java-jni-linux-x64.tar.gz` / `*-java-jni-macos-arm64.tar.gz` | Preview 附属产物；Java 8+ 控制台接入 |
 | Node.js | `*-node-wasm.zip` | Node 18+ 原始 WASM 包，Tiny |
@@ -47,7 +48,7 @@ Pack 与自包含浏览器文件提供。LWM v0.1 仍是内部 Preview 格式。
 从 `0.1.x` 升级时应整体替换同一版本的配套文件，并重新编译 Native/Managed 调用方，
 因为 LWM 仍是内部 Preview 格式。详见[开发包说明](docs/package.md)和
 [模型选型矩阵](docs/supported-models.md)。正式版门槛见
-[v1.2 发布准备清单](docs/release-readiness-v1.2.md)。
+[v1.2.1 发布准备清单](docs/release-readiness-v1.2.1.md)。
 已批准的 1.0 稳定范围记录在
 [`ci/stable-release-scope.json`](ci/stable-release-scope.json)；Small、Medium、
 Android、Java/JNI、ARM64 和 LoongArch64 仍明确标记为 Preview。

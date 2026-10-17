@@ -32,6 +32,12 @@ jobs:
     permissions:
       contents: read
 
+  winforms:
+    name: Build and test WinForms portable Demo
+    uses: ./.github/workflows/winforms-demo.yml
+    permissions:
+      contents: read
+
   java:
     name: Build and test Desktop Java JNI bundles
     uses: ./.github/workflows/java-jni.yml
@@ -64,7 +70,7 @@ jobs:
 
   publish:
     name: Publish tested assets
-    needs: [native, wasm, android, java, tiny-models, small-models, medium-models]
+    needs: [native, wasm, android, winforms, java, tiny-models, small-models, medium-models]
     runs-on: ubuntu-22.04
     permissions:
       contents: write
@@ -125,6 +131,12 @@ jobs:
         uses: actions/download-artifact@v8
         with:
           name: lw.PPOCR.C-browser-${{ github.sha }}
+          path: release-assets
+
+      - name: Download tested WinForms portable Demo
+        uses: actions/download-artifact@v8
+        with:
+          name: lw-ppocr-winforms-windows-x64-${{ github.sha }}
           path: release-assets
 
       - name: Download tested Android artifacts

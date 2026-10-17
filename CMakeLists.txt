@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.20)
 
-project(lw.PPOCR.C VERSION 1.2.0 LANGUAGES C)
+project(lw.PPOCR.C VERSION 1.2.1 LANGUAGES C)
 
 option(LW_BUILD_HTTP_DEMO
     "Build the cross-platform cpp-httplib HTTP OCR Demo" ON)
@@ -1481,6 +1481,10 @@ if(BUILD_TESTING AND NOT EMSCRIPTEN)
     add_test(NAME web_release_profile_contract
         COMMAND "${Python3_EXECUTABLE}" -m unittest -v tests.test_web_release_profile)
     set_tests_properties(web_release_profile_contract PROPERTIES
+        WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}" TIMEOUT 30)
+    add_test(NAME winforms_release_version_contract
+        COMMAND "${Python3_EXECUTABLE}" -m unittest -v tests.test_winforms_release)
+    set_tests_properties(winforms_release_version_contract PROPERTIES
         WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}" TIMEOUT 30)
     add_test(NAME native_rec_quality_contract
         COMMAND "${Python3_EXECUTABLE}" -m unittest -v tests.test_native_rec_quality)

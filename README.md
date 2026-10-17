@@ -15,13 +15,13 @@ The supported PP-OCRv6 subset is normalized once to the existing internal IR;
 legacy LWM remains compatible. See [direct ONNX loading](docs/onnx-runtime.md).
 This new source capability is not a claim about older released binaries.
 
-## Preparing stable release: v1.2.0
+## Preparing stable release: v1.2.1
 
-The latest published stable release is `v1.1.0`. This source prepares `v1.2.0`:
-direct official ONNX loading with LWM compatibility, and faster Tiny/Small
-modern browser OCR, without expanding the frozen support scope. See the
-[v1.2.0 release notes](docs/release-notes-v1.2.0.md) and
-[release checklist](docs/release-readiness-v1.2.md).
+The latest published stable release is `v1.2.0`. This source prepares `v1.2.1`:
+configurable C# source pixel limits and a ready-to-run three-model WinForms
+portable ZIP, without changing runtime arithmetic or the frozen support scope.
+See the [v1.2.1 release notes](docs/release-notes-v1.2.1.md) and
+[release checklist](docs/release-readiness-v1.2.1.md).
 
 Tagged Tiny/Small modern HTML and SDK assets use compiled SIMD128, Pointwise
 2×16 and lazy REC fallback. Medium browser and Node assets remain canonical;
@@ -44,6 +44,7 @@ according to the integration target:
 | Try a larger browser model | `*-ocr-demo-small.html` / `*-ocr-demo-medium.html` | Preview attachments; Small is opt-in; Medium is desktop-first |
 | Embed OCR in a Web page | `*-web-sdk.js` / `*-web-sdk-small.js` / `*-web-sdk-medium.js` | Same `LwPpocr` API, different embedded models |
 | Native C/C++ | `*-windows-x64-msvc.zip` / `*-linux-x86_64.tar.gz` | Tiny is bundled by default |
+| Test C# WinForms directly | `*-winforms-windows-x64-net48.zip` | Windows 10/11 x64, .NET Framework 4.8; includes all three models |
 | Android ARM64 | `*-android-arm64.aar` / `*-android-arm64-demo.apk` | Preview attachment; `arm64-v8a`, `minSdk 21`, Tiny |
 | Desktop Java/JNI | `*-java-jni-windows-x64.zip` / `*-java-jni-linux-x64.tar.gz` / `*-java-jni-macos-arm64.tar.gz` | Preview attachment; Java 8+ console integration |
 | Node.js | `*-node-wasm.zip` | Raw Node 18+ WASM package, Tiny |
@@ -57,7 +58,7 @@ the complete matching set and rebuild native/managed consumers because LWM
 remains an internal Preview format.
 See the [package guide](docs/package.md) and
 [model selection matrix](docs/supported-models.md). The stable-release gate is
-tracked in the [v1.2 readiness checklist](docs/release-readiness-v1.2.md).
+tracked in the [v1.2.1 readiness checklist](docs/release-readiness-v1.2.1.md).
 The approved stable scope is recorded in
 [`ci/stable-release-scope.json`](ci/stable-release-scope.json); Small, Medium,
 Android, Java/JNI, ARM64, and LoongArch64 remain explicitly Preview.

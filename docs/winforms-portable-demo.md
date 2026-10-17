@@ -1,10 +1,11 @@
 # lw.PPOCR.C WinForms 便携测试包 / Portable test Demo
 
-这是本地构建的 Windows x64 测试包，不是新的 GitHub 正式 Release。
+这是 Windows x64 便携 Demo；`BUILD-INFO.txt` 区分本地测试构建和 CI 发布候选。
+正式版本请从项目对应 tag 的 GitHub Release 下载，不要将本地测试包误认为正式产物。
 支持 Windows 10/11 x64，系统需已安装 .NET Framework 4.8 或更新的 4.x。
 不需要 Visual Studio、.NET SDK、Python、OpenCV、ONNX Runtime、VC++ Redistributable
 或网络模型下载。原生 DLL 静态链接 VC 运行库；Windows 自带系统 DLL 不另行打包。
-This local test build needs Windows 10/11 x64 and .NET Framework 4.8+, not a development SDK.
+This portable Demo needs Windows 10/11 x64 and .NET Framework 4.8+, not a development SDK.
 
 ## 使用步骤
 

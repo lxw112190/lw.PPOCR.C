@@ -134,7 +134,7 @@ a high-water mark and are reused by later calls.
 The script defines one frozen global object:
 
 ~~~javascript
-LwPpocr.version;       // SDK package version, for example "1.2.0"
+LwPpocr.version;       // SDK package version, for example "1.2.1"
 LwPpocr.webAbiVersion; // low-level Web ABI used by this SDK; currently 1
 LwPpocr.Error;         // error class
 LwPpocr.create;        // async factory

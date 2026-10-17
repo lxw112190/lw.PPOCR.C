@@ -172,7 +172,7 @@ class ReleaseAssetContractTests(unittest.TestCase):
             repository / "ci/release-assets.json", "0.2.0-preview.1"
         )
         suffixes = tuple(pattern[1:] for pattern in patterns)
-        self.assertEqual(len(assets), 18)
+        self.assertEqual(len(assets), 19)
         self.assertEqual(
             sorted(name for name in assets if not name.endswith(suffixes)), []
         )

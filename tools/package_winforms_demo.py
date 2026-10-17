@@ -32,15 +32,24 @@ def copy(source: Path, destination: Path) -> None:
     shutil.copyfile(source, destination)
 
 
+def resolve_package_version(version: str, release: str | None) -> str:
+    value = version if release is None else release[1:] if release.startswith("v") else release
+    if not re.fullmatch(re.escape(version) + r"(?:-[0-9A-Za-z][0-9A-Za-z.-]*)?", value):
+        raise ValueError("release version must match the CMake base version")
+    return value
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--build-dir", required=True, type=Path)
     parser.add_argument("--csc", required=True, type=Path)
     parser.add_argument("--framework-dir", required=True, type=Path)
     parser.add_argument("--output-dir", required=True, type=Path)
+    parser.add_argument("--release-version", help="Exact tag version for a CI release candidate (optional v prefix)")
     args = parser.parse_args()
     version = re.search(r"project\(lw\.PPOCR\.C VERSION (\S+) LANGUAGES C\)",
                         (ROOT / "CMakeLists.txt").read_text(encoding="utf-8")).group(1)
+    package_version = resolve_package_version(version, args.release_version)
     cache = {}
     for line in (args.build_dir / "CMakeCache.txt").read_text(encoding="utf-8").splitlines():
         match = re.fullmatch(r"([^#/:][^:]*):[^=]+=(.*)", line)
@@ -50,7 +59,7 @@ def main() -> int:
         raise ValueError("requires a current-version CMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded build")
     if cache.get("CMAKE_GENERATOR_PLATFORM") != "x64":
         raise ValueError("native build must target x64")
-    name = f"lw.PPOCR.C-{version}-winforms-windows-x64-net48"
+    name = f"lw.PPOCR.C-{package_version}-winforms-windows-x64-net48"
     output = args.output_dir.resolve()
     staging = output / name
     archive = output / (name + ".zip")
@@ -124,8 +133,10 @@ def main() -> int:
         raise RuntimeError("could not determine source modification state")
     (staging / "BUILD-INFO.txt").write_text(
         f"Product: lw.PPOCR.C {version}\nSource commit: {commit}\n"
+        f"Package version: {package_version}\n"
         f"Tracked source modifications: {'yes' if tracked_changes else 'no'}\n"
-        "Distribution: local portable test build (not a tagged release)\n"
+        + ("Distribution: CI release candidate (publication requires release gates)\n"
+           if args.release_version else "Distribution: local portable test build (not a tagged release)\n") +
         "OS/architecture: Windows 10/11 x64\nManaged: .NET Framework 4.8\n"
         "Native: Release, static MSVC CRT (/MT), default native dispatch\n"
         "REC maximum width: 960; Tiny default; Small/Medium Preview\n"

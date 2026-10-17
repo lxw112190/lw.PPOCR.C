@@ -101,8 +101,8 @@ def check(mode: str, expected_version: str | None = None) -> dict[str, Any]:
                 statuses[name] = status
 
     required_assets = release_assets.get("required_assets")
-    if not isinstance(required_assets, list) or len(required_assets) != 18:
-        blockers.append("release asset manifest must contain exactly 18 primary assets")
+    if not isinstance(required_assets, list) or len(required_assets) != 19:
+        blockers.append("release asset manifest must contain exactly 19 primary assets")
     release_line = ".".join(version.split(".")[:2])
     if not (ROOT / "docs" / f"release-readiness-v{release_line}.md").is_file():
         blockers.append(f"v{release_line} readiness checklist is missing")

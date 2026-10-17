@@ -25,7 +25,7 @@ class VersionConsistencyTest(unittest.TestCase):
 
     def test_product_metadata_uses_the_cmake_version(self) -> None:
         version = self.project_version()
-        self.assertEqual(version, "1.2.0")
+        self.assertEqual(version, "1.2.1")
 
         assembly = (
             ROOT / "examples" / "csharp-winforms" / "Properties" / "AssemblyInfo.cs"
@@ -38,7 +38,7 @@ class VersionConsistencyTest(unittest.TestCase):
             "android/demo-java/build.gradle.kts",
         ):
             gradle = (ROOT / relative).read_text(encoding="utf-8")
-            self.assertIn("versionCode = 4", gradle)
+            self.assertIn("versionCode = 5", gradle)
             self.assertIn(f'versionName = "{version}-preview.1"', gradle)
 
         sbom = json.loads((ROOT / "sbom.cdx.json").read_text(encoding="utf-8"))
@@ -198,6 +198,21 @@ class VersionConsistencyTest(unittest.TestCase):
         wasm_job = workflow.split("  wasm:", 1)[1].split("  android:", 1)[0]
         self.assertNotIn("compiled_rec: true", wasm_job)
         self.assertIn("release_web_profile: true", wasm_job)
+
+    def test_release_includes_tested_winforms_portable_zip(self) -> None:
+        release = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
+        portable = (ROOT / ".github/workflows/winforms-demo.yml").read_text(encoding="utf-8")
+        self.assertIn("uses: ./.github/workflows/winforms-demo.yml", release)
+        self.assertIn("needs: [native, wasm, android, winforms, java, tiny-models, small-models, medium-models]", release)
+        self.assertIn("name: lw-ppocr-winforms-windows-x64-${{ github.sha }}", release)
+        self.assertIn("name: lw-ppocr-winforms-windows-x64-${{ github.sha }}", portable)
+        self.assertIn("tests/test_winforms_package.py", portable)
+        self.assertIn("tests/test_csharp_image_limits.py", portable)
+        self.assertIn("-DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded", portable)
+        self.assertIn("--release-version", portable)
+        assets = json.loads((ROOT / "ci/release-assets.json").read_text(encoding="utf-8"))
+        self.assertIn("lw.PPOCR.C-{version}-winforms-windows-x64-net48.zip",
+                      [asset["name"] for asset in assets["required_assets"]])
 
     def test_preview_release_documentation_matches_supported_outputs(self) -> None:
         version = self.project_version()

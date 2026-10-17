@@ -16,8 +16,8 @@ android {
         applicationId = "com.lxw112190.ppocr.javademo"
         minSdk = 21
         targetSdk = 35
-        versionCode = 4
-        versionName = "1.2.0-preview.1"
+        versionCode = 5
+        versionName = "1.2.1-preview.1"
         ndk {
             abiFilters += "arm64-v8a"
         }
