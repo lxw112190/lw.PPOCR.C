@@ -14,8 +14,15 @@
 #include <stddef.h>
 #include <stdint.h>
 
-/* Keep the individual physical ops for diagnostic/reference execution. */
+/* Scheduling retains individual ops; tile-local fusion uses sentinel hidden
+ * offsets and deliberately rejects separate single-op execution. */
 #define LW_X64_REC_OP_FFN_BEGIN 1u
+#define LW_X64_REC_OP_FFN_LOCAL 2u
+#define LW_X64_REC_OP_FFN_INPLACE 4u
+#define LW_X64_REC_OP_DW_PW_BEGIN 8u
+#define LW_X64_REC_VALUE_FFN_LOCAL 1u
+#define LW_X64_REC_VALUE_FFN_INPLACE 2u
+#define LW_X64_REC_VALUE_DW_PW_LOCAL 4u
 
 typedef enum lw_x64_rec_compile_result {
     LW_X64_REC_COMPILE_OK = 0,
@@ -390,6 +397,8 @@ typedef struct lw_x64_rec_profile {
     uint64_t ctc_ns;
     uint64_t ffn_ns;
     uint32_t ffn_calls;
+    uint64_t dw_pw_ns;
+    uint32_t dw_pw_calls;
     /* Pointwise epilogue diagnostics; populated only when REC profiling is on. */
     uint64_t pw_epi_ns[7];
     uint64_t pw_epi_calls[7];
@@ -420,6 +429,8 @@ typedef struct lw_x64_rec_instance {
 } lw_x64_rec_instance;
 
 uint64_t lw_x64_rec_arena_align(uint64_t value, uint64_t alignment);
+lw_status lw_x64_rec_instance_run_dw_pw_pair(lw_x64_rec_instance* instance,
+                                             uint32_t op_index, lw_error* error);
 lw_status lw_x64_rec_arena_alloc(uint64_t* cursor, uint64_t bytes, uint64_t alignment,
                                  uint64_t* out_offset, lw_error* error);
 /* Generalized entry: explicit input height (REC callers pass 48; the CLS

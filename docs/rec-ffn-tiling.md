@@ -1,5 +1,9 @@
 # Experimental REC FFN cache-local scheduling
 
+The subsequent native [tile-local hidden storage experiment](rec-ffn-fusion.md)
+has its own opt-in flag, contracts and full OCR measurements. Both experiments
+remain disabled by default.
+
 ## Decision
 
 This experiment is **not promoted to a production default**. Cache-local

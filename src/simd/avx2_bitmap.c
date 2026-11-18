@@ -1,8 +1,6 @@
 #include "simd_kernels.h"
 
-/* AVX2 bitmap helpers for the DET postprocess: thresholding the probability
- * map and computing the 4-neighborhood "interior" bitmap that replaces the
- * per-pixel boundary probe during connected-component extraction. */
+/* AVX2 thresholding for the DET probability map. */
 
 #include <math.h>
 #include <stddef.h>
@@ -148,59 +146,5 @@ int lw_avx2_threshold_bitmap_f32(const float* prediction, uint8_t* bitmap,
         bitmap[(size_t)index] = value > threshold ? 1u : 0u;
     }
     return 0;
-#endif
-}
-
-#if LW_COMPILES_AVX2_BITMAP && (defined(__GNUC__) || defined(__clang__))
-__attribute__((target("avx2,no-fma")))
-#endif
-void lw_avx2_interior_bitmap_u8(const uint8_t* bitmap, uint8_t* interior,
-                                uint32_t width, uint32_t height) {
-    /* 4-neighborhood interior: interior[p] is non-zero only when all four
-     * orthogonal neighbors are foreground. Border pixels stay zero, which
-     * reproduces the per-pixel boundary probe exactly. */
-    uint32_t y;
-    memset(interior, 0, (size_t)width * height);
-    if (width < 3u || height < 3u) return;
-#if LW_COMPILES_AVX2_BITMAP
-    for (y = 1u; y + 1u < height; ++y) {
-        const uint8_t* previous = bitmap + (size_t)(y - 1u) * width;
-        const uint8_t* current = bitmap + (size_t)y * width;
-        const uint8_t* next = bitmap + (size_t)(y + 1u) * width;
-        uint8_t* destination = interior + (size_t)y * width;
-        uint32_t x = 1u;
-        for (; x + 33u <= width; x += 32u) {
-            __m256i vertical = _mm256_and_si256(
-                _mm256_loadu_si256((const __m256i*)(const void*)(previous + x)),
-                _mm256_loadu_si256((const __m256i*)(const void*)(next + x)));
-            __m256i horizontal = _mm256_and_si256(
-                _mm256_loadu_si256((const __m256i*)(const void*)(current + x - 1u)),
-                _mm256_loadu_si256((const __m256i*)(const void*)(current + x + 1u)));
-            _mm256_storeu_si256((__m256i*)(void*)(destination + x),
-                                _mm256_and_si256(vertical, horizontal));
-        }
-        for (; x + 1u < width; ++x) {
-            if (previous[x - 1u] != 0u && previous[x + 1u] != 0u &&
-                current[x - 1u] != 0u && current[x + 1u] != 0u &&
-                next[x - 1u] != 0u && next[x + 1u] != 0u) {
-                destination[x] = 1u;
-            }
-        }
-    }
-#else
-    for (y = 1u; y + 1u < height; ++y) {
-        const uint8_t* previous = bitmap + (size_t)(y - 1u) * width;
-        const uint8_t* current = bitmap + (size_t)y * width;
-        const uint8_t* next = bitmap + (size_t)(y + 1u) * width;
-        uint8_t* destination = interior + (size_t)y * width;
-        uint32_t x;
-        for (x = 1u; x + 1u < width; ++x) {
-            if (previous[x - 1u] != 0u && previous[x + 1u] != 0u &&
-                current[x - 1u] != 0u && current[x + 1u] != 0u &&
-                next[x - 1u] != 0u && next[x + 1u] != 0u) {
-                destination[x] = 1u;
-            }
-        }
-    }
 #endif
 }

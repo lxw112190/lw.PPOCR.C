@@ -20,6 +20,48 @@ typedef struct det_point {
     float y;
 } det_point;
 
+enum {
+    DET_UNCLIP_POINTS_PER_CORNER = 228,
+    DET_UNCLIP_EXTRA_POINTS = 8,
+    DET_UNCLIP_QUAD_CAPACITY = 4 * DET_UNCLIP_POINTS_PER_CORNER + DET_UNCLIP_EXTRA_POINTS
+};
+
+typedef struct det_contour_row {
+    uint32_t left;
+    uint32_t end; /* Exclusive right edge. Zero denotes an untouched row. */
+} det_contour_row;
+
+typedef struct det_contour {
+    det_contour_row* rows;
+    uint32_t first;
+    uint32_t end;
+} det_contour;
+
+static void contour_include(det_contour* contour, uint32_t y, uint32_t left, uint32_t right) {
+    det_contour_row* row = &contour->rows[y];
+    if (row->end == 0u || left < row->left) row->left = left;
+    if (right >= row->end) row->end = right + 1u;
+    if (y < contour->first) contour->first = y;
+    if (y >= contour->end) contour->end = y + 1u;
+}
+
+static uint32_t contour_collect(det_contour* contour, det_point* points) {
+    uint32_t count = 0u;
+    uint32_t y;
+    for (y = contour->first; y < contour->end; ++y) {
+        det_contour_row* row = &contour->rows[y];
+        if (row->end == 0u) continue;
+        points[count++] = (det_point){(float)row->left, (float)y};
+        if (row->left != row->end - 1u) {
+            points[count++] = (det_point){(float)(row->end - 1u), (float)y};
+        }
+        row->end = 0u;
+    }
+    contour->first = UINT32_MAX;
+    contour->end = 0u;
+    return count;
+}
+
 /* Keep allocation overflow checks meaningful on both 32-bit and 64-bit
  * targets. Passing the count through uint64_t avoids comparisons that GCC can
  * prove are always false when the original count is only uint32_t. */
@@ -555,27 +597,22 @@ static float polygon_score(const float* prediction, uint32_t width, uint32_t hei
 /* Grow the reusable scratch buffers to cover this image. Buffers only grow;
  * a detector that processes many same-size images allocates once. */
 static lw_status workspace_grow(lw_db_postprocess_workspace* workspace, uint32_t pixels,
-                                uint32_t max_candidates) {
+                                uint32_t map_height, uint32_t max_candidates) {
     uint8_t* bitmap = workspace->bitmap;
     uint8_t* visited = workspace->visited;
     uint8_t* background_visited = workspace->background_visited;
     uint8_t* dilated = workspace->dilated;
-    uint8_t* interior = workspace->interior;
     uint32_t* stack = workspace->queue;
-    det_point* points = (det_point*)workspace->points;
-    det_point* hull = (det_point*)workspace->hull;
     lw_detection_box* results = (lw_detection_box*)workspace->results;
     if (workspace->pixel_capacity < pixels) {
         bitmap = (uint8_t*)malloc((size_t)pixels);
         visited = (uint8_t*)malloc((size_t)pixels);
         background_visited = (uint8_t*)malloc((size_t)pixels);
         dilated = (uint8_t*)malloc((size_t)pixels);
-        interior = (uint8_t*)malloc((size_t)pixels);
         stack = (uint32_t*)malloc(3u * (size_t)pixels * sizeof(*stack));
         if (bitmap == NULL || visited == NULL || background_visited == NULL ||
-            dilated == NULL || interior == NULL || stack == NULL) {
+            dilated == NULL || stack == NULL) {
             free(stack);
-            free(interior);
             free(dilated);
             free(background_visited);
             free(visited);
@@ -583,7 +620,6 @@ static lw_status workspace_grow(lw_db_postprocess_workspace* workspace, uint32_t
             return LW_STATUS_OUT_OF_MEMORY;
         }
         free(workspace->queue);
-        free(workspace->interior);
         free(workspace->dilated);
         free(workspace->background_visited);
         free(workspace->visited);
@@ -592,23 +628,22 @@ static lw_status workspace_grow(lw_db_postprocess_workspace* workspace, uint32_t
         workspace->visited = visited;
         workspace->background_visited = background_visited;
         workspace->dilated = dilated;
-        workspace->interior = interior;
         workspace->queue = stack;
         workspace->pixel_capacity = pixels;
     }
-    if (workspace->point_capacity < pixels) {
-        points = (det_point*)malloc((size_t)pixels * sizeof(*points));
-        hull = (det_point*)malloc((size_t)pixels * 2u * sizeof(*hull));
-        if (points == NULL || hull == NULL) {
-            free(hull);
+    if (workspace->contour_row_capacity < map_height) {
+        det_contour_row* rows = (det_contour_row*)calloc(map_height, sizeof(*rows));
+        det_point* points = (det_point*)malloc((size_t)map_height * 2u * sizeof(*points));
+        if (rows == NULL || points == NULL) {
             free(points);
+            free(rows);
             return LW_STATUS_OUT_OF_MEMORY;
         }
-        free(workspace->hull);
+        free(workspace->contour_rows);
         free(workspace->points);
+        workspace->contour_rows = rows;
         workspace->points = points;
-        workspace->hull = hull;
-        workspace->point_capacity = pixels;
+        workspace->contour_row_capacity = map_height;
     }
     if (workspace->result_capacity < max_candidates) {
         results = (lw_detection_box*)calloc(max_candidates, sizeof(*results));
@@ -622,11 +657,27 @@ static lw_status workspace_grow(lw_db_postprocess_workspace* workspace, uint32_t
     return LW_STATUS_OK;
 }
 
+/* The monotone chain can write up to twice the input count. */
+static lw_status workspace_grow_hull(lw_db_postprocess_workspace* workspace, uint32_t count) {
+    det_point* hull;
+    if (workspace->hull_capacity >= count) return LW_STATUS_OK;
+    if (count > UINT32_MAX / 2u || !allocation_fits(count, 2u * sizeof(*hull))) {
+        return LW_STATUS_OUT_OF_BOUNDS;
+    }
+    hull = (det_point*)realloc(workspace->hull, (size_t)count * 2u * sizeof(*hull));
+    if (hull == NULL) return LW_STATUS_OUT_OF_MEMORY;
+    workspace->hull = hull;
+    workspace->hull_capacity = count;
+    return LW_STATUS_OK;
+}
+
 /* Grow the polygon scratch (unclip round-join and PolygonScore arrays). */
 static lw_status workspace_grow_polygon(lw_db_postprocess_workspace* workspace, uint32_t count) {
     uint32_t capacity;
-    if (count > (UINT32_MAX - 7u) / 228u) return LW_STATUS_OUT_OF_BOUNDS;
-    capacity = count * 228u + 8u;
+    if (count > (UINT32_MAX - DET_UNCLIP_EXTRA_POINTS) / DET_UNCLIP_POINTS_PER_CORNER) {
+        return LW_STATUS_OUT_OF_BOUNDS;
+    }
+    capacity = count * DET_UNCLIP_POINTS_PER_CORNER + DET_UNCLIP_EXTRA_POINTS;
     if (workspace->unclip_capacity < capacity) {
         int64_t* pts = (int64_t*)malloc((size_t)count * 2u * sizeof(*pts));
         double* normals = (double*)malloc((size_t)count * 2u * sizeof(*normals));
@@ -688,8 +739,8 @@ void lw_db_postprocess_workspace_free(lw_db_postprocess_workspace* workspace) {
     free(workspace->results);
     free(workspace->hull);
     free(workspace->points);
+    free(workspace->contour_rows);
     free(workspace->queue);
-    free(workspace->interior);
     free(workspace->dilated);
     free(workspace->background_visited);
     free(workspace->visited);
@@ -697,16 +748,14 @@ void lw_db_postprocess_workspace_free(lw_db_postprocess_workspace* workspace) {
     memset(workspace, 0, sizeof(*workspace));
 }
 
-/* Scanline 8-connected flood fill: the visited set matches the classic
- * per-pixel BFS, and the boundary points come from the precomputed
- * 4-neighborhood interior bitmap (interior[p]==0 reproduces the per-pixel
- * four-neighbor probe exactly). */
-static uint32_t fill_foreground(const uint8_t* bitmap, uint8_t* visited,
-                                uint32_t map_width, uint32_t map_height,
-                                uint32_t start, const uint8_t* interior,
-                                det_point* points, uint32_t* stack) {
+/* Each foreground run is maximal and is marked visited in its entirety.
+ * Both endpoints are boundary pixels. Every other point on that row lies
+ * between the component's leftmost and rightmost endpoints, so those two
+ * points alone preserve its convex hull. */
+static void fill_foreground(const uint8_t* bitmap, uint8_t* visited,
+                            uint32_t map_width, uint32_t map_height,
+                            uint32_t start, det_contour* contour, uint32_t* stack) {
     uint32_t top = 0u;
-    uint32_t point_count = 0u;
     uint32_t seed_y = start / map_width;
     uint32_t seed_x = start % map_width;
     uint32_t seed_row = seed_y * map_width;
@@ -728,18 +777,11 @@ static uint32_t fill_foreground(const uint8_t* bitmap, uint8_t* visited,
         uint32_t run_right = stack[--top];
         uint32_t run_left = stack[--top];
         uint32_t y = stack[--top];
-        uint32_t row = y * map_width;
         uint32_t x;
         int32_t direction;
         uint32_t scan_from;
         uint32_t scan_to;
-        for (x = run_left; x <= run_right; ++x) {
-            if (interior[row + x] == 0u) {
-                points[point_count].x = (float)x;
-                points[point_count].y = (float)y;
-                ++point_count;
-            }
-        }
+        contour_include(contour, y, run_left, run_right);
         scan_from = run_left > 0u ? run_left - 1u : 0u;
         scan_to = run_right + 1u < map_width ? run_right + 1u : map_width - 1u;
         for (direction = -1; direction <= 1; direction += 2) {
@@ -772,24 +814,22 @@ static uint32_t fill_foreground(const uint8_t* bitmap, uint8_t* visited,
             }
         }
     }
-    return point_count;
 }
 
 /* Scanline flood fill over the 4-connected background component containing
- * `seed`. With boundary_points != NULL this traces the component's contour
+ * `seed`. With contour != NULL this traces the component's contour
  * (OpenCV RETR_LIST background-hole parity); with NULL it only marks the
  * visited set. */
-static uint32_t fill_background(const uint8_t* bitmap, uint8_t* visited,
-                                uint32_t map_width, uint32_t map_height, uint32_t seed,
-                                det_point* boundary_points, uint32_t* stack) {
+static void fill_background(const uint8_t* bitmap, uint8_t* visited,
+                            uint32_t map_width, uint32_t map_height, uint32_t seed,
+                            det_contour* contour, uint32_t* stack) {
     uint32_t top = 0u;
-    uint32_t boundary_count = 0u;
     uint32_t seed_y = seed / map_width;
     uint32_t seed_x = seed % map_width;
     uint32_t seed_row = seed_y * map_width;
     uint32_t left = seed_x;
     uint32_t right = seed_x;
-    if (bitmap[seed] != 0u || visited[seed] != 0u) return 0u;
+    if (bitmap[seed] != 0u || visited[seed] != 0u) return;
     while (left > 0u && bitmap[seed_row + left - 1u] == 0u &&
            visited[seed_row + left - 1u] == 0u) {
         --left;
@@ -808,16 +848,12 @@ static uint32_t fill_background(const uint8_t* bitmap, uint8_t* visited,
         uint32_t y = stack[--top];
         uint32_t row = y * map_width;
         int32_t direction;
-        if (boundary_points != NULL) {
+        if (contour != NULL) {
             if (run_left > 0u && bitmap[row + run_left - 1u] != 0u) {
-                boundary_points[boundary_count].x = (float)run_left;
-                boundary_points[boundary_count].y = (float)y;
-                ++boundary_count;
+                contour_include(contour, y, run_left, run_left);
             }
             if (run_right + 1u < map_width && bitmap[row + run_right + 1u] != 0u) {
-                boundary_points[boundary_count].x = (float)run_right;
-                boundary_points[boundary_count].y = (float)y;
-                ++boundary_count;
+                contour_include(contour, y, run_right, run_right);
             }
         }
         for (direction = -1; direction <= 1; direction += 2) {
@@ -829,10 +865,8 @@ static uint32_t fill_background(const uint8_t* bitmap, uint8_t* visited,
             x = run_left;
             while (x <= run_right) {
                 if (bitmap[nrow + x] != 0u) {
-                    if (boundary_points != NULL) {
-                        boundary_points[boundary_count].x = (float)x;
-                        boundary_points[boundary_count].y = (float)y;
-                        ++boundary_count;
+                    if (contour != NULL) {
+                        contour_include(contour, y, x, x);
                     }
                     ++x;
                 } else if (visited[nrow + x] == 0u) {
@@ -858,7 +892,6 @@ static uint32_t fill_background(const uint8_t* bitmap, uint8_t* visited,
             }
         }
     }
-    return boundary_count;
 }
 
 /* Reference TryBuildDetection: min-area rect of the contour -> PolygonScore
@@ -957,6 +990,30 @@ static int try_build_detection(const float* prediction, uint32_t map_width, uint
     return 1;
 }
 
+static lw_status finish_contour(det_contour* contour, const float* prediction,
+                                uint32_t map_width, uint32_t map_height,
+                                float box_threshold, float unclip_ratio,
+                                uint32_t source_width, uint32_t source_height,
+                                lw_db_postprocess_workspace* workspace,
+                                lw_pipeline_component_profile* profile,
+                                uint32_t* result_count) {
+    det_point* points = (det_point*)workspace->points;
+    uint32_t count = contour_collect(contour, points);
+    lw_status status;
+    lw_detection_box* results = (lw_detection_box*)workspace->results;
+    if (count < 3u) return LW_STATUS_OK;
+    /* Reuse the hull for unclip, whose round-join buffer can hold this many points. */
+    status = workspace_grow_hull(workspace, count > DET_UNCLIP_QUAD_CAPACITY
+                                               ? count : DET_UNCLIP_QUAD_CAPACITY);
+    if (status != LW_STATUS_OK) return status;
+    if (try_build_detection(prediction, map_width, map_height, box_threshold, unclip_ratio,
+                            source_width, source_height, points, count,
+                            (det_point*)workspace->hull, workspace, profile, &results[*result_count])) {
+        ++*result_count;
+    }
+    return LW_STATUS_OK;
+}
+
 lw_status lw_db_postprocess_f32_ws(
     const float* prediction, uint32_t map_width, uint32_t map_height,
     float bitmap_threshold, float box_threshold, float unclip_ratio,
@@ -967,10 +1024,8 @@ lw_status lw_db_postprocess_f32_ws(
     uint64_t pixel_count;
     uint8_t* bitmap;
     uint8_t* visited;
-    uint8_t* interior;
     uint32_t* stack;
-    det_point* points;
-    det_point* hull;
+    det_contour contour;
     lw_detection_box* results;
     uint32_t result_count = 0u;
     uint32_t candidate_count = 0u;
@@ -993,19 +1048,18 @@ lw_status lw_db_postprocess_f32_ws(
     pixel_count = (uint64_t)map_width * map_height;
     if (pixel_count > UINT32_MAX ||
         pixel_count > SIZE_MAX / (3u * sizeof(*stack)) ||
-        pixel_count > SIZE_MAX / sizeof(det_point) ||
+        !allocation_fits(map_height, 2u * sizeof(det_point)) ||
+        !allocation_fits(map_height, sizeof(det_contour_row)) ||
         !allocation_fits(max_candidates, sizeof(*results))) {
         return LW_STATUS_OUT_OF_BOUNDS;
     }
-    status = workspace_grow(workspace, (uint32_t)pixel_count, max_candidates);
+    status = workspace_grow(workspace, (uint32_t)pixel_count, map_height, max_candidates);
     if (status != LW_STATUS_OK)
         return status;
     bitmap = workspace->bitmap;
     visited = workspace->visited;
-    interior = workspace->interior;
     stack = workspace->queue;
-    points = (det_point*)workspace->points;
-    hull = (det_point*)workspace->hull;
+    contour = (det_contour){(det_contour_row*)workspace->contour_rows, UINT32_MAX, 0u};
     results = (lw_detection_box*)workspace->results;
     memset(visited, 0, (size_t)pixel_count);
     /* Convert model probabilities to a compact bitmap after rejecting NaN/Inf. */
@@ -1038,21 +1092,15 @@ lw_status lw_db_postprocess_f32_ws(
         }
         bitmap = dilated;
     }
-    lw_avx2_interior_bitmap_u8(bitmap, interior, map_width, map_height);
-    /* Flood-fill each 8-connected foreground component; only boundary pixels
-     * are retained because the convex hull does not need the interior. */
+    /* Flood-fill each 8-connected foreground component. */
     for (start = 0u; start < pixel_count && candidate_count < max_candidates; ++start) {
-        uint32_t point_count;
         if (bitmap[(size_t)start] == 0u || visited[(size_t)start] != 0u)
             continue;
         ++candidate_count;
-        point_count = fill_foreground(bitmap, visited, map_width, map_height, start, interior,
-                                      points, stack);
-        if (try_build_detection(prediction, map_width, map_height, box_threshold, unclip_ratio,
-                                source_width, source_height, points, point_count, hull, workspace,
-                                profile, &results[result_count])) {
-            ++result_count;
-        }
+        fill_foreground(bitmap, visited, map_width, map_height, start, &contour, stack);
+        status = finish_contour(&contour, prediction, map_width, map_height, box_threshold,
+                                unclip_ratio, source_width, source_height, workspace, profile, &result_count);
+        if (status != LW_STATUS_OK) return status;
     }
     /* OpenCV RETR_LIST also returns contours for enclosed background regions:
      * flood the exterior background from the image border, then trace the
@@ -1076,18 +1124,14 @@ lw_status lw_db_postprocess_f32_ws(
         }
     }
     for (start = 0u; start < pixel_count && candidate_count < max_candidates; ++start) {
-        uint32_t point_count;
         if (bitmap[(size_t)start] != 0u || workspace->background_visited[(size_t)start] != 0u) {
             continue;
         }
         ++candidate_count;
-        point_count = fill_background(bitmap, workspace->background_visited, map_width,
-                                      map_height, start, points, stack);
-        if (try_build_detection(prediction, map_width, map_height, box_threshold, unclip_ratio,
-                                source_width, source_height, points, point_count, hull, workspace,
-                                profile, &results[result_count])) {
-            ++result_count;
-        }
+        fill_background(bitmap, workspace->background_visited, map_width, map_height, start, &contour, stack);
+        status = finish_contour(&contour, prediction, map_width, map_height, box_threshold,
+                                unclip_ratio, source_width, source_height, workspace, profile, &result_count);
+        if (status != LW_STATUS_OK) return status;
     }
     *box_count = result_count;
     if (boxes != NULL) {

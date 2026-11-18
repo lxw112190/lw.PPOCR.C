@@ -61,8 +61,8 @@ typedef struct lw_db_postprocess_workspace {
     uint8_t* visited;
     uint8_t* background_visited;
     uint8_t* dilated;
-    uint8_t* interior;
     uint32_t* queue;
+    void* contour_rows;
     void* points;
     void* hull;
     void* results;
@@ -74,7 +74,7 @@ typedef struct lw_db_postprocess_workspace {
     void* score_hit_high;
     void* score_poly_x;
     void* score_poly_y;
-    uint32_t point_capacity;
+    uint32_t contour_row_capacity;
     uint32_t hull_capacity;
     uint32_t pixel_capacity;
     uint32_t result_capacity;

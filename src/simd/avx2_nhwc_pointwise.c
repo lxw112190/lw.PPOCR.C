@@ -2,6 +2,30 @@
 
 #include <stddef.h>
 
+/* Preserve the existing accumulation and exact GELU implementations. A tile
+ * is completely expanded before projection; only its hidden rows survive.
+ * Kernel selection is performed once by the caller, outside the tile loop. */
+void lw_nhwc_ffn_tile_f32(const float* input, const float* expand_weights,
+    const lw_nhwc_epilogue* expand_epilogue, const float* project_weights,
+    const lw_nhwc_epilogue* project_epilogue, float* output, float* hidden,
+    uint32_t pixels, uint32_t input_channels, uint32_t hidden_channels,
+    uint32_t output_channels, uint32_t tile_pixels,
+    lw_nhwc_pointwise_fn expand, lw_nhwc_pointwise_fn project) {
+    uint32_t begin = 0u;
+    while (begin < pixels) {
+        uint32_t count = pixels - begin;
+        lw_nhwc_epilogue ep = *project_epilogue;
+        if (count > tile_pixels) count = tile_pixels;
+        if (ep.residual != NULL) ep.residual += (size_t)begin * output_channels;
+        expand(input + (size_t)begin * input_channels, expand_weights,
+               expand_epilogue, hidden, count, input_channels, hidden_channels);
+        project(hidden, project_weights, &ep,
+                output + (size_t)begin * output_channels,
+                count, hidden_channels, output_channels);
+        begin += count;
+    }
+}
+
 #if defined(__x86_64__) || defined(_M_X64) || defined(__i386__) || defined(_M_IX86)
 #define LW_NHWC_X86 1
 #include <immintrin.h>

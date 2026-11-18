@@ -20,6 +20,15 @@ option(LW_NATIVE_FINE_REC_WIDTHS
     "Experimentally reduce native compiled REC padding with finer widths (including 480)" OFF)
 option(LW_EXPERIMENTAL_REC_FFN_TILING
     "Experimental cache-local Pointwise/GELU/Pointwise scheduling (no arithmetic changes)" OFF)
+option(LW_EXPERIMENTAL_REC_FFN_FUSION
+    "Experimental native REC FFN with tile-local hidden storage" OFF)
+option(LW_EXPERIMENTAL_REC_DW_PW_FUSION
+    "Experimental native REC depthwise-to-pointwise tile fusion" OFF)
+set(LW_REC_DW_PW_TILE_PIXELS "48" CACHE STRING "DW/PW pixel tile (12, 48 or 96)")
+set_property(CACHE LW_REC_DW_PW_TILE_PIXELS PROPERTY STRINGS 12 48 96)
+if(NOT LW_REC_DW_PW_TILE_PIXELS MATCHES "^(12|48|96)$")
+    message(FATAL_ERROR "LW_REC_DW_PW_TILE_PIXELS must be 12, 48 or 96")
+endif()
 set(LW_REC_FFN_TILE_PIXELS "96" CACHE STRING "Experimental FFN pixel block (12, 48 or 96)")
 set_property(CACHE LW_REC_FFN_TILE_PIXELS PROPERTY STRINGS 12 48 96)
 if(NOT LW_REC_FFN_TILE_PIXELS MATCHES "^(12|48|96)$")
@@ -379,6 +388,11 @@ if(LW_NATIVE_FINE_REC_WIDTHS AND
    (NOT LW_X64_REC_FAST_ENABLED OR NOT CMAKE_SIZEOF_VOID_P EQUAL 8))
     message(FATAL_ERROR "LW_NATIVE_FINE_REC_WIDTHS requires compiled native x64 REC")
 endif()
+if(LW_EXPERIMENTAL_REC_DW_PW_FUSION AND
+   (NOT LW_X64_REC_FAST_ENABLED OR NOT CMAKE_SIZEOF_VOID_P EQUAL 8 OR EMSCRIPTEN OR
+    LW_EXPERIMENTAL_REC_FFN_TILING OR LW_EXPERIMENTAL_REC_FFN_FUSION))
+    message(FATAL_ERROR "DW/PW fusion requires native x64 REC with FFN experiments OFF")
+endif()
 if(LW_X64_REC_FAST_ENABLED OR LW_WASM_COMPILED_REC_ENABLED)
     list(APPEND LW_PPOCR_C_SOURCES
         src/runtime/layout_planner.c
@@ -463,6 +477,14 @@ if(LW_SYSTEM_PROCESSOR_LOWER MATCHES "^(loongarch64|loong64)$")
 endif()
 
 function(lw_configure_runtime_target target)
+    if(LW_EXPERIMENTAL_REC_DW_PW_FUSION AND LW_X64_REC_FAST_ENABLED AND NOT EMSCRIPTEN)
+        target_compile_definitions(${target} PRIVATE LW_EXPERIMENTAL_REC_DW_PW_FUSION=1
+            LW_REC_DW_PW_TILE_PIXELS=${LW_REC_DW_PW_TILE_PIXELS})
+    endif()
+    if(LW_EXPERIMENTAL_REC_FFN_FUSION AND LW_X64_REC_FAST_ENABLED AND NOT EMSCRIPTEN)
+        target_compile_definitions(${target} PRIVATE LW_EXPERIMENTAL_REC_FFN_FUSION=1
+            LW_REC_FFN_TILE_PIXELS=${LW_REC_FFN_TILE_PIXELS})
+    endif()
     if(LW_EXPERIMENTAL_REC_FFN_TILING)
         target_compile_definitions(${target} PRIVATE LW_EXPERIMENTAL_REC_FFN_TILING=1
             LW_REC_FFN_TILE_PIXELS=${LW_REC_FFN_TILE_PIXELS})
@@ -2203,6 +2225,7 @@ if(BUILD_TESTING AND NOT EMSCRIPTEN)
     target_compile_features(det-pipeline-driver PRIVATE c_std_11)
     add_dependencies(det-pipeline-driver convert_det_model)
     if(MSVC)
+        target_compile_definitions(det-pipeline-driver PRIVATE _CRT_SECURE_NO_WARNINGS)
         target_compile_options(det-pipeline-driver PRIVATE /W4 /WX /utf-8)
     else()
         target_compile_options(det-pipeline-driver PRIVATE
@@ -2577,11 +2600,31 @@ if(BUILD_TESTING AND NOT EMSCRIPTEN)
         set_tests_properties(x64_rec_backend_contract PROPERTIES TIMEOUT 120)
         add_executable(x64-rec-backend-execution-driver
             tests/x64_rec_backend_execution_driver.c)
-        if(LW_EXPERIMENTAL_REC_FFN_TILING)
+        if(LW_EXPERIMENTAL_REC_DW_PW_FUSION)
+            add_executable(rec-dw-pw-contract-driver tests/rec_dw_pw_contract_driver.c)
+            target_link_libraries(rec-dw-pw-contract-driver PRIVATE lw_ppocr_c)
+            target_include_directories(rec-dw-pw-contract-driver PRIVATE src/runtime src/kernels src/simd)
+            target_compile_features(rec-dw-pw-contract-driver PRIVATE c_std_11)
+            if(MSVC)
+                target_compile_options(rec-dw-pw-contract-driver PRIVATE /W4 /WX /utf-8)
+            else()
+                target_compile_options(rec-dw-pw-contract-driver PRIVATE -Wall -Wextra -Wpedantic -Werror)
+            endif()
+            foreach(variant tiny small medium)
+                add_test(NAME rec_dw_pw_contract_${variant}
+                    COMMAND rec-dw-pw-contract-driver
+                        "${CMAKE_CURRENT_SOURCE_DIR}/models/ppocrv6-${variant}/rec.onnx")
+                set_tests_properties(rec_dw_pw_contract_${variant} PROPERTIES TIMEOUT 180)
+            endforeach()
+        endif()
+        if(LW_EXPERIMENTAL_REC_FFN_TILING OR LW_EXPERIMENTAL_REC_FFN_FUSION)
             add_executable(rec-ffn-contract-driver tests/rec_ffn_contract_driver.c)
             target_link_libraries(rec-ffn-contract-driver PRIVATE lw_ppocr_c)
             target_include_directories(rec-ffn-contract-driver PRIVATE src/runtime src/kernels src/simd)
             target_compile_features(rec-ffn-contract-driver PRIVATE c_std_11)
+            if(LW_EXPERIMENTAL_REC_FFN_FUSION)
+                target_compile_definitions(rec-ffn-contract-driver PRIVATE LW_EXPERIMENTAL_REC_FFN_FUSION=1)
+            endif()
             if(MSVC)
                 target_compile_options(rec-ffn-contract-driver PRIVATE /W4 /WX /utf-8)
             else()

@@ -1,0 +1,67 @@
+name: Native REC FFN fusion experiment
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - '.github/workflows/rec-ffn-fusion.yml'
+      - 'tests/rec_ffn_contract_driver.c'
+      - 'src/runtime/x64_rec_backend_compile.c'
+      - 'src/runtime/x64_rec_backend_execute.c'
+      - 'src/runtime/x64_rec_backend_internal.h'
+      - 'src/simd/avx2_nhwc_pointwise.c'
+      - 'src/kernels/nhwc_internal.h'
+
+permissions:
+  contents: read
+
+jobs:
+  compare:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-2022]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Install converter dependencies
+        run: python -m pip install -r requirements-converter.txt
+      - name: Build matched control and fusion configurations
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $generator = @('-G', 'Ninja', '-DCMAKE_BUILD_TYPE=Release')
+          if ($IsWindows) { $generator = @('-G', 'Visual Studio 17 2022', '-A', 'x64') }
+          foreach ($flavor in @('control', 'fusion')) {
+            $enabled = if ($flavor -eq 'fusion') { 'ON' } else { 'OFF' }
+            cmake -S . -B "build/ffn-$flavor" @generator -DBUILD_TESTING=ON -DLW_BUILD_HTTP_DEMO=OFF -DLW_NATIVE_FINE_REC_WIDTHS=OFF -DLW_EXPERIMENTAL_REC_FFN_TILING=OFF "-DLW_EXPERIMENTAL_REC_FFN_FUSION=$enabled" -DLW_REC_FFN_TILE_PIXELS=96
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            $targets = @('lw-ocr-benchmark', 'lw-ocr-ppm')
+            if ($flavor -eq 'fusion') { $targets += @('rec-ffn-contract-driver', 'ocr-pipeline-driver', 'rec-pipeline-driver') }
+            cmake --build "build/ffn-$flavor" --config Release --parallel 2 --target @targets
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+      - name: Gate bitwise FFN contracts and public OCR golden corpus
+        run: ctest --test-dir build/ffn-fusion -C Release -R '^(rec_ffn_contract_.*|full_ocr_golden_corpus|rec_golden_corpus|onnx_e2e_comparison_contract|source_final_newline_contract)$' --output-on-failure
+      - name: Compare full OCR and memory
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $bin = if ($IsWindows) { 'Release/' } else { '' }
+          $ext = if ($IsWindows) { '.exe' } else { '' }
+          python tools/compare_onnx_e2e.py --baseline "build/ffn-control/${bin}lw-ocr-benchmark$ext" --candidate "build/ffn-fusion/${bin}lw-ocr-benchmark$ext" --sample build/ffn-fusion/models/sample.ppm --rounds 3 --iterations 5 --collect-text --output build/ffn-results
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Get-Content build/ffn-results/report.md | Out-File $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: rec-ffn-${{ matrix.os }}-${{ github.sha }}
+          path: |
+            build/ffn-results/
+            build/ffn-fusion/Testing/Temporary/LastTest.log
+          if-no-files-found: warn

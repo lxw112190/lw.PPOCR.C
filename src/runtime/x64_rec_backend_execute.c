@@ -24,7 +24,7 @@ static void rec_aligned_free(void* p) { free(p); }
 #endif
 
 static float* offset_ptr(lw_x64_rec_instance* instance, uint64_t offset) {
-    if (instance == NULL || instance->arena == NULL || offset > SIZE_MAX) return NULL;
+    if (instance == NULL || instance->arena == NULL || offset >= SIZE_MAX) return NULL;
     return (float*)(void*)(instance->arena + (size_t)offset);
 }
 
@@ -191,13 +191,42 @@ static uint32_t pointwise_shard_workers(const lw_x64_rec_instance* instance,
 typedef struct lw_rec_ffn_shard {
     lw_rec_pointwise_shard expansion;
     lw_rec_pointwise_shard projection;
+    uint8_t* local_scratch;
+    uint64_t scratch_stride;
+    lw_nhwc_pointwise_fn expand_kernel;
+    lw_nhwc_pointwise_fn project_kernel;
 } lw_rec_ffn_shard;
+
+static uint8_t* dense_shard_scratch(lw_x64_rec_instance* instance, uint32_t workers,
+                                    uint64_t scratch_bytes);
+
+static lw_nhwc_pointwise_fn ffn_pointwise_kernel(uint16_t kernel) {
+    switch (kernel) {
+    case LW_X64_REC_PW_4X16: return lw_avx2_fma_nhwc_pointwise_4x16_f32;
+    case LW_X64_REC_PW_3X32: return lw_avx2_fma_nhwc_pointwise_3x32_f32;
+    case LW_X64_REC_PW_2X32: return lw_avx2_fma_nhwc_pointwise_2x32_f32;
+    default: return lw_avx2_fma_nhwc_pointwise_f32;
+    }
+}
 
 static void ffn_shard_entry(void* context_void, uint32_t worker_index,
                              uint32_t worker_count) {
     const lw_rec_ffn_shard* pair = (const lw_rec_ffn_shard*)context_void;
     uint32_t begin = pointwise_shard_begin(pair->expansion.pixels, worker_count, worker_index);
     uint32_t end = pointwise_shard_begin(pair->expansion.pixels, worker_count, worker_index + 1u);
+    if (pair->local_scratch != NULL) {
+        const lw_rec_pointwise_shard* a = &pair->expansion;
+        const lw_rec_pointwise_shard* b = &pair->projection;
+        lw_nhwc_epilogue ep = b->epilogue;
+        if (ep.residual != NULL) ep.residual += (size_t)begin * b->output_channels;
+        lw_nhwc_ffn_tile_f32(a->input + (size_t)begin * a->input_channels,
+            a->packed_weights, &a->epilogue, b->packed_weights, &ep,
+            b->output + (size_t)begin * b->output_channels,
+            (float*)(void*)(pair->local_scratch + (size_t)worker_index * pair->scratch_stride),
+            end - begin, a->input_channels, a->output_channels, b->output_channels,
+            LW_REC_FFN_TILE_PIXELS, pair->expand_kernel, pair->project_kernel);
+        return;
+    }
     while (begin < end) {
         uint32_t count = end - begin;
         if (count > LW_REC_FFN_TILE_PIXELS) count = LW_REC_FFN_TILE_PIXELS;
@@ -219,8 +248,8 @@ static void ffn_init_shard(lw_x64_rec_instance* instance,
                             const lw_x64_rec_conv_op* conv, uint32_t pixels,
                             lw_rec_pointwise_shard* shard) {
     memset(shard, 0, sizeof(*shard));
-    shard->input = offset_ptr(instance, conv->input_offset);
-    shard->output = offset_ptr(instance, conv->output_offset);
+    shard->input = conv->input_offset == UINT64_MAX ? NULL : offset_ptr(instance, conv->input_offset);
+    shard->output = conv->output_offset == UINT64_MAX ? NULL : offset_ptr(instance, conv->output_offset);
     shard->packed_weights = conv->packed_weights;
     shard->pixels = pixels;
     shard->input_channels = conv->input_channels;
@@ -241,7 +270,8 @@ lw_status lw_x64_rec_instance_run_ffn_pair(lw_x64_rec_instance* instance,
     const lw_x64_rec_conv_op *a, *b;
     uint64_t pixels64, input_bytes, middle_bytes, output_bytes;
     uint32_t pixels, workers;
-    lw_rec_ffn_shard pair;
+    lw_rec_ffn_shard pair = {0};
+    int local;
     if (instance == NULL || instance->program == NULL || instance->arena == NULL ||
         op_index >= instance->program->op_count ||
         instance->program->op_count - op_index < 2u) goto invalid;
@@ -251,6 +281,7 @@ lw_status lw_x64_rec_instance_run_ffn_pair(lw_x64_rec_instance* instance,
     second = &program->ops[op_index + 1u];
     a = &first->data.conv;
     b = &second->data.conv;
+    local = (first->flags & LW_X64_REC_OP_FFN_LOCAL) != 0u;
     if (!(first->flags & LW_X64_REC_OP_FFN_BEGIN) ||
         first->kind != LW_X64_REC_OP_POINTWISE || second->kind != LW_X64_REC_OP_POINTWISE ||
         a->scalar_fallback || b->scalar_fallback || a->has_residual ||
@@ -274,18 +305,35 @@ lw_status lw_x64_rec_instance_run_ffn_pair(lw_x64_rec_instance* instance,
     middle_bytes = pixels64 * a->output_channels * sizeof(float);
     output_bytes = pixels64 * b->output_channels * sizeof(float);
     if (!ffn_span_valid(a->input_offset, input_bytes, program->arena_bytes) ||
-        !ffn_span_valid(a->output_offset, middle_bytes, program->arena_bytes) ||
         !ffn_span_valid(b->output_offset, output_bytes, program->arena_bytes) ||
+        (!ffn_disjoint(a->input_offset, input_bytes, b->output_offset, output_bytes) &&
+         !(local && (first->flags & LW_X64_REC_OP_FFN_INPLACE) != 0u &&
+           a->input_offset == b->output_offset && input_bytes == output_bytes))) goto invalid;
+    if (local) {
+        uint64_t needed = (uint64_t)LW_REC_FFN_TILE_PIXELS * a->output_channels * sizeof(float);
+        if (a->output_offset != UINT64_MAX || instance->scratch == NULL ||
+            a->scratch_bytes < needed || a->scratch_bytes > program->scratch_bytes) goto invalid;
+    } else if (!ffn_span_valid(a->output_offset, middle_bytes, program->arena_bytes) ||
         !ffn_disjoint(a->input_offset, input_bytes, a->output_offset, middle_bytes) ||
-        !ffn_disjoint(a->input_offset, input_bytes, b->output_offset, output_bytes) ||
         !ffn_disjoint(a->output_offset, middle_bytes, b->output_offset, output_bytes)) goto invalid;
     if (b->has_residual &&
         (!ffn_span_valid(b->residual_offset, output_bytes, program->arena_bytes) ||
-         !ffn_disjoint(b->residual_offset, output_bytes, a->output_offset, middle_bytes) ||
-         !ffn_disjoint(b->residual_offset, output_bytes, b->output_offset, output_bytes))) goto invalid;
+         (!local && !ffn_disjoint(b->residual_offset, output_bytes, a->output_offset, middle_bytes)) ||
+         (!ffn_disjoint(b->residual_offset, output_bytes, b->output_offset, output_bytes) &&
+          !(local && (first->flags & LW_X64_REC_OP_FFN_INPLACE) != 0u &&
+            b->residual_offset == b->output_offset)))) goto invalid;
     ffn_init_shard(instance, a, pixels, &pair.expansion);
     ffn_init_shard(instance, b, pixels, &pair.projection);
     workers = pointwise_shard_workers(instance, pixels, a->input_channels, a->output_channels);
+    if (local) {
+        pair.local_scratch = workers > 1u ? dense_shard_scratch(instance, workers, a->scratch_bytes)
+                                          : instance->scratch;
+        /* Allocation failure falls back to serial using preallocated scratch. */
+        if (pair.local_scratch == NULL) { workers = 1u; pair.local_scratch = instance->scratch; }
+        pair.scratch_stride = a->scratch_bytes;
+        pair.expand_kernel = ffn_pointwise_kernel(a->pointwise_kernel);
+        pair.project_kernel = ffn_pointwise_kernel(b->pointwise_kernel);
+    }
     if (workers > 1u) {
         lw_thread_pool_run(instance->thread_pool, workers, ffn_shard_entry, &pair);
     } else {
@@ -379,6 +427,7 @@ static uint8_t* dense_shard_scratch(lw_x64_rec_instance* instance, uint32_t work
     if (scratch_bytes == 0u || workers <= 1u) {
         return NULL;
     }
+    if (scratch_bytes > SIZE_MAX / workers) return NULL;
     needed = (uint64_t)workers * scratch_bytes;
     if (instance->dense_shard_scratch_bytes < needed) {
         uint8_t* grown;
@@ -393,6 +442,139 @@ static uint8_t* dense_shard_scratch(lw_x64_rec_instance* instance, uint32_t work
         instance->dense_shard_scratch_bytes = needed;
     }
     return instance->dense_shard_scratch;
+}
+
+#ifndef LW_REC_DW_PW_TILE_PIXELS
+#define LW_REC_DW_PW_TILE_PIXELS 48u
+#endif
+
+typedef struct lw_rec_dw_pw_shard {
+    const float* input;
+    const float* dw_weights;
+    const float* dw_bias;
+    const float* pw_weights;
+    lw_nhwc_depthwise_desc desc;
+    lw_nhwc_epilogue epilogue;
+    lw_nhwc_pointwise_fn pointwise;
+    float* output;
+    uint8_t* scratch;
+    uint64_t scratch_stride;
+    uint32_t pixels;
+    uint32_t output_channels;
+    lw_status status[LW_PARALLEL_MAX_WORKERS];
+} lw_rec_dw_pw_shard;
+
+static void dw_pw_shard_entry(void* context, uint32_t worker_index, uint32_t workers) {
+    lw_rec_dw_pw_shard* shard = (lw_rec_dw_pw_shard*)context;
+    uint32_t begin = pointwise_shard_begin(shard->pixels, workers, worker_index);
+    uint32_t end = pointwise_shard_begin(shard->pixels, workers, worker_index + 1u);
+    float* tile = (float*)(void*)(shard->scratch + (size_t)worker_index * shard->scratch_stride);
+    shard->status[worker_index] = LW_STATUS_OK;
+    while (begin < end) {
+        uint32_t count = end - begin;
+        lw_nhwc_epilogue ep = shard->epilogue;
+        lw_status status;
+        if (count > LW_REC_DW_PW_TILE_PIXELS) count = LW_REC_DW_PW_TILE_PIXELS;
+        status = lw_avx2_fma_nhwc_depthwise_range_f32(shard->input, shard->dw_weights,
+            shard->dw_bias, tile, &shard->desc, begin, count);
+        if (status != LW_STATUS_OK) { shard->status[worker_index] = status; return; }
+        if (ep.residual != NULL) ep.residual += (size_t)begin * shard->output_channels;
+        shard->pointwise(tile, shard->pw_weights, &ep,
+            shard->output + (size_t)begin * shard->output_channels,
+            count, shard->desc.channels, shard->output_channels);
+        begin += count;
+    }
+}
+
+lw_status lw_x64_rec_instance_run_dw_pw_pair(lw_x64_rec_instance* instance,
+                                             uint32_t index, lw_error* error) {
+    const lw_x64_rec_program* program;
+    const lw_x64_rec_conv_op *a, *b;
+    lw_rec_dw_pw_shard shard = {0};
+    uint64_t pixels, input_pixels, input_bytes, output_bytes, needed;
+    uint32_t workers, wi;
+    if (instance == NULL || instance->program == NULL || instance->arena == NULL ||
+        instance->scratch == NULL || index >= instance->program->op_count ||
+        instance->program->op_count - index < 2u) goto invalid;
+    program = instance->program;
+    a = &program->ops[index].data.conv;
+    b = &program->ops[index + 1u].data.conv;
+    if (program->arena_bytes > SIZE_MAX ||
+        !(program->ops[index].flags & LW_X64_REC_OP_DW_PW_BEGIN) ||
+        program->ops[index].kind != LW_X64_REC_OP_DEPTHWISE ||
+        program->ops[index + 1u].kind != LW_X64_REC_OP_POINTWISE ||
+        a->scalar_fallback || b->scalar_fallback || a->has_residual ||
+        a->activation != LW_NHWC_ACT_NONE || a->kernel_h != 3u || a->kernel_w != 3u ||
+        a->input_channels == 0u || (a->input_channels & 7u) != 0u ||
+        a->groups != a->input_channels || a->output_channels != a->input_channels ||
+        a->output_offset != UINT64_MAX || b->input_offset != UINT64_MAX ||
+        a->packed_weights == NULL || b->packed_weights == NULL ||
+        b->input_channels != a->output_channels || b->output_channels == 0u ||
+        b->kernel_h != 1u || b->kernel_w != 1u || b->groups != 1u ||
+        b->stride_h != 1u || b->stride_w != 1u ||
+        b->input_height != a->output_height || b->input_width != a->output_width ||
+        b->input_height != b->output_height || b->input_width != b->output_width) goto invalid;
+    pixels = (uint64_t)a->output_height * a->output_width;
+    input_pixels = (uint64_t)a->input_height * a->input_width;
+    if (pixels == 0u || pixels > UINT32_MAX || input_pixels == 0u ||
+        pixels > UINT64_MAX / ((uint64_t)a->output_channels * sizeof(float)) ||
+        pixels > UINT64_MAX / ((uint64_t)b->output_channels * sizeof(float)) ||
+        input_pixels > UINT64_MAX / ((uint64_t)a->input_channels * sizeof(float))) goto invalid;
+    input_bytes = input_pixels * a->input_channels * sizeof(float);
+    output_bytes = pixels * b->output_channels * sizeof(float);
+    needed = (uint64_t)LW_REC_DW_PW_TILE_PIXELS * a->output_channels * sizeof(float);
+    if (a->scratch_bytes < needed || a->scratch_bytes > program->scratch_bytes ||
+        !ffn_span_valid(a->input_offset, input_bytes, program->arena_bytes) ||
+        !ffn_span_valid(b->output_offset, output_bytes, program->arena_bytes) ||
+        !ffn_disjoint(a->input_offset, input_bytes, b->output_offset, output_bytes) ||
+        (b->has_residual &&
+         (!ffn_span_valid(b->residual_offset, output_bytes, program->arena_bytes) ||
+          !ffn_disjoint(b->residual_offset, output_bytes, b->output_offset, output_bytes)))) goto invalid;
+    shard.input = offset_ptr(instance, a->input_offset);
+    shard.dw_weights = a->packed_weights;
+    shard.dw_bias = a->bias;
+    shard.pw_weights = b->packed_weights;
+    shard.output = offset_ptr(instance, b->output_offset);
+    shard.pixels = (uint32_t)pixels;
+    shard.output_channels = b->output_channels;
+    shard.desc.batch = 1u;
+    shard.desc.channels = a->input_channels;
+    shard.desc.input_height = a->input_height;
+    shard.desc.input_width = a->input_width;
+    shard.desc.output_height = a->output_height;
+    shard.desc.output_width = a->output_width;
+    shard.desc.kernel_h = a->kernel_h;
+    shard.desc.kernel_w = a->kernel_w;
+    shard.desc.stride_h = a->stride_h;
+    shard.desc.stride_w = a->stride_w;
+    shard.desc.pad_top = a->pad_top;
+    shard.desc.pad_left = a->pad_left;
+    shard.desc.pad_bottom = a->pad_bottom;
+    shard.desc.pad_right = a->pad_right;
+    shard.desc.post_bias = a->post_bias;
+    shard.epilogue.bias = b->bias;
+    shard.epilogue.post_bias = b->post_bias;
+    shard.epilogue.activation = b->activation;
+    if (b->has_residual) shard.epilogue.residual = offset_ptr(instance, b->residual_offset);
+    shard.pointwise = ffn_pointwise_kernel(b->pointwise_kernel);
+    workers = pointwise_shard_workers(instance, (uint32_t)pixels, a->output_channels, b->output_channels);
+    if (workers > LW_PARALLEL_MAX_WORKERS) workers = LW_PARALLEL_MAX_WORKERS;
+    shard.scratch = workers > 1u ? dense_shard_scratch(instance, workers, a->scratch_bytes) : instance->scratch;
+    if (shard.scratch == NULL) { workers = 1u; shard.scratch = instance->scratch; }
+    shard.scratch_stride = a->scratch_bytes;
+    if (workers > 1u) lw_thread_pool_run(instance->thread_pool, workers, dw_pw_shard_entry, &shard);
+    else dw_pw_shard_entry(&shard, 0u, 1u);
+    for (wi = 0u; wi < workers; ++wi) {
+        if (shard.status[wi] != LW_STATUS_OK) {
+            lw_set_error(error, shard.status[wi], "REC DW/PW tile execution failed");
+            return shard.status[wi];
+        }
+    }
+    lw_set_error(error, LW_STATUS_OK, "");
+    return LW_STATUS_OK;
+invalid:
+    lw_set_error(error, LW_STATUS_INVALID_ARGUMENT, "REC DW/PW pair/lifetime is invalid");
+    return LW_STATUS_INVALID_ARGUMENT;
 }
 
 /* Depthwise convs shard along output rows like dense ones; the kernel applies
@@ -631,6 +813,9 @@ static lw_status execute_op(lw_x64_rec_instance* instance, const lw_x64_rec_op* 
 #endif
     case LW_X64_REC_OP_POINTWISE: {
         lw_nhwc_epilogue ep = { NULL, NULL, op->data.conv.activation, 0u, 0.0f, 0.0f, NULL };
+        /* No single-op execution for an elided, tile-local hidden value. */
+        if (op->data.conv.input_offset == UINT64_MAX ||
+            op->data.conv.output_offset == UINT64_MAX) return LW_STATUS_INVALID_ARGUMENT;
         input = offset_ptr(instance, op->data.conv.input_offset);
         output = offset_ptr(instance, op->data.conv.output_offset);
         if (input == NULL || output == NULL) return LW_STATUS_INVALID_ARGUMENT;
@@ -776,6 +961,8 @@ static lw_status execute_op(lw_x64_rec_instance* instance, const lw_x64_rec_op* 
     case LW_X64_REC_OP_DEPTHWISE: {
         lw_nhwc_depthwise_desc desc;
         lw_status status;
+        if (op->data.conv.input_offset == UINT64_MAX ||
+            op->data.conv.output_offset == UINT64_MAX) return LW_STATUS_INVALID_ARGUMENT;
         memset(&desc, 0, sizeof(desc));
         desc.batch = 1u;
         desc.channels = op->data.conv.input_channels;
@@ -1470,8 +1657,11 @@ static lw_status run_backbone_ops(lw_x64_rec_instance* instance, lw_error* error
     }
     for (i = 0u; i < instance->program->op_count; ++i) {
         int paired = 0;
-#if defined(LW_EXPERIMENTAL_REC_FFN_TILING)
+#if defined(LW_EXPERIMENTAL_REC_FFN_TILING) || defined(LW_EXPERIMENTAL_REC_FFN_FUSION)
         paired = (instance->program->ops[i].flags & LW_X64_REC_OP_FFN_BEGIN) != 0u;
+#endif
+#if defined(LW_EXPERIMENTAL_REC_DW_PW_FUSION)
+        if (instance->program->ops[i].flags & LW_X64_REC_OP_DW_PW_BEGIN) paired = 2;
 #endif
 #if defined(__EMSCRIPTEN__)
         /* Detailed one-op traces retain the unfused diagnostic execution. */
@@ -1480,15 +1670,19 @@ static lw_status run_backbone_ops(lw_x64_rec_instance* instance, lw_error* error
         if (profiling) {
             uint64_t started = rec_profile_now_ns();
             uint64_t* slot;
-            status = paired ? lw_x64_rec_instance_run_ffn_pair(instance, i, error)
+            status = paired == 2 ? lw_x64_rec_instance_run_dw_pw_pair(instance, i, error)
+                     : paired ? lw_x64_rec_instance_run_ffn_pair(instance, i, error)
                             : execute_op(instance, &instance->program->ops[i], error);
-            slot = rec_profile_slot(&instance->profile, instance->program->ops[i].kind);
+            slot = paired == 2 ? &instance->profile.dw_pw_ns :
+                rec_profile_slot(&instance->profile, instance->program->ops[i].kind);
             {
                 uint64_t finished = rec_profile_now_ns();
                 uint64_t elapsed = finished >= started ? finished - started : 0u;
                 if (slot != NULL) *slot += elapsed;
                 instance->profile.total_ns += elapsed;
-                if (paired) {
+                if (paired == 2) {
+                    ++instance->profile.dw_pw_calls;
+                } else if (paired) {
                     instance->profile.ffn_ns += elapsed;
                     ++instance->profile.ffn_calls;
                 } else if (instance->program->ops[i].kind == LW_X64_REC_OP_POINTWISE) {
@@ -1500,7 +1694,8 @@ static lw_status run_backbone_ops(lw_x64_rec_instance* instance, lw_error* error
 #endif
             }
         } else {
-            status = paired ? lw_x64_rec_instance_run_ffn_pair(instance, i, error)
+            status = paired == 2 ? lw_x64_rec_instance_run_dw_pw_pair(instance, i, error)
+                     : paired ? lw_x64_rec_instance_run_ffn_pair(instance, i, error)
                             : execute_op(instance, &instance->program->ops[i], error);
         }
         if (status != LW_STATUS_OK) {
@@ -1562,6 +1757,10 @@ lw_status lw_x64_rec_instance_run(lw_x64_rec_instance* instance, lw_error* error
             fprintf(stderr, "REC_FFN width=%u pairs=%u elapsed=%.3f tile=%u\n",
                 instance->program->target_width, p->ffn_calls, p->ffn_ns / 1e6,
                 LW_REC_FFN_TILE_PIXELS);
+        if (p->dw_pw_calls != 0u)
+            fprintf(stderr, "REC_DW_PW width=%u pairs=%u elapsed=%.3f tile=%u\n",
+                instance->program->target_width, p->dw_pw_calls, p->dw_pw_ns / 1e6,
+                LW_REC_DW_PW_TILE_PIXELS);
 #if defined(__EMSCRIPTEN__)
         {
             static const char* const names[REC_PW_EPI_COUNT] = {

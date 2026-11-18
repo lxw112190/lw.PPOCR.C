@@ -87,8 +87,6 @@ void lw_avx2_ctc_row_probabilities_f32(
     uint32_t rows, uint32_t inner_dimension, uint32_t columns);
 int lw_avx2_threshold_bitmap_f32(const float* prediction, uint8_t* bitmap,
                                  uint64_t pixel_count, float threshold);
-void lw_avx2_interior_bitmap_u8(const uint8_t* bitmap, uint8_t* interior,
-                                uint32_t width, uint32_t height);
 void lw_sse2_conv1x1_unit_f32(const float* input, const float* weights, const float* bias,
                               float* output, const int32_t input_dimensions[4],
                               const int32_t output_dimensions[4], uint32_t groups,

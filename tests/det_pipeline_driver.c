@@ -135,6 +135,62 @@ cleanup:
     return return_code;
 }
 
+static int check_contour_workspace(void) {
+    enum { width = 96, height = 72, capacity = 32 };
+    float prediction[width * height];
+    lw_detection_box standalone[capacity];
+    lw_detection_box reused[capacity];
+    lw_db_postprocess_workspace workspace = {0};
+    int result = 1;
+    uint32_t pass;
+    for (pass = 0u; pass < 5u; ++pass) {
+        uint32_t w = pass == 1u ? 31u : width;
+        uint32_t h = pass == 1u ? 47u : height;
+        uint32_t dilation = pass == 3u ? 1u : 0u;
+        uint32_t count = 0u;
+        uint32_t fresh_count = 0u;
+        uint32_t y;
+        memset(prediction, 0, sizeof(prediction));
+        if (pass != 1u) {
+            for (y = 2u; y < h - 2u; ++y) {
+                uint32_t x;
+                for (x = 2u; x < w - 2u; ++x) {
+                    /* Filled border, enclosed hole, and a disconnected
+                     * island inside the hole. Several runs share each row. */
+                    if (y < 9u || y >= h - 9u || x < 9u || x >= w - 9u ||
+                        (y >= 18u && y < 26u && x >= 25u && x < 42u)) {
+                        prediction[y * w + x] = 0.9f;
+                    }
+                }
+            }
+        }
+        if (pass == 2u) prediction[0] = NAN;
+        memset(standalone, 0, sizeof(standalone));
+        memset(reused, 0, sizeof(reused));
+        {
+            lw_status fresh = lw_db_postprocess_f32(
+                prediction, w, h, 0.3f, 0.0f, 1.6f, dilation, capacity, w, h, 1.0f, 1.0f,
+                standalone, capacity, &fresh_count);
+            lw_status status = lw_db_postprocess_f32_ws(
+                prediction, w, h, 0.3f, 0.0f, 1.6f, dilation, capacity, w, h, 1.0f, 1.0f,
+                reused, capacity, &count, &workspace, NULL);
+            if (status != fresh || count != fresh_count ||
+                (pass == 2u ? status != LW_STATUS_INVALID_ARGUMENT :
+                              status != LW_STATUS_OK || count != (pass == 1u ? 0u : 3u)) ||
+                memcmp(standalone, reused, sizeof(reused)) != 0 ||
+                workspace.contour_row_capacity != height || workspace.hull_capacity >= width * height) {
+                fprintf(stderr, "DB contour workspace mismatch on pass %u (status=%d, count=%u)\n",
+                        pass, (int)status, count);
+                goto cleanup;
+            }
+        }
+    }
+    result = 0;
+cleanup:
+    lw_db_postprocess_workspace_free(&workspace);
+    return result;
+}
+
 static int run_postprocess(void) {
     float prediction[32u * 32u];
     lw_detection_box box;
@@ -165,7 +221,7 @@ static int run_postprocess(void) {
     printf("count=%u score=%.9g box=%.9g,%.9g,%.9g,%.9g,%.9g,%.9g,%.9g,%.9g\n", count,
            (double)box.score, (double)box.x1, (double)box.y1, (double)box.x2, (double)box.y2,
            (double)box.x3, (double)box.y3, (double)box.x4, (double)box.y4);
-    return 0;
+    return check_contour_workspace();
 }
 
 static int run_pipeline(int argc, char** argv) {

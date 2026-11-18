@@ -28,7 +28,8 @@
 LW_DW_TARGET
 static void depthwise_block32(const float* input, const float* weights, const float* bias,
                               float* output, const lw_nhwc_depthwise_desc* desc,
-                              uint32_t output_y, uint32_t output_x, uint32_t channel_base, uint32_t vector_count) {
+                              uint32_t output_y, uint32_t output_x, uint32_t channel_base,
+                              uint32_t vector_count, uint32_t output_pixel_base) {
     __m256 sums[4];
     int32_t input_y0 = (int32_t)((uint64_t)(output_y + desc->output_row_offset) * desc->stride_h) -
         (int32_t)desc->pad_top;
@@ -53,7 +54,7 @@ static void depthwise_block32(const float* input, const float* weights, const fl
             }
         }
     }
-    float* destination = output + (((size_t)output_y * desc->output_width + output_x) *
+    float* destination = output + (((size_t)output_y * desc->output_width + output_x - output_pixel_base) *
                                    desc->channels + channel_base);
     if (desc->post_bias != NULL) {
         for (uint32_t lane = 0u; lane < vector_count; ++lane) {
@@ -83,7 +84,8 @@ static int depthwise_pair_is_interior(const lw_nhwc_depthwise_desc* desc,
 LW_DW_TARGET
 static void depthwise_block32_x2(const float* input, const float* weights, const float* bias,
                                   float* output, const lw_nhwc_depthwise_desc* desc,
-                                  uint32_t output_y, uint32_t output_x, uint32_t channel_base) {
+                                  uint32_t output_y, uint32_t output_x, uint32_t channel_base,
+                                  uint32_t output_pixel_base) {
     __m256 sum0[4];
     __m256 sum1[4];
     int32_t input_y0 = (int32_t)((uint64_t)(output_y + desc->output_row_offset) * desc->stride_h) -
@@ -111,7 +113,7 @@ static void depthwise_block32_x2(const float* input, const float* weights, const
             }
         }
     }
-    float* destination0 = output + (((size_t)output_y * desc->output_width + output_x) *
+    float* destination0 = output + (((size_t)output_y * desc->output_width + output_x - output_pixel_base) *
         desc->channels + channel_base);
     float* destination1 = destination0 + desc->channels;
     if (desc->post_bias != NULL) {
@@ -127,6 +129,67 @@ static void depthwise_block32_x2(const float* input, const float* weights, const
     }
 }
 #endif
+lw_status lw_avx2_fma_nhwc_depthwise_range_f32(const float* input,
+    const float* packed_weights, const float* bias, float* output,
+    const lw_nhwc_depthwise_desc* desc, uint32_t begin, uint32_t count) {
+    uint64_t pixels;
+    if (input == NULL || packed_weights == NULL || output == NULL || desc == NULL ||
+        desc->batch != 1u || desc->channels == 0u || (desc->channels & 7u) != 0u ||
+        desc->input_height == 0u || desc->input_width == 0u ||
+        desc->output_height == 0u || desc->output_width == 0u ||
+        desc->kernel_h == 0u || desc->kernel_w == 0u ||
+        desc->stride_h == 0u || desc->stride_w == 0u ||
+        desc->kernel_h > UINT32_MAX / desc->kernel_w ||
+        desc->output_row_offset != 0u || count == 0u) return LW_STATUS_INVALID_ARGUMENT;
+    pixels = (uint64_t)desc->output_height * desc->output_width;
+    if (pixels > UINT32_MAX || begin >= pixels || count > pixels - begin ||
+        (uint64_t)desc->input_height * desc->input_width >
+            SIZE_MAX / ((uint64_t)desc->channels * sizeof(float)) ||
+        pixels > SIZE_MAX / ((uint64_t)desc->channels * sizeof(float)) ||
+        (uint64_t)desc->input_height + desc->pad_top + desc->pad_bottom < desc->kernel_h ||
+        (uint64_t)desc->input_width + desc->pad_left + desc->pad_right < desc->kernel_w ||
+        ((uint64_t)desc->input_height + desc->pad_top + desc->pad_bottom - desc->kernel_h) /
+            desc->stride_h + 1u != desc->output_height ||
+        ((uint64_t)desc->input_width + desc->pad_left + desc->pad_right - desc->kernel_w) /
+            desc->stride_w + 1u != desc->output_width) return LW_STATUS_INVALID_SHAPE;
+#if LW_DW_X86
+    {
+        uint32_t taps = desc->kernel_h * desc->kernel_w;
+        uint32_t blocks = (desc->channels - 1u) / 32u + 1u;
+        uint32_t pixel = begin, end = begin + count;
+        while (pixel < end) {
+            uint32_t y = pixel / desc->output_width;
+            uint32_t x = pixel % desc->output_width;
+            uint32_t run = end - pixel;
+            if (run > desc->output_width - x) run = desc->output_width - x;
+            for (uint32_t block = 0u; block < blocks; ++block) {
+                uint32_t channels = desc->channels - block * 32u;
+                uint32_t ox = x, limit = x + run;
+                const float* weights = packed_weights + (size_t)block * taps * 32u;
+                if (channels > 32u) channels = 32u;
+                while (ox < limit) {
+                    if (ox + 1u < limit && channels == 32u &&
+                        depthwise_pair_is_interior(desc, y, ox)) {
+                        depthwise_block32_x2(input, weights, bias, output, desc,
+                                             y, ox, block * 32u, begin);
+                        ox += 2u;
+                    } else {
+                        depthwise_block32(input, weights, bias, output, desc,
+                            y, ox, block * 32u, channels / 8u, begin);
+                        ++ox;
+                    }
+                }
+            }
+            pixel += run;
+        }
+    }
+    return LW_STATUS_OK;
+#else
+    (void)bias;
+    return LW_STATUS_UNSUPPORTED;
+#endif
+}
+
 static lw_status depthwise_execute(const float* input, const float* packed_weights,
                                    const float* bias, float* output,
                                    const lw_nhwc_depthwise_desc* desc,
@@ -164,12 +227,12 @@ static lw_status depthwise_execute(const float* input, const float* packed_weigh
                         vector_count == 4u &&
                         depthwise_pair_is_interior(desc, output_y, output_x)) {
                         depthwise_block32_x2(input_batch, block_weights, bias, output_batch, desc,
-                                             output_y, output_x, channel_base);
+                                             output_y, output_x, channel_base, 0u);
                         if (stats != NULL && stats->x2_invocations != UINT64_MAX) ++stats->x2_invocations;
                         output_x += 2u;
                     } else {
                         depthwise_block32(input_batch, block_weights, bias, output_batch, desc,
-                                          output_y, output_x, channel_base, vector_count);
+                                          output_y, output_x, channel_base, vector_count, 0u);
                         if (stats != NULL && stats->x1_invocations != UINT64_MAX) ++stats->x1_invocations;
                         ++output_x;
                     }

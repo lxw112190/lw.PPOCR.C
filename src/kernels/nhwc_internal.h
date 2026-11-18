@@ -32,6 +32,18 @@ typedef struct lw_nhwc_epilogue {
     const float* post_bias;
 } lw_nhwc_epilogue;
 
+typedef void (*lw_nhwc_pointwise_fn)(const float*, const float*,
+    const lw_nhwc_epilogue*, float*, uint32_t, uint32_t, uint32_t);
+
+/* Private FFN primitive. hidden has tile_pixels * hidden_channels floats;
+ * neither the full hidden activation nor a second packing format is needed. */
+void lw_nhwc_ffn_tile_f32(const float* input, const float* expand_weights,
+    const lw_nhwc_epilogue* expand_epilogue, const float* project_weights,
+    const lw_nhwc_epilogue* project_epilogue, float* output, float* hidden,
+    uint32_t pixels, uint32_t input_channels, uint32_t hidden_channels,
+    uint32_t output_channels, uint32_t tile_pixels,
+    lw_nhwc_pointwise_fn expand, lw_nhwc_pointwise_fn project);
+
 float lw_nhwc_gelu_scalar_exact_f32(float value);
 #if defined(__x86_64__) || defined(_M_X64) || defined(__i386__) || defined(_M_IX86)
 #include <immintrin.h>
@@ -135,6 +147,11 @@ lw_status lw_avx2_fma_nhwc_depthwise_f32(const float* input,
                                          const float* bias,
                                          float* output,
                                          const lw_nhwc_depthwise_desc* desc);
+/* Flattened output range, packed at output[0] without rebasing a pointer
+ * before its allocation. Reads the original image halo across tile borders. */
+lw_status lw_avx2_fma_nhwc_depthwise_range_f32(const float* input,
+    const float* packed_weights, const float* bias, float* output,
+    const lw_nhwc_depthwise_desc* desc, uint32_t begin, uint32_t count);
 typedef struct lw_nhwc_depthwise_stats {
     uint64_t x1_invocations;
     uint64_t x2_invocations;

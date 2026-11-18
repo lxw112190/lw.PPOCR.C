@@ -923,7 +923,8 @@ static lw_status plan_arena_offsets(lw_x64_rec_program* program, lw_error* error
         int32_t first;
         int32_t last;
         uint32_t a;
-        if (value->alias != 0u || value->constant_data != NULL) continue;
+        if (value->alias != 0u || value->constant_data != NULL ||
+            (value->reserved & (LW_X64_REC_VALUE_FFN_LOCAL | LW_X64_REC_VALUE_DW_PW_LOCAL)) != 0u) continue;
         if ((int32_t)i == (int32_t)program->input_value) {
             /* The caller rewrites the input between runs, so it must never
              * share its offset with any value produced inside the program. */
@@ -1026,7 +1027,7 @@ static lw_x64_rec_compile_result lower_ops(const lw_model* model, const lw_sessi
                                            lw_x64_rec_program* program, uint32_t limit,
                                            lw_error* error);
 
-#if defined(LW_EXPERIMENTAL_REC_FFN_TILING)
+#if defined(LW_EXPERIMENTAL_REC_FFN_TILING) || defined(LW_EXPERIMENTAL_REC_FFN_FUSION)
 /* Discover pairs before placing tensors, then reproduce the same flags after
  * offsets are embedded. Scheduling the second op early extends the first
  * input's lifetime: the projected output must not reuse unread input pixels. */
@@ -1035,9 +1036,9 @@ static void mark_ffn_pairs(lw_x64_rec_program* program) {
     if (program->backend_layout != LW_X64_REC_BACKEND_NHWC || !program->ctc_fused) return;
     for (i = 0u; i + 1u < program->op_count; ++i) {
         lw_x64_rec_op* first = &program->ops[i];
-        const lw_x64_rec_op* second = &program->ops[i + 1u];
-        const lw_x64_rec_conv_op* a = &first->data.conv;
-        const lw_x64_rec_conv_op* b = &second->data.conv;
+        lw_x64_rec_op* second = &program->ops[i + 1u];
+        lw_x64_rec_conv_op* a = &first->data.conv;
+        lw_x64_rec_conv_op* b = &second->data.conv;
         uint32_t middle, input, output;
         int is_output = 0;
         if (first->kind != LW_X64_REC_OP_POINTWISE ||
@@ -1062,12 +1063,171 @@ static void mark_ffn_pairs(lw_x64_rec_program* program) {
             }
         }
         if (is_output || middle == program->ctc.activation_value) continue;
+#if defined(LW_EXPERIMENTAL_REC_FFN_FUSION)
+        /* An alias can escape the apparent single-consumer chain. Do not
+         * remove its root storage, even if that alias is currently dead. */
+        for (output = 0u; output < program->value_count; ++output) {
+            if (program->values[output].alias &&
+                resolve_alias_root(program, output) == middle) break;
+        }
+        if (output != program->value_count) continue;
+        program->values[middle].reserved |= LW_X64_REC_VALUE_FFN_LOCAL;
+        program->values[middle].offset = UINT64_MAX;
+        a->output_offset = b->input_offset = UINT64_MAX;
+        a->scratch_bytes = lw_x64_rec_arena_align(
+            (uint64_t)LW_REC_FFN_TILE_PIXELS * a->output_channels * sizeof(float), 64u);
+        if (program->scratch_bytes < a->scratch_bytes)
+            program->scratch_bytes = a->scratch_bytes;
+        first->flags |= LW_X64_REC_OP_FFN_LOCAL;
+        {
+            uint32_t source = lwm_read_u32(node_bytes(program->model, first->semantic_begin) + 8u);
+            uint32_t root = resolve_alias_root(program, source);
+            uint32_t target = lwm_read_u32(node_bytes(program->model,
+                second->semantic_begin + second->semantic_count - 1u) + 40u);
+            lw_x64_rec_value* dst = &program->values[target];
+            int reusable = (dst->reserved & LW_X64_REC_VALUE_FFN_INPLACE) != 0u;
+            if (!reusable && a->input_channels == b->output_channels &&
+                !dst->alias && program->values[root].constant_data == NULL &&
+                root != program->input_value && dst->bytes == program->values[root].bytes) {
+                uint32_t v;
+                reusable = 1;
+                for (v = 0u; v < program->value_count; ++v) {
+                    if (resolve_alias_root(program, v) == root &&
+                        program->values[v].last_use > (int32_t)(i + 1u)) reusable = 0;
+                }
+                for (v = 0u; v < program->model->info.output_count; ++v) {
+                    uint32_t graph_output = lwm_read_u32(program->model->bytes +
+                        (size_t)program->model->output_offset + (size_t)v * sizeof(uint32_t));
+                    if (resolve_alias_root(program, graph_output) == root) reusable = 0;
+                }
+            }
+            if (reusable) {
+                /* Each worker expands all input rows in its private tile
+                 * before overwriting those same rows with projected output. */
+                dst->alias = 1u;
+                dst->alias_of = root;
+                dst->reserved |= LW_X64_REC_VALUE_FFN_INPLACE;
+                dst->offset = program->values[root].offset;
+                b->output_offset = dst->offset;
+                first->flags |= LW_X64_REC_OP_FFN_INPLACE;
+            }
+        }
+#endif
         input = lwm_read_u32(node_bytes(program->model, first->semantic_begin) + 8u);
         if (program->values[input].last_use < (int32_t)(i + 1u))
             program->values[input].last_use = (int32_t)(i + 1u);
         first->flags |= LW_X64_REC_OP_FFN_BEGIN;
         ++i;
     }
+}
+#endif
+
+#if defined(LW_EXPERIMENTAL_REC_FFN_FUSION)
+/* Second-pass offsets must agree with the first-pass elision decisions.
+ * A lost/moved pair must fail compilation, never alias an unrelated tensor. */
+static int validate_ffn_storage(const lw_x64_rec_program* program) {
+    uint32_t i, locals = 0u, pairs = 0u;
+    for (i = 0u; i < program->value_count; ++i) {
+        const lw_x64_rec_value* v = &program->values[i];
+        if ((v->reserved & LW_X64_REC_VALUE_FFN_LOCAL) == 0u) continue;
+        if (v->alias || v->constant_data != NULL || v->offset != UINT64_MAX) return 0;
+        ++locals;
+    }
+    for (i = 0u; i < program->op_count; ++i) {
+        const lw_x64_rec_op* op = &program->ops[i];
+        if ((op->flags & LW_X64_REC_OP_FFN_LOCAL) == 0u) continue;
+        if ((op->flags & LW_X64_REC_OP_FFN_BEGIN) == 0u || i + 1u >= program->op_count ||
+            op->kind != LW_X64_REC_OP_POINTWISE ||
+            program->ops[i + 1u].kind != LW_X64_REC_OP_POINTWISE ||
+            op->data.conv.output_offset != UINT64_MAX ||
+            program->ops[i + 1u].data.conv.input_offset != UINT64_MAX ||
+            op->data.conv.scratch_bytes == 0u ||
+            op->data.conv.scratch_bytes > program->scratch_bytes) return 0;
+        if ((op->flags & LW_X64_REC_OP_FFN_INPLACE) != 0u &&
+            (op->data.conv.input_offset != program->ops[i + 1u].data.conv.output_offset ||
+             op->data.conv.input_channels != program->ops[i + 1u].data.conv.output_channels)) return 0;
+        ++pairs;
+        ++i;
+    }
+    return pairs == locals;
+}
+#endif
+
+#if defined(LW_EXPERIMENTAL_REC_DW_PW_FUSION)
+static int dw_pw_private_value(const lw_x64_rec_program* program, uint32_t value,
+                               uint32_t consumer, uint32_t physical_consumer) {
+    uint32_t v;
+    if (!tensor_single_consumer(program->model, value, consumer) ||
+        program->values[value].alias || value == program->ctc.activation_value ||
+        program->values[value].last_use != (int32_t)physical_consumer) return 0;
+    for (v = 0u; v < program->value_count; ++v)
+        if (program->values[v].alias && resolve_alias_root(program, v) == value) return 0;
+    for (v = 0u; v < program->model->info.output_count; ++v)
+        if (value == lwm_read_u32(program->model->bytes +
+            (size_t)program->model->output_offset + (size_t)v * sizeof(uint32_t))) return 0;
+    return 1;
+}
+
+static void mark_dw_pw_pairs(lw_x64_rec_program* program) {
+    uint32_t i;
+    if (program->backend_layout != LW_X64_REC_BACKEND_NHWC || !program->ctc_fused) return;
+    for (i = 0u; i + 1u < program->op_count; ++i) {
+        lw_x64_rec_op* first = &program->ops[i];
+        lw_x64_rec_op* second = &program->ops[i + 1u];
+        lw_x64_rec_conv_op* a = &first->data.conv;
+        lw_x64_rec_conv_op* b;
+        uint32_t middle, input;
+        if (first->kind != LW_X64_REC_OP_DEPTHWISE || a->scalar_fallback || a->has_residual ||
+            a->activation != LW_NHWC_ACT_NONE || a->kernel_h != 3u || a->kernel_w != 3u ||
+            a->groups != a->input_channels || a->output_channels != a->input_channels ||
+            (a->input_channels & 7u) != 0u || a->input_channels == 0u ||
+            first->semantic_count == 0u) continue;
+        middle = lwm_read_u32(node_bytes(program->model,
+            first->semantic_begin + first->semantic_count - 1u) + 40u);
+        b = &second->data.conv;
+        if (second->kind != LW_X64_REC_OP_POINTWISE || b->scalar_fallback ||
+            b->kernel_h != 1u || b->kernel_w != 1u || b->groups != 1u ||
+            b->stride_h != 1u || b->stride_w != 1u ||
+            a->output_channels != b->input_channels ||
+            a->output_height != b->input_height || a->output_width != b->input_width ||
+            b->output_height != b->input_height || b->output_width != b->input_width) continue;
+        if (middle != lwm_read_u32(node_bytes(program->model, second->semantic_begin) + 8u) ||
+            !dw_pw_private_value(program, middle, second->semantic_begin, i + 1u)) continue;
+        input = lwm_read_u32(node_bytes(program->model, first->semantic_begin) + 8u);
+        if (program->values[input].last_use < (int32_t)(i + 1u))
+            program->values[input].last_use = (int32_t)(i + 1u);
+        program->values[middle].reserved |= LW_X64_REC_VALUE_DW_PW_LOCAL;
+        program->values[middle].offset = UINT64_MAX;
+        a->output_offset = b->input_offset = UINT64_MAX;
+        a->scratch_bytes = lw_x64_rec_arena_align(
+            (uint64_t)LW_REC_DW_PW_TILE_PIXELS * a->output_channels * sizeof(float), 64u);
+        if (program->scratch_bytes < a->scratch_bytes) program->scratch_bytes = a->scratch_bytes;
+        first->flags |= LW_X64_REC_OP_DW_PW_BEGIN;
+        ++i;
+    }
+}
+
+static int validate_dw_pw_storage(const lw_x64_rec_program* program) {
+    uint32_t i, values = 0u, pairs = 0u;
+    for (i = 0u; i < program->value_count; ++i) {
+        const lw_x64_rec_value* v = &program->values[i];
+        if ((v->reserved & LW_X64_REC_VALUE_DW_PW_LOCAL) == 0u) continue;
+        if (v->alias || v->constant_data != NULL || v->offset != UINT64_MAX) return 0;
+        ++values;
+    }
+    for (i = 0u; i < program->op_count; ++i) {
+        const lw_x64_rec_op* op = &program->ops[i];
+        if ((op->flags & LW_X64_REC_OP_DW_PW_BEGIN) == 0u) continue;
+        if (program->op_count - i <= 1u || op->kind != LW_X64_REC_OP_DEPTHWISE ||
+            program->ops[i + 1u].kind != LW_X64_REC_OP_POINTWISE ||
+            op->data.conv.output_offset != UINT64_MAX ||
+            program->ops[i + 1u].data.conv.input_offset != UINT64_MAX ||
+            op->data.conv.scratch_bytes == 0u ||
+            op->data.conv.scratch_bytes > program->scratch_bytes) return 0;
+        ++pairs;
+        ++i;
+    }
+    return values == pairs;
 }
 #endif
 
@@ -1089,16 +1249,36 @@ static lw_x64_rec_compile_result rec_backend_compile_input_impl(const lw_model* 
     for(i=0u;i<program->value_count;++i){fill_value(session,i,&program->values[i],strategy);if((session->tensors[i].flags&LWM_V0_TENSOR_FLAG_INPUT)!=0u)program->input_value=i;}
     lowered=lower_ops(model,session,program,limit,error);
     if(lowered!=LW_X64_REC_COMPILE_OK){lw_session_free(session);lw_x64_rec_program_free(program);return lowered;}
-#if defined(LW_EXPERIMENTAL_REC_FFN_TILING)
+#if defined(LW_EXPERIMENTAL_REC_FFN_TILING) || defined(LW_EXPERIMENTAL_REC_FFN_FUSION)
     mark_ffn_pairs(program);
+#endif
+#if defined(LW_EXPERIMENTAL_REC_DW_PW_FUSION)
+    mark_dw_pw_pairs(program);
 #endif
     status=plan_arena_offsets(program,error);
     if(status!=LW_STATUS_OK){lw_session_free(session);lw_x64_rec_program_free(program);return status==LW_STATUS_OUT_OF_MEMORY?LW_X64_REC_COMPILE_OUT_OF_MEMORY:LW_X64_REC_COMPILE_INVALID_GRAPH;}
     reset_lowering(program,limit);
     lowered=lower_ops(model,session,program,limit,error);
     if(lowered!=LW_X64_REC_COMPILE_OK){lw_session_free(session);lw_x64_rec_program_free(program);return lowered;}
-#if defined(LW_EXPERIMENTAL_REC_FFN_TILING)
+#if defined(LW_EXPERIMENTAL_REC_FFN_TILING) || defined(LW_EXPERIMENTAL_REC_FFN_FUSION)
     mark_ffn_pairs(program);
+#endif
+#if defined(LW_EXPERIMENTAL_REC_FFN_FUSION)
+    if (!validate_ffn_storage(program)) {
+        lw_session_free(session);
+        lw_x64_rec_program_free(program);
+        lw_set_error(error, LW_STATUS_INVALID_SHAPE, "REC FFN second-pass storage mismatch");
+        return LW_X64_REC_COMPILE_INVALID_GRAPH;
+    }
+#endif
+#if defined(LW_EXPERIMENTAL_REC_DW_PW_FUSION)
+    mark_dw_pw_pairs(program);
+    if (!validate_dw_pw_storage(program)) {
+        lw_session_free(session);
+        lw_x64_rec_program_free(program);
+        lw_set_error(error, LW_STATUS_INVALID_SHAPE, "REC DW/PW second-pass storage mismatch");
+        return LW_X64_REC_COMPILE_INVALID_GRAPH;
+    }
 #endif
     program->semantic_consumed+=program->semantic_elided; if(program->ctc_fused){
         uint64_t ctc_count = 0u;
