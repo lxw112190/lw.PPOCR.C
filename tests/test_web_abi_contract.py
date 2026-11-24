@@ -16,7 +16,7 @@ class WebAbiContractTest(unittest.TestCase):
         )
         self.source = (ROOT / "web" / "lw_web_api.c").read_text(encoding="utf-8")
         self.sdk = (ROOT / "web" / "lw_ppocr_sdk.template.js").read_text(encoding="utf-8")
-        self.cmake = (ROOT / "CMakeLists.txt").read_text(encoding="utf-8")
+        self.cmake = (ROOT / "cmake" / "WebTargets.cmake").read_text(encoding="utf-8")
 
     def test_manifest_identity_and_status(self) -> None:
         self.assertEqual(self.manifest["schema_version"], 1)

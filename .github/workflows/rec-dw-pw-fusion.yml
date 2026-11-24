@@ -10,6 +10,7 @@ on:
     paths:
       - '.github/workflows/rec-dw-pw-fusion.yml'
       - 'CMakeLists.txt'
+      - 'cmake/**'
       - 'tests/rec_dw_pw_contract_driver.c'
       - 'src/runtime/x64_rec_backend_compile.c'
       - 'src/runtime/x64_rec_backend_execute.c'

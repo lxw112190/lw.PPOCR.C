@@ -5,6 +5,8 @@ on:
   pull_request:
     paths:
       - '.github/workflows/rec-ffn-fusion.yml'
+      - 'CMakeLists.txt'
+      - 'cmake/**'
       - 'tests/rec_ffn_contract_driver.c'
       - 'src/runtime/x64_rec_backend_compile.c'
       - 'src/runtime/x64_rec_backend_execute.c'

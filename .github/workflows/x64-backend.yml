@@ -16,6 +16,7 @@ on:
       - "ci/ppocrv6-*-validation.json"
       - "ci/web-ppocrv6-*.json"
       - "CMakeLists.txt"
+      - "cmake/**"
       - ".github/workflows/x64-backend.yml"
   pull_request:
     branches: [main]

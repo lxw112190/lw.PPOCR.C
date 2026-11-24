@@ -7,6 +7,7 @@ on:
     branches: [main]
     paths:
       - "CMakeLists.txt"
+      - "cmake/**"
       - "include/**"
       - "src/**"
       - "converter/**"
@@ -18,6 +19,7 @@ on:
   pull_request:
     paths:
       - "CMakeLists.txt"
+      - "cmake/**"
       - "include/**"
       - "src/**"
       - "converter/**"

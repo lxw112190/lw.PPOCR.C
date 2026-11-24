@@ -16,6 +16,7 @@ on:
       - main
     paths:
       - "CMakeLists.txt"
+      - "cmake/**"
       - "converter/**"
       - "models/ppocrv6-medium/**"
       - "models/ppocrv6-shared/**"

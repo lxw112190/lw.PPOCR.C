@@ -54,26 +54,28 @@ lw_status lw_db_postprocess_f32(const float* prediction, uint32_t map_width, uin
                                 float height_ratio, lw_detection_box* boxes, uint32_t box_capacity,
                                 uint32_t* box_count);
 
-/* Reusable grow-only postprocess scratch owned by the detector handle; kills
- * the per-image malloc/free churn of the standalone entry. */
+typedef struct det_contour_row det_contour_row;
+typedef struct det_point det_point;
+
+/* The detector owns this scratch and reuses its capacity between images. */
 typedef struct lw_db_postprocess_workspace {
     uint8_t* bitmap;
     uint8_t* visited;
     uint8_t* background_visited;
     uint8_t* dilated;
     uint32_t* queue;
-    void* contour_rows;
-    void* points;
-    void* hull;
-    void* results;
-    void* unclip_pts;
-    void* unclip_normals;
-    void* unclip_result;
-    void* score_thresholds;
-    void* score_hit_low;
-    void* score_hit_high;
-    void* score_poly_x;
-    void* score_poly_y;
+    det_contour_row* contour_rows;
+    det_point* points;
+    det_point* hull;
+    lw_detection_box* results;
+    int64_t* unclip_pts;
+    double* unclip_normals;
+    det_point* unclip_result;
+    float* score_thresholds;
+    int32_t* score_hit_low;
+    int32_t* score_hit_high;
+    int32_t* score_poly_x;
+    int32_t* score_poly_y;
     uint32_t contour_row_capacity;
     uint32_t hull_capacity;
     uint32_t pixel_capacity;
