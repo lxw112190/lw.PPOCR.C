@@ -36,6 +36,49 @@ void lw_neon_packed_conv1x1_f32(const float* input, const float* packed_weights,
             if (valid_outputs > LW_PACKED_CONV1X1_OUTPUT_TILE) {
                 valid_outputs = LW_PACKED_CONV1X1_OUTPUT_TILE;
             }
+            if (valid_outputs == LW_PACKED_CONV1X1_OUTPUT_TILE) {
+                const float* weights = packed_weights + (size_t)output_block * input_channels *
+                                                           LW_PACKED_CONV1X1_OUTPUT_TILE;
+                float* dst0 = batch_output + (size_t)output_base * channel_plane;
+                float* dst1 = dst0 + channel_plane;
+                float* dst2 = dst1 + channel_plane;
+                float* dst3 = dst2 + channel_plane;
+                const float32x4_t b0 = vdupq_n_f32(bias == NULL ? 0.0f : bias[output_base]);
+                const float32x4_t b1 = vdupq_n_f32(bias == NULL ? 0.0f : bias[output_base + 1u]);
+                const float32x4_t b2 = vdupq_n_f32(bias == NULL ? 0.0f : bias[output_base + 2u]);
+                const float32x4_t b3 = vdupq_n_f32(bias == NULL ? 0.0f : bias[output_base + 3u]);
+                /* Load one weight vector for two independent groups of four pixels. */
+                for (; spatial + 8u <= channel_plane; spatial += 8u) {
+                    float32x4_t a0 = b0, a1 = b1, a2 = b2, a3 = b3;
+                    float32x4_t a4 = b0, a5 = b1, a6 = b2, a7 = b3;
+                    const float* src = batch_input;
+                    const float* packed = weights;
+                    uint32_t ic;
+                    for (ic = 0u; ic < input_channels; ++ic) {
+                        const float32x4_t lo = vld1q_f32(src + (size_t)spatial);
+                        const float32x4_t hi = vld1q_f32(src + (size_t)spatial + 4u);
+                        const float32x4_t w = vld1q_f32(packed);
+                        a0 = vaddq_f32(a0, vmulq_laneq_f32(lo, w, 0));
+                        a4 = vaddq_f32(a4, vmulq_laneq_f32(hi, w, 0));
+                        a1 = vaddq_f32(a1, vmulq_laneq_f32(lo, w, 1));
+                        a5 = vaddq_f32(a5, vmulq_laneq_f32(hi, w, 1));
+                        a2 = vaddq_f32(a2, vmulq_laneq_f32(lo, w, 2));
+                        a6 = vaddq_f32(a6, vmulq_laneq_f32(hi, w, 2));
+                        a3 = vaddq_f32(a3, vmulq_laneq_f32(lo, w, 3));
+                        a7 = vaddq_f32(a7, vmulq_laneq_f32(hi, w, 3));
+                        src += channel_plane;
+                        packed += LW_PACKED_CONV1X1_OUTPUT_TILE;
+                    }
+                    vst1q_f32(dst0 + (size_t)spatial, a0);
+                    vst1q_f32(dst0 + (size_t)spatial + 4u, a4);
+                    vst1q_f32(dst1 + (size_t)spatial, a1);
+                    vst1q_f32(dst1 + (size_t)spatial + 4u, a5);
+                    vst1q_f32(dst2 + (size_t)spatial, a2);
+                    vst1q_f32(dst2 + (size_t)spatial + 4u, a6);
+                    vst1q_f32(dst3 + (size_t)spatial, a3);
+                    vst1q_f32(dst3 + (size_t)spatial + 4u, a7);
+                }
+            }
             for (; spatial + 4u <= channel_plane; spatial += 4u) {
                 float32x4_t accumulator0 =
                     vdupq_n_f32(bias == NULL ? 0.0f : bias[output_base]);

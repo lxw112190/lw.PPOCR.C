@@ -89,3 +89,109 @@ void lw_neon_conv3x3_unit_pad1_f32(const float* input, const float* weights, con
                                     output_dimensions);
 #endif
 }
+
+#if LW_COMPILES_NEON_CONV3X3
+static float stride2_edge_pixel(const float* input, const float* weights, float sum,
+                                size_t input_plane, uint32_t channels,
+                                uint32_t input_width, uint32_t input_height,
+                                uint32_t output_y, uint32_t output_x) {
+    const int64_t y = (int64_t)output_y * 2 - 1;
+    const int64_t x = (int64_t)output_x * 2 - 1;
+    uint32_t c;
+    for (c = 0u; c < channels; ++c) {
+        uint32_t ky;
+        for (ky = 0u; ky < 3u; ++ky) {
+            const int64_t iy = y + ky;
+            uint32_t kx;
+            const float* row;
+            if (iy < 0 || iy >= input_height) {
+                continue;
+            }
+            row = input + (size_t)iy * input_width;
+            for (kx = 0u; kx < 3u; ++kx) {
+                const int64_t ix = x + kx;
+                if (ix >= 0 && ix < input_width) {
+                    sum += row[(size_t)ix] * weights[ky * 3u + kx];
+                }
+            }
+        }
+        input += input_plane;
+        weights += 9u;
+    }
+    return sum;
+}
+#endif
+
+void lw_neon_conv3x3_stride2_pad1_f32(const float* input, const float* weights, const float* bias,
+                                      float* output, const int32_t input_dimensions[4],
+                                      const int32_t output_dimensions[4]) {
+#if LW_COMPILES_NEON_CONV3X3
+    const uint32_t channels = (uint32_t)input_dimensions[1];
+    const uint32_t input_height = (uint32_t)input_dimensions[2];
+    const uint32_t input_width = (uint32_t)input_dimensions[3];
+    const uint32_t output_channels = (uint32_t)output_dimensions[1];
+    const uint32_t output_height = (uint32_t)output_dimensions[2];
+    const uint32_t output_width = (uint32_t)output_dimensions[3];
+    const size_t input_plane = (size_t)input_height * input_width;
+    const size_t output_plane = (size_t)output_height * output_width;
+    /* A complete horizontal tap window ends at 2 * x + 1. */
+    const uint32_t interior_end = input_width / 2u;
+    uint32_t batch;
+    if (interior_end < 5u) {
+        lw_scalar_conv3x3_stride2_pad1_f32(input, weights, bias, output, input_dimensions,
+                                           output_dimensions);
+        return;
+    }
+    for (batch = 0u; batch < (uint32_t)input_dimensions[0]; ++batch) {
+        const float* batch_input = input + (size_t)batch * channels * input_plane;
+        float* batch_output = output + (size_t)batch * output_channels * output_plane;
+        uint32_t oc;
+        for (oc = 0u; oc < output_channels; ++oc) {
+            const float* kernel = weights + (size_t)oc * channels * 9u;
+            const float initial = bias == NULL ? 0.0f : bias[oc];
+            uint32_t y;
+            for (y = 0u; y < output_height; ++y) {
+                float* dst = batch_output + (size_t)oc * output_plane + (size_t)y * output_width;
+                const uint32_t ky_begin = y == 0u ? 1u : 0u;
+                const uint32_t ky_end = (uint64_t)y * 2u + 1u >= input_height ? 2u : 3u;
+                uint32_t x = 1u;
+                dst[0] = stride2_edge_pixel(batch_input, kernel, initial, input_plane, channels,
+                                            input_width, input_height, y, 0u);
+                for (; x + 4u <= interior_end; x += 4u) {
+                    const size_t left = (size_t)x * 2u - 1u;
+                    const float* src = batch_input;
+                    const float* w = kernel;
+                    float32x4_t sum = vdupq_n_f32(initial);
+                    uint32_t c;
+                    for (c = 0u; c < channels; ++c) {
+                        uint32_t ky;
+                        for (ky = ky_begin; ky < ky_end; ++ky) {
+                            const size_t iy = (size_t)y * 2u + ky - 1u;
+                            const float* row = src + iy * input_width + left;
+                            /* Deinterleave the left and center taps and slide the left
+                             * vector forward for the right tap. Preserve tap order. */
+                            const float32x4x2_t pair = vld2q_f32(row);
+                            const float32x4_t right =
+                                vextq_f32(pair.val[0], vdupq_n_f32(row[8]), 1);
+                            const float* tap = w + ky * 3u;
+                            sum = vaddq_f32(sum, vmulq_n_f32(pair.val[0], tap[0]));
+                            sum = vaddq_f32(sum, vmulq_n_f32(pair.val[1], tap[1]));
+                            sum = vaddq_f32(sum, vmulq_n_f32(right, tap[2]));
+                        }
+                        src += input_plane;
+                        w += 9u;
+                    }
+                    vst1q_f32(dst + x, sum);
+                }
+                for (; x < output_width; ++x) {
+                    dst[x] = stride2_edge_pixel(batch_input, kernel, initial, input_plane, channels,
+                                                input_width, input_height, y, x);
+                }
+            }
+        }
+    }
+#else
+    lw_scalar_conv3x3_stride2_pad1_f32(input, weights, bias, output, input_dimensions,
+                                       output_dimensions);
+#endif
+}

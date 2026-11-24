@@ -582,11 +582,22 @@ int main(void) {
         }
     }
     if (lw_simd_level_is_neon(simd_level)) {
+        const int32_t odd_stride2_output_dimensions[4] = {1, 2, 3, 10};
         lw_neon_conv3x3_unit_pad1_f32(unit_conv_input, unit_conv_weights, unit_conv_bias,
                                       unit_conv_simd_output, unit_conv_input_dimensions,
                                       unit_conv_output_dimensions);
         if (memcmp(unit_conv_output, unit_conv_simd_output, sizeof(unit_conv_output)) != 0) {
             fprintf(stderr, "NEON unit-stride Conv differs from scalar output\n");
+            return 1;
+        }
+        lw_scalar_conv3x3_stride2_pad1_f32(
+            unit_conv_input, unit_conv_weights, NULL, unit_conv_dispatched_output,
+            unit_conv_input_dimensions, odd_stride2_output_dimensions);
+        lw_neon_conv3x3_stride2_pad1_f32(
+            unit_conv_input, unit_conv_weights, NULL, unit_conv_simd_output,
+            unit_conv_input_dimensions, odd_stride2_output_dimensions);
+        if (memcmp(unit_conv_dispatched_output, unit_conv_simd_output, 60u * sizeof(float)) != 0) {
+            fprintf(stderr, "NEON odd-width stride-2 Conv differs from scalar output\n");
             return 1;
         }
     }

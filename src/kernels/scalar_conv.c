@@ -757,6 +757,9 @@ lw_status lw_scalar_conv2d_f32(const float* input, const float* weights, const f
         } else if (lw_simd_level_is_sse2(simd_level)) {
             lw_sse2_conv3x3_stride2_pad1_f32(input, weights, bias, output, input_dimensions,
                                              output_dimensions);
+        } else if (lw_simd_level_is_neon(simd_level)) {
+            lw_neon_conv3x3_stride2_pad1_f32(input, weights, bias, output, input_dimensions,
+                                             output_dimensions);
         } else {
             lw_scalar_conv3x3_stride2_pad1_f32(input, weights, bias, output, input_dimensions,
                                                output_dimensions);
