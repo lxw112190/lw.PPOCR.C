@@ -10,6 +10,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: native-ci-${{ (github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref_type == 'branch')) && github.ref || github.run_id }}
+  cancel-in-progress: true
+
 jobs:
   analyze:
     strategy:
@@ -35,6 +39,9 @@ jobs:
           version: "v0.16.0"
       - name: Install converter dependencies
         run: python -m pip install -r requirements-converter.txt
+      - name: Verify readable OCR contracts
+        if: runner.os == 'Linux'
+        run: python -m unittest discover -s tests -p "test_*ocr_text*.py"
       - name: Configure Windows MSVC
         if: runner.os == 'Windows'
         run: >-

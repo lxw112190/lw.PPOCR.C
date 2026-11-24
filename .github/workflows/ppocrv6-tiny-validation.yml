@@ -8,18 +8,21 @@ on:
         type: string
         default: "1.0.0"
   push:
-    branches:
-      - main
+    branches: [main]
     paths:
       - "CMakeLists.txt"
-      - "cmake/**"
-      - "src/**"
-      - "include/**"
+      - "cmake/ModelAssets.cmake"
       - "converter/**"
-      - "tools/**"
-      - "tests/**"
-      - "models/ppocrv6-tiny/**"
       - "requirements-converter.txt"
+      - "models/ppocrv6-models.json"
+      - "models/ppocrv6-tiny/**"
+      - "tools/run_tiny_validation.py"
+      - "ci/ppocrv6-tiny-validation.json"
+      - "tools/package_ppocrv6_runtime.py"
+      - "tools/validate_model_catalog.py"
+      - "tools/validate_runtime_model_pack.py"
+      - "tests/test_model_catalog.py"
+      - "tests/test_runtime_model_pack.py"
       - ".github/workflows/ppocrv6-tiny-validation.yml"
   schedule:
     - cron: "0 3 * * 5"

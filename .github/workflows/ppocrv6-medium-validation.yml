@@ -16,7 +16,8 @@ on:
       - main
     paths:
       - "CMakeLists.txt"
-      - "cmake/**"
+      - "cmake/ModelAssets.cmake"
+      - "cmake/X64Tests.cmake"
       - "converter/**"
       - "models/ppocrv6-medium/**"
       - "models/ppocrv6-shared/**"

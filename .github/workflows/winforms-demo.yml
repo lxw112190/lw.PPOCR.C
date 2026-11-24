@@ -3,8 +3,44 @@ name: Windows WinForms portable Demo
 on:
   push:
     branches: [main]
+    paths:
+      - "CMakeLists.txt"
+      - "cmake/RuntimeTargets.cmake"
+      - "src/**"
+      - "include/**"
+      - "examples/csharp-common/**"
+      - "examples/csharp-winforms/**"
+      - "models/**"
+      - "tools/package_winforms_demo.py"
+      - "tools/validate_model_catalog.py"
+      - "tests/test_csharp_image_limits.py"
+      - "tests/test_winforms_*.py"
+      - "docs/winforms-portable-demo.md"
+      - "LICENSE"
+      - "licenses/**"
+      - "THIRD-PARTY-NOTICES.md"
+      - "sbom.cdx.json"
+      - ".github/workflows/winforms-demo.yml"
   pull_request:
     branches: [main]
+    paths:
+      - "CMakeLists.txt"
+      - "cmake/RuntimeTargets.cmake"
+      - "src/**"
+      - "include/**"
+      - "examples/csharp-common/**"
+      - "examples/csharp-winforms/**"
+      - "models/**"
+      - "tools/package_winforms_demo.py"
+      - "tools/validate_model_catalog.py"
+      - "tests/test_csharp_image_limits.py"
+      - "tests/test_winforms_*.py"
+      - "docs/winforms-portable-demo.md"
+      - "LICENSE"
+      - "licenses/**"
+      - "THIRD-PARTY-NOTICES.md"
+      - "sbom.cdx.json"
+      - ".github/workflows/winforms-demo.yml"
   workflow_dispatch:
   workflow_call:
 

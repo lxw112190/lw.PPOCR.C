@@ -1165,7 +1165,7 @@ Streaming crop 仍是实验开关。在完成默认/Streaming 完整 CTest、Gol
 - 1/4 worker、REC 960、warm-up 1、paired AB/BA 多轮；
 - 每图 OCR 耗时、P95、Peak RSS、最大采样 RSS、文本 checksum。
 
-该 workflow 默认通过 GitHub Actions 的 **Run workflow** 手动启动，也按周执行一次。推送代码后，
+该 workflow 默认通过 GitHub Actions 的 **Run workflow** 手动启动，也在每月 1 日 04:00 UTC 执行一次。推送代码后，
 可用 GitHub CLI 触发完整矩阵：
 
 ```powershell

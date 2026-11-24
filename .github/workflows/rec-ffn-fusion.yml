@@ -2,17 +2,6 @@ name: Native REC FFN fusion experiment
 
 on:
   workflow_dispatch:
-  pull_request:
-    paths:
-      - '.github/workflows/rec-ffn-fusion.yml'
-      - 'CMakeLists.txt'
-      - 'cmake/**'
-      - 'tests/rec_ffn_contract_driver.c'
-      - 'src/runtime/x64_rec_backend_compile.c'
-      - 'src/runtime/x64_rec_backend_execute.c'
-      - 'src/runtime/x64_rec_backend_internal.h'
-      - 'src/simd/avx2_nhwc_pointwise.c'
-      - 'src/kernels/nhwc_internal.h'
 
 permissions:
   contents: read

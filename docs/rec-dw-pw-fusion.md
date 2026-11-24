@@ -150,6 +150,6 @@ ctest --test-dir build/dw-pw-fusion -C Release -R '^(rec_dw_pw_contract_.*|nhwc_
 Build a separate control directory with DW/PW fusion OFF; compare with
 `tools/compare_onnx_e2e.py --baseline <control-driver> --candidate <fusion-driver>
 --sample <sample.ppm> --rounds 3 --iterations 5 --collect-text --output <report-dir>`.
-The `Native REC DW-PW fusion experiment` CI runs Windows/Linux x64 contracts,
-full OCR A/B, summary tables and raw-log artifacts. Text/numerics gate; timings
-and memory do not. Remote CI results are pending submission.
+Start `Native REC DW-PW fusion experiment` with **Run workflow** for the Windows/Linux
+x64 contracts and full OCR A/B. Text and numerical correctness gate the run.
+The workflow publishes timing and memory summaries alongside raw logs.

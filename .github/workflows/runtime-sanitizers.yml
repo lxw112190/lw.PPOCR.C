@@ -3,12 +3,45 @@ name: runtime-sanitizers
 on:
   push:
     branches: [main]
+    paths:
+      - "CMakeLists.txt"
+      - "cmake/**"
+      - "src/**"
+      - "include/**"
+      - "tests/**"
+      - "abi/**"
+      - "models/**"
+      - "converter/**"
+      - "examples/http-server/**"
+      - "examples/*ppm.c"
+      - "tools/**"
+      - "requirements-converter.txt"
+      - ".github/workflows/runtime-sanitizers.yml"
   pull_request:
     branches: [main]
+    paths:
+      - "CMakeLists.txt"
+      - "cmake/**"
+      - "src/**"
+      - "include/**"
+      - "tests/**"
+      - "abi/**"
+      - "models/**"
+      - "converter/**"
+      - "examples/http-server/**"
+      - "examples/*ppm.c"
+      - "tools/**"
+      - "requirements-converter.txt"
+      - ".github/workflows/runtime-sanitizers.yml"
   workflow_call:
+  workflow_dispatch:
 
 permissions:
   contents: read
+
+concurrency:
+  group: sanitizer-ci-${{ (github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref_type == 'branch')) && github.ref || github.run_id }}
+  cancel-in-progress: true
 
 jobs:
   asan-ubsan:

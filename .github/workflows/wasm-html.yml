@@ -3,8 +3,70 @@ name: browser-wasm-sdk-and-html
 on:
   push:
     branches: [main]
+    paths:
+      - "CMakeLists.txt"
+      - "cmake/RuntimeTargets.cmake"
+      - "cmake/ModelAssets.cmake"
+      - "cmake/DemoTargets.cmake"
+      - "cmake/WebTargets.cmake"
+      - "src/**"
+      - "include/**"
+      - "web/**"
+      - "models/**"
+      - "converter/**"
+      - "requirements-converter.txt"
+      - "requirements-wasm-test.txt"
+      - "tests/node/**"
+      - "tests/wasm_*"
+      - "tests/test_web_*.py"
+      - "tests/test_*wasm*.py"
+      - "abi/web-*.json"
+      - "ci/web-ppocrv6-*.json"
+      - "tools/*wasm*.py"
+      - "tools/create_det_demo_fixture.py"
+      - "tools/convert_small_*.py"
+      - "tools/convert_medium_*.py"
+      - "tools/prepare_ppocrv6_runtime_variant.py"
+      - "tools/validate_model_catalog.py"
+      - "tools/stage_web_release_artifacts.py"
+      - "tools/check_release_readiness.py"
+      - "LICENSE"
+      - "THIRD-PARTY-NOTICES.md"
+      - "licenses/**"
+      - ".github/workflows/wasm-html.yml"
   pull_request:
     branches: [main]
+    paths:
+      - "CMakeLists.txt"
+      - "cmake/RuntimeTargets.cmake"
+      - "cmake/ModelAssets.cmake"
+      - "cmake/DemoTargets.cmake"
+      - "cmake/WebTargets.cmake"
+      - "src/**"
+      - "include/**"
+      - "web/**"
+      - "models/**"
+      - "converter/**"
+      - "requirements-converter.txt"
+      - "requirements-wasm-test.txt"
+      - "tests/node/**"
+      - "tests/wasm_*"
+      - "tests/test_web_*.py"
+      - "tests/test_*wasm*.py"
+      - "abi/web-*.json"
+      - "ci/web-ppocrv6-*.json"
+      - "tools/*wasm*.py"
+      - "tools/create_det_demo_fixture.py"
+      - "tools/convert_small_*.py"
+      - "tools/convert_medium_*.py"
+      - "tools/prepare_ppocrv6_runtime_variant.py"
+      - "tools/validate_model_catalog.py"
+      - "tools/stage_web_release_artifacts.py"
+      - "tools/check_release_readiness.py"
+      - "LICENSE"
+      - "THIRD-PARTY-NOTICES.md"
+      - "licenses/**"
+      - ".github/workflows/wasm-html.yml"
   workflow_dispatch:
     inputs:
       release_web_profile:
@@ -18,7 +80,7 @@ on:
         default: false
         type: boolean
       compiled_rec:
-        description: "Test the experimental compiled REC backend in WASM"
+        description: "Run compiled REC WASM correctness and performance comparisons"
         required: false
         default: false
         type: boolean
@@ -39,6 +101,10 @@ on:
 
 permissions:
   contents: read
+
+concurrency:
+  group: web-ci-${{ (github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref_type == 'branch')) && github.ref || github.run_id }}
+  cancel-in-progress: true
 
 jobs:
   build:
@@ -170,7 +236,7 @@ jobs:
           --golden ci/web-ppocrv6-tiny.json
 
       - name: Compare canonical and compiled WASM full OCR
-        if: github.event_name == 'push' || github.event_name == 'pull_request' || inputs.compiled_rec == true || inputs.release_web_profile == true
+        if: inputs.compiled_rec == true || inputs.release_web_profile == true
         shell: bash
         run: |
           set -euo pipefail
@@ -329,7 +395,7 @@ jobs:
           exit "$report_status"
 
       - name: Compare Small canonical and compiled WASM full OCR
-        if: github.event_name == 'push' || github.event_name == 'pull_request' || inputs.compiled_rec == true || inputs.release_web_profile == true
+        if: inputs.compiled_rec == true || inputs.release_web_profile == true
         shell: bash
         run: |
           set -euo pipefail
@@ -475,7 +541,7 @@ jobs:
           --sample models/ppocrv6-tiny/sample.jpg
 
       # Test the exact release profile on normal main/PR CI as well as tag builds.
-      # Reuse the compiled runtime from A/B; never overwrite canonical Medium/Node.
+      # The compiled browser profile also runs independently of the timing comparison.
       - name: Build and test release Tiny and Small browser profile
         if: inputs.release_web_profile == true || github.event_name == 'push' || github.event_name == 'pull_request'
         shell: bash
@@ -495,9 +561,11 @@ jobs:
             -DLW_WASM_POINTWISE_ROWS=2 -DLW_WASM_FINE_REC_WIDTHS=OFF \
             -DLW_EXPERIMENTAL_REC_FFN_TILING=OFF -DLW_EXPERIMENTAL_CTC_TILED=OFF
           cmake --build build-wasm-compiled \
-            --target lw-ocr-html lw-ocr-html-small wasm-pointwise-contract wasm-erf-contract --parallel
+            --target lw-ocr-html lw-ocr-html-small wasm-pointwise-contract wasm-erf-contract wasm-rec-lazy-contract --parallel
           node build-wasm-compiled/wasm-pointwise-contract.js
           node build-wasm-compiled/wasm-erf-contract.js
+          node build-wasm-compiled/wasm-rec-lazy-contract.js 2>&1 | tee build-wasm-compiled/rec-lazy-contract.log
+          python web/compiled_diagnostics.py --expected-widths 5 build-wasm-compiled/rec-lazy-contract.log
           python web/test_ocr_sdk.py --sdk build-wasm-compiled/lw-ppocr.js \
             --sample models/ppocrv6-tiny/sample.jpg --golden ci/web-ppocrv6-tiny.json
           python web/test_ocr_html.py --html build-wasm-compiled/ocr-demo.html \
@@ -562,7 +630,7 @@ jobs:
           retention-days: 14
 
       - name: Upload compiled REC comparison
-        if: always() && (github.event_name == 'push' || github.event_name == 'pull_request' || inputs.compiled_rec == true || inputs.release_web_profile == true)
+        if: always() && (inputs.compiled_rec == true || inputs.release_web_profile == true)
         uses: actions/upload-artifact@v7
         with:
           name: wasm-compiled-rec-comparison-${{ github.sha }}
@@ -731,7 +799,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        node-version: [18, 20, 22]
+        node-version: ${{ fromJSON((inputs.release_web_profile == true || github.event_name == 'workflow_dispatch') && '[18,20,22]' || '[22]') }}
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7

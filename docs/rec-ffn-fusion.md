@@ -102,7 +102,7 @@ Build a separate control directory with fusion OFF, then use
 --sample <sample.ppm> --rounds 3 --iterations 5 --collect-text --output <report-dir>`.
 
 The `Native REC FFN fusion experiment` workflow runs the contracts and complete
-three-model 1/4-worker A/B on Windows x64 and Linux x64. It is available manually
-and for relevant pull requests; latency/memory are informational, while text
-and numerical correctness are gating. Single-op backend diagnostic suites
-requiring a materialized hidden plane should use the control build.
+three-model 1/4-worker A/B on Windows x64 and Linux x64. Start it with **Run workflow**
+when evaluating the experiment. Text and numerical correctness gate the run.
+Latency and memory appear in the comparison report. Use the control build
+for single-op diagnostics that require a materialized hidden plane.

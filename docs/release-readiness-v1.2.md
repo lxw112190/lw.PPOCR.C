@@ -44,8 +44,10 @@ These are local checks, not Android/device validation or exact-tag CI evidence.
 ## Before tagging / 打 tag 前
 
 - [ ] Commit/push changes and record the exact candidate SHA.
-- [ ] Native Windows/Linux, sanitizers, backend correctness, Android,
-  Java/JNI, Tiny/Small/Medium validation and browser WASM pass that SHA.
+- [ ] Check the candidate SHA in native Windows/Linux, sanitizers, Android,
+  Java/JNI, WinForms, Tiny/Small/Medium validation and browser WASM. Run the
+  relevant path-filtered workflows manually if the candidate did not trigger
+  them. The native CTest suite covers the x64 backend contracts.
 - [ ] Inspect `web-release-profile-<SHA>`: compiled Tiny/Small, canonical
   Medium/Node. If main CI omitted Medium, run the full-variant profile:
 

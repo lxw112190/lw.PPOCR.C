@@ -2,6 +2,7 @@ name: Android ARM64 Preview
 
 on:
   workflow_call:
+  workflow_dispatch:
   push:
     branches: [main]
     paths:
