@@ -121,14 +121,14 @@ jobs:
             -DLW_BUILD_ENVIRONMENT_FILE="$GITHUB_WORKSPACE/.ci/BUILD-ENVIRONMENT-arm64.txt" \
             -DLW_PACKAGE_PLATFORM_OVERRIDE=linux-arm64-ubuntu22.04
           cmake --build build-arm64 --parallel 2 --target \
-            full-ocr-profile-driver full-ocr-intra-benchmark \
+            full-ocr-profile-driver full-ocr-intra-benchmark full-ocr-dataset-benchmark \
             simd-backend-driver conv-reference-driver kernel-reference-driver \
             ocr-pipeline-driver
       - name: Run ARM64 correctness gates
         run: |
           set -euo pipefail
           ctest --test-dir build-arm64 --output-on-failure \
-            -R '^(simd_backend_detection|scalar_kernel_reference|conv_kernel_reference|full_ocr_pipeline_reference|full_ocr_golden_corpus)$'
+            -R '^(simd_backend_detection|scalar_kernel_reference|conv_kernel_reference|full_ocr_pipeline_reference|full_ocr_golden_corpus|full_ocr_adaptive_rec_budget)$'
       - name: Collect native OCR profile
         env:
           PROFILE_WARMUP: ${{ inputs.warmup }}

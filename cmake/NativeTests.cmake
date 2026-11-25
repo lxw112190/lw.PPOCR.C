@@ -1016,7 +1016,7 @@ if(BUILD_TESTING AND NOT EMSCRIPTEN)
             target_compile_options(full-ocr-dataset-benchmark PRIVATE
                 -Wall -Wextra -Wpedantic -Werror)
         endif()
-        if(LW_X64_REC_FAST_ENABLED AND LW_EXPERIMENTAL_ADAPTIVE_REC_BUDGET)
+        if(LW_ADAPTIVE_REC_BUDGET_ENABLED)
             add_test(
                 NAME full_ocr_adaptive_rec_budget
                 COMMAND "${Python3_EXECUTABLE}"

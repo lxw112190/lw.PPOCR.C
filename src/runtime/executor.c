@@ -142,6 +142,7 @@ typedef struct lw_parallel_conv_context {
     int32_t pads[4];
     uint32_t groups;
     uint32_t packed;
+    uint32_t slice_channels;
     lw_packed_conv1x1_kernel_fn conv1x1_kernel;
     lw_packed_conv3x3_kernel_fn conv3x3_kernel;
     lw_status statuses[LW_PARALLEL_MAX_WORKERS];
@@ -168,13 +169,13 @@ static uint64_t multiply_saturated(uint64_t left, uint64_t right) {
     return right != 0u && left > UINT64_MAX / right ? UINT64_MAX : left * right;
 }
 
-static uint32_t parallel_conv_worker_count(const lw_session* session,
+static uint32_t parallel_conv_worker_count(uint32_t worker_cap,
                                            const lw_parallel_conv_context* context) {
     uint32_t output_channels = (uint32_t)context->output_dimensions[1];
     uint32_t maximum_workers;
     uint64_t work;
     int depthwise;
-    if (session->intra_op_thread_count <= 1u || context->input_dimensions[0] != 1 ||
+    if (worker_cap <= 1u || context->input_dimensions[0] != 1 ||
         context->output_dimensions[0] != 1 || output_channels == 0u) {
         return 1u;
     }
@@ -183,20 +184,12 @@ static uint32_t parallel_conv_worker_count(const lw_session* session,
     if (context->groups != 1u && !depthwise) {
         return 1u;
     }
-    if (context->packed != 0u) {
-        const uint32_t output_tile =
-            context->packed == LW_PREPARED_CONSTANT_CONV3X3_STRIDE2_PACKED8
-                ? LW_PACKED_CONV3X3_STRIDE2_OUTPUT_TILE
-                : LW_PACKED_CONV1X1_OUTPUT_TILE;
-        if (output_channels % output_tile != 0u) {
-            return 1u;
-        }
-        maximum_workers = output_channels / output_tile;
-    } else {
-        maximum_workers = output_channels;
+    if (context->packed != 0u && output_channels % context->slice_channels != 0u) {
+        return 1u;
     }
-    if (maximum_workers > session->intra_op_thread_count) {
-        maximum_workers = session->intra_op_thread_count;
+    maximum_workers = (output_channels + context->slice_channels - 1u) / context->slice_channels;
+    if (maximum_workers > worker_cap) {
+        maximum_workers = worker_cap;
     }
     if (maximum_workers < 2u) {
         return 1u;
@@ -213,16 +206,14 @@ static void execute_parallel_conv_slice(void* opaque, uint32_t worker_index,
                                         uint32_t worker_count) {
     lw_parallel_conv_context* context = (lw_parallel_conv_context*)opaque;
     uint32_t output_channels = (uint32_t)context->output_dimensions[1];
-    uint32_t item_size =
-        context->packed == LW_PREPARED_CONSTANT_CONV3X3_STRIDE2_PACKED8
-            ? LW_PACKED_CONV3X3_STRIDE2_OUTPUT_TILE
-            : (context->packed != 0u ? LW_PACKED_CONV1X1_OUTPUT_TILE : 1u);
-    uint32_t item_count = output_channels / item_size;
+    uint32_t item_size = context->slice_channels;
+    uint32_t item_count = (output_channels + item_size - 1u) / item_size;
     uint32_t channel_begin =
         (uint32_t)(((uint64_t)item_count * worker_index) / worker_count) * item_size;
     uint32_t channel_end =
         (uint32_t)(((uint64_t)item_count * (worker_index + 1u)) / worker_count) * item_size;
-    uint32_t channel_count = channel_end - channel_begin;
+    uint32_t channel_count = (channel_end < output_channels ? channel_end : output_channels) -
+                             channel_begin;
     uint64_t input_plane =
         (uint64_t)(uint32_t)context->input_dimensions[2] * (uint32_t)context->input_dimensions[3];
     uint64_t output_plane =
@@ -296,6 +287,8 @@ static lw_status dispatch_parallel_conv(lw_session* session, const float* input,
                                         lw_packed_conv3x3_kernel_fn conv3x3_kernel,
                                         lw_execution_profile* profile) {
     lw_parallel_conv_context context;
+    lw_thread_pool* pool = session->thread_pool;
+    uint32_t worker_cap = session->intra_op_thread_count;
     uint32_t worker_count;
     uint32_t worker_index;
     memset(&context, 0, sizeof(context));
@@ -312,9 +305,23 @@ static lw_status dispatch_parallel_conv(lw_session* session, const float* input,
     memcpy(context.pads, pads, sizeof(context.pads));
     context.groups = groups;
     context.packed = packed;
+    context.slice_channels = 1u;
+    if (packed == LW_PREPARED_CONSTANT_CONV3X3_STRIDE2_PACKED8) {
+        context.slice_channels = LW_PACKED_CONV3X3_STRIDE2_OUTPUT_TILE;
+    } else if (packed == LW_PREPARED_CONSTANT_CONV1X1_PACKED4) {
+        context.slice_channels = LW_PACKED_CONV1X1_OUTPUT_TILE;
+    }
+    if (lw_simd_level_is_neon(session->cpu.simd)) {
+        pool = lw_session_execution_pool(session, &worker_cap);
+        if (packed == 0u && groups == 1u && kernel[0] == 3 && kernel[1] == 3 &&
+            strides[0] == 2 && strides[1] == 2) {
+            /* Preserve the two-output kernel when the dispatcher splits channels. */
+            context.slice_channels = 2u;
+        }
+    }
     context.conv1x1_kernel = conv1x1_kernel;
     context.conv3x3_kernel = conv3x3_kernel;
-    worker_count = parallel_conv_worker_count(session, &context);
+    worker_count = parallel_conv_worker_count(worker_cap, &context);
     if (profile != NULL && worker_count < LW_EXECUTION_PROFILE_THREAD_HISTOGRAM_CAPACITY &&
         profile->conv_thread_histogram[worker_count] != UINT64_MAX) {
         ++profile->conv_thread_histogram[worker_count];
@@ -322,7 +329,7 @@ static lw_status dispatch_parallel_conv(lw_session* session, const float* input,
     if (worker_count <= 1u) {
         return LW_STATUS_UNSUPPORTED;
     }
-    lw_thread_pool_run(session->thread_pool, worker_count, execute_parallel_conv_slice, &context);
+    lw_thread_pool_run(pool, worker_count, execute_parallel_conv_slice, &context);
     for (worker_index = 0u; worker_index < worker_count; ++worker_index) {
         if (context.statuses[worker_index] != LW_STATUS_OK) {
             return context.statuses[worker_index];
@@ -951,6 +958,42 @@ static int match_gelu(lw_session* session, uint32_t node_index, uint32_t graph_i
     return *gelu_input != NULL && *gelu_output != NULL;
 }
 
+typedef struct lw_gelu_task {
+    const float* input;
+    float* output;
+    uint64_t count;
+} lw_gelu_task;
+
+static void execute_gelu_slice(void* opaque, uint32_t worker, uint32_t workers) {
+    const lw_gelu_task* task = (const lw_gelu_task*)opaque;
+    const uint64_t size = task->count / workers;
+    const uint64_t begin = size * worker;
+    const uint64_t end = worker + 1u == workers ? task->count : begin + size;
+    lw_scalar_gelu_exact_f32(task->input + (size_t)begin, task->output + (size_t)begin, end - begin);
+}
+
+static void execute_neon_gelu(lw_session* session, const float* input, float* output,
+                              uint64_t count) {
+    const uint64_t minimum_elements_per_worker = 16384u;
+    const uintptr_t source = (uintptr_t)input;
+    const uintptr_t destination = (uintptr_t)output;
+    const uintptr_t distance = source <= destination ? destination - source : source - destination;
+    const uint64_t useful_workers = count / minimum_elements_per_worker;
+    uint32_t workers;
+    lw_thread_pool* pool;
+    lw_gelu_task task = {input, output, count};
+    /* A partially overlapping arena range needs the serial directional walk. */
+    if (useful_workers < 2u || (distance != 0u && distance / sizeof(float) < count)) {
+        lw_scalar_gelu_exact_f32(input, output, count);
+        return;
+    }
+    pool = lw_session_execution_pool(session, &workers);
+    if (useful_workers < workers) {
+        workers = (uint32_t)useful_workers;
+    }
+    lw_thread_pool_run(pool, workers, execute_gelu_slice, &task);
+}
+
 static uint32_t profile_conv_class(const lw_session* session, const uint8_t* node) {
     const lw_model* model = session->model;
     uint64_t param_offset = lwm_read_u64(node + 56);
@@ -1181,7 +1224,7 @@ static lw_status execute_session_nodes_f32(lw_session* session, const float* inp
                 if (lw_simd_level_is_avx2(simd_level)) {
                     lw_avx2_gelu_f32(gelu_input, gelu_output, gelu_element_count);
                 } else {
-                    lw_scalar_gelu_exact_f32(gelu_input, gelu_output, gelu_element_count);
+                    execute_neon_gelu(session, gelu_input, gelu_output, gelu_element_count);
                 }
                 if (profile != NULL) {
                     uint64_t finished = profile->clock(profile->clock_context);
@@ -1406,6 +1449,17 @@ typedef struct lw_packed_ctc_projection {
     uint32_t columns;
 } lw_packed_ctc_projection;
 
+static void execute_neon_projection_slice(void* opaque, uint32_t worker, uint32_t workers) {
+    const lw_packed_ctc_projection* projection = (const lw_packed_ctc_projection*)opaque;
+    const uint32_t begin = (uint32_t)((uint64_t)projection->rows * worker / workers);
+    const uint32_t end = (uint32_t)((uint64_t)projection->rows * (worker + 1u) / workers);
+    lw_neon_packed_matmul_shared_f32(
+        projection->activation + (size_t)begin * projection->inner_dimension,
+        projection->packed_weights, projection->bias,
+        projection->logits + (size_t)begin * projection->columns, 1u, end - begin,
+        projection->inner_dimension, projection->columns);
+}
+
 static int match_packed_ctc_projection(lw_session* session, const float* graph_input,
                                        uint32_t logits_index, uint32_t time_steps,
                                        uint32_t class_count, lw_execution_profile* profile,
@@ -1556,7 +1610,7 @@ static lw_status execute_packed_ctc_projection_tiled(
         }
         {
             uint32_t head_workers = 1u;
-            lw_thread_pool* head_pool = lw_session_ctc_head_pool(session, &head_workers);
+            lw_thread_pool* head_pool = lw_session_execution_pool(session, &head_workers);
             head_workers = lw_ctc_head_parallel_worker_count(head_pool, head_workers, rows,
                                                              projection->inner_dimension,
                                                              projection->columns);
@@ -1681,10 +1735,13 @@ lw_status lw_execute_session_f32_ctc_greedy(
         if (neon_projection) {
             /* Bias is applied as the packed GEMM stores each tile. The
              * greedy decoder consumes logits directly from that same buffer. */
-            lw_neon_packed_matmul_shared_f32(
-                projection.activation, projection.packed_weights, projection.bias,
-                projection.logits, 1u, projection.rows, projection.inner_dimension,
-                projection.columns);
+            uint32_t head_workers;
+            lw_thread_pool* head_pool = lw_session_execution_pool(session, &head_workers);
+            head_workers = lw_ctc_head_parallel_worker_count(head_pool, head_workers,
+                                                             projection.rows,
+                                                             projection.inner_dimension,
+                                                             projection.columns);
+            lw_thread_pool_run(head_pool, head_workers, execute_neon_projection_slice, &projection);
         } else
 #if defined(LW_EXPERIMENTAL_CTC_TILED)
         if (session->ctc_logits_scratch != NULL && session->ctc_logits_scratch_rows != 0u) {
@@ -1708,7 +1765,7 @@ lw_status lw_execute_session_f32_ctc_greedy(
 #endif
         {
             uint32_t head_workers = 1u;
-            lw_thread_pool* head_pool = lw_session_ctc_head_pool(session, &head_workers);
+            lw_thread_pool* head_pool = lw_session_execution_pool(session, &head_workers);
             head_workers = lw_ctc_head_parallel_worker_count(head_pool, head_workers,
                                                              projection.rows,
                                                              projection.inner_dimension,

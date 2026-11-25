@@ -155,6 +155,11 @@ if(MSVC AND MSVC_C_ARCHITECTURE_ID MATCHES "^(x64|X86)$")
 endif()
 
 string(TOLOWER "${CMAKE_SYSTEM_PROCESSOR}" LW_SYSTEM_PROCESSOR_LOWER)
+set(LW_ADAPTIVE_REC_BUDGET_ENABLED OFF)
+if(LW_EXPERIMENTAL_ADAPTIVE_REC_BUDGET AND NOT EMSCRIPTEN AND
+   (LW_X64_REC_FAST_ENABLED OR LW_SYSTEM_PROCESSOR_LOWER MATCHES "^(arm64|aarch64)$"))
+    set(LW_ADAPTIVE_REC_BUDGET_ENABLED ON)
+endif()
 
 # Keep the portable Conv references and their SIMD implementations on the same
 # multiply-then-add contract. GCC enables FP contraction by default on AArch64
@@ -234,6 +239,9 @@ function(lw_configure_runtime_target target)
 endfunction()
 
 function(lw_configure_runtime_features target)
+    if(LW_ADAPTIVE_REC_BUDGET_ENABLED)
+        target_compile_definitions(${target} PRIVATE LW_EXPERIMENTAL_ADAPTIVE_REC_BUDGET=1)
+    endif()
     if(LW_EXPERIMENTAL_DET_FIXED_POINT_RESIZE)
         target_compile_definitions(${target} PRIVATE LW_EXPERIMENTAL_DET_FIXED_POINT_RESIZE=1)
     endif()
@@ -286,9 +294,6 @@ set_target_properties(lw_ppocr_c PROPERTIES
 lw_configure_runtime_target(lw_ppocr_c)
 if(LW_X64_REC_FAST_ENABLED OR LW_WASM_COMPILED_REC_ENABLED)
     target_compile_definitions(lw_ppocr_c PRIVATE LW_EXPERIMENTAL_AVX2_FAST_PATH=1)
-    if(LW_X64_REC_FAST_ENABLED AND LW_EXPERIMENTAL_ADAPTIVE_REC_BUDGET)
-        target_compile_definitions(lw_ppocr_c PRIVATE LW_EXPERIMENTAL_ADAPTIVE_REC_BUDGET=1)
-    endif()
     if(LW_WASM_COMPILED_REC_ENABLED)
         if(LW_WASM_FINE_REC_WIDTHS)
             target_compile_definitions(lw_ppocr_c PRIVATE LW_WASM_FINE_REC_WIDTHS=1)
@@ -330,9 +335,6 @@ target_compile_definitions(lw_ppocr_c_shared
 lw_configure_runtime_target(lw_ppocr_c_shared)
 if(LW_X64_REC_FAST_ENABLED)
     target_compile_definitions(lw_ppocr_c_shared PRIVATE LW_EXPERIMENTAL_AVX2_FAST_PATH=1)
-    if(LW_EXPERIMENTAL_ADAPTIVE_REC_BUDGET)
-        target_compile_definitions(lw_ppocr_c_shared PRIVATE LW_EXPERIMENTAL_ADAPTIVE_REC_BUDGET=1)
-    endif()
     if(MSVC)
         set_property(SOURCE src/simd/avx2_nhwc_pointwise.c src/simd/avx2_nhwc_dense.c src/simd/avx2_nhwc_depthwise.c src/simd/avx2_nhwc_support.c src/simd/avx2_nhwc_convtranspose.c APPEND PROPERTY
             COMPILE_OPTIONS /arch:AVX2 /fp:strict)

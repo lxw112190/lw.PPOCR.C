@@ -733,7 +733,7 @@ void lw_session_set_external_thread_pool(lw_session* session, lw_thread_pool* po
     session->external_worker_count = worker_count;
 }
 
-lw_thread_pool* lw_session_ctc_head_pool(const lw_session* session, uint32_t* out_workers) {
+lw_thread_pool* lw_session_execution_pool(const lw_session* session, uint32_t* out_workers) {
     if (out_workers != NULL) {
         *out_workers = 1u;
     }

@@ -154,10 +154,9 @@ void lw_session_set_intra_op_thread_count(lw_session* session, uint32_t thread_c
  * by the session. */
 void lw_session_set_external_thread_pool(lw_session* session, lw_thread_pool* pool,
                                          uint32_t worker_count);
-/* Pool the CTC head projection may fan out to: the borrowed pool when
- * attached, else the session's own intra-op pool.  *out_workers receives the
- * usable worker count (1 when serial). */
-lw_thread_pool* lw_session_ctc_head_pool(const lw_session* session, uint32_t* out_workers);
+/* Use the recognizer's borrowed pool when attached, otherwise the session's
+ * own intra-op pool. *out_workers receives the usable count (1 when serial). */
+lw_thread_pool* lw_session_execution_pool(const lw_session* session, uint32_t* out_workers);
 lw_status lw_session_share_prepared_constants(lw_session* destination,
                                                const lw_session* source,
                                                lw_error* error);

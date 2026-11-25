@@ -62,7 +62,7 @@ option(LW_EXPERIMENTAL_AVX2_FMA_MATMUL_DISPATCH
 option(LW_EXPERIMENTAL_AVX2_FAST_PATH
     "Enable compiled AVX2/FMA x64 REC backends for adaptive widths" ON)
 option(LW_EXPERIMENTAL_ADAPTIVE_REC_BUDGET
-    "Share the native x64 REC intra-op thread budget across active line workers" ON)
+    "Share the native x64 and ARM64 REC thread budget across active line workers" ON)
 option(LW_EXPERIMENTAL_DET_FIXED_POINT_RESIZE
     "Use the OpenCV-parity fixed-point DET resize with LUT normalization" ON)
 option(LW_EXPERIMENTAL_CLS_FIXED_POINT_RESIZE
