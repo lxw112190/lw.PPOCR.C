@@ -135,7 +135,10 @@ void lw_sse2_depthwise_conv5x5_unit_pad2_f32(const float* input, const float* we
                                              const int32_t dimensions[4]);
 void lw_avx2_depthwise_conv5x5_unit_pad2_f32(const float* input, const float* weights,
                                              const float* bias, float* output,
-                                             const int32_t dimensions[4]);
+                                           const int32_t dimensions[4]);
+void lw_neon_depthwise_conv5x5_unit_pad2_f32(const float* input, const float* weights,
+                                            const float* bias, float* output,
+                                            const int32_t dimensions[4]);
 void lw_avx2_depthwise_conv9x9_unit_pad4_f32(const float* input, const float* weights,
                                              const float* bias, float* output,
                                              const int32_t dimensions[4]);

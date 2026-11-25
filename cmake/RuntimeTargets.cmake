@@ -61,6 +61,7 @@ set(LW_PPOCR_C_SOURCES
     src/simd/lsx_packed_conv1x1.c
     src/simd/neon_conv3x3.c
     src/simd/neon_convtranspose2x2.c
+    src/simd/neon_depthwise5x5.c
     src/simd/neon_matmul.c
     src/simd/neon_packed_conv1x1.c
     src/simd/sse2_binary.c
@@ -167,6 +168,7 @@ set(LW_REPRODUCIBLE_CONV_SOURCES
     src/simd/lsx_packed_conv1x1.c
     src/simd/neon_conv3x3.c
     src/simd/neon_convtranspose2x2.c
+    src/simd/neon_depthwise5x5.c
     src/simd/neon_packed_conv1x1.c)
 
 if(MSVC AND LW_SYSTEM_PROCESSOR_LOWER MATCHES "^(arm64|aarch64)$")

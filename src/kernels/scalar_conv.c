@@ -605,6 +605,8 @@ lw_status lw_scalar_conv2d_f32(const float* input, const float* weights, const f
             lw_avx2_depthwise_conv5x5_unit_pad2_f32(input, weights, bias, output, input_dimensions);
         } else if (lw_simd_level_is_sse2(simd_level)) {
             lw_sse2_depthwise_conv5x5_unit_pad2_f32(input, weights, bias, output, input_dimensions);
+        } else if (lw_simd_level_is_neon(simd_level)) {
+            lw_neon_depthwise_conv5x5_unit_pad2_f32(input, weights, bias, output, input_dimensions);
         } else {
             lw_scalar_depthwise_conv5x5_unit_pad2_f32(input, weights, bias, output,
                                                       input_dimensions);

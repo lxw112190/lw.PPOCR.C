@@ -894,6 +894,12 @@ int main(void) {
         fprintf(stderr, "dispatched depthwise 5x5 Conv differs from scalar output\n");
         return 1;
     }
+    if (lw_simd_level_is_neon(simd_level) &&
+        (memcmp)(unit_depthwise5x5_output, unit_depthwise5x5_dispatched_output,
+                 sizeof(unit_depthwise5x5_output)) != 0) {
+        fprintf(stderr, "NEON depthwise 5x5 Conv differs bitwise from scalar output\n");
+        return 1;
+    }
     print_values("unit_depthwise_conv5x5", unit_depthwise5x5_output, 228u);
 
     fill_values(unit_depthwise9x9_input, 380u, 37u, 67u, 31, 17.0f);
