@@ -62,6 +62,7 @@ set(LW_PPOCR_C_SOURCES
     src/simd/neon_conv3x3.c
     src/simd/neon_convtranspose2x2.c
     src/simd/neon_depthwise5x5.c
+    src/simd/neon_gelu.c
     src/simd/neon_matmul.c
     src/simd/neon_packed_conv1x1.c
     src/simd/neon_spatial_conv.c

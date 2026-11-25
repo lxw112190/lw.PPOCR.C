@@ -1025,10 +1025,11 @@ typedef struct lw_gelu_task {
 
 static void execute_gelu_slice(void* opaque, uint32_t worker, uint32_t workers) {
     const lw_gelu_task* task = (const lw_gelu_task*)opaque;
-    const uint64_t size = task->count / workers;
+    /* Keep vector groups and the scalar tail independent of worker count. */
+    const uint64_t size = (task->count / workers) & ~UINT64_C(3);
     const uint64_t begin = size * worker;
     const uint64_t end = worker + 1u == workers ? task->count : begin + size;
-    lw_scalar_gelu_exact_f32(task->input + (size_t)begin, task->output + (size_t)begin, end - begin);
+    lw_neon_gelu_f32(task->input + (size_t)begin, task->output + (size_t)begin, end - begin);
 }
 
 static void execute_neon_gelu(lw_session* session, const float* input, float* output,
@@ -1043,7 +1044,7 @@ static void execute_neon_gelu(lw_session* session, const float* input, float* ou
     lw_gelu_task task = {input, output, count};
     /* A partially overlapping arena range needs the serial directional walk. */
     if (useful_workers < 2u || (distance != 0u && distance / sizeof(float) < count)) {
-        lw_scalar_gelu_exact_f32(input, output, count);
+        lw_neon_gelu_f32(input, output, count);
         return;
     }
     pool = lw_session_execution_pool(session, &workers);

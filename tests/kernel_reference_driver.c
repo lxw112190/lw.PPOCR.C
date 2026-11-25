@@ -309,6 +309,54 @@ int main(void) {
         }
     }
 
+    if (lw_simd_level_is_neon(simd_level)) {
+        const float special_input[8] = {0.0f, -0.0f, INFINITY, -INFINITY, NAN, -0.5f, 2.0f, 5.0f};
+        float special_output[8];
+        for (index = 0u; index < ERF_DENSE_COUNT; ++index) {
+            /* Mix the piecewise intervals within each vector. */
+            const uint32_t sample = index * 997u % ERF_DENSE_COUNT;
+            erf_dense_input[index] = -8.0f + 16.0f * (float)sample / (float)(ERF_DENSE_COUNT - 1u);
+        }
+        lw_scalar_gelu_exact_f32(erf_dense_input, gelu_reference, ERF_DENSE_COUNT);
+        lw_neon_gelu_f32(erf_dense_input, gelu_output, ERF_DENSE_COUNT);
+        for (index = 0u; index < ERF_DENSE_COUNT; ++index) {
+            if (!isfinite(gelu_output[index]) ||
+                fabsf(gelu_reference[index] - gelu_output[index]) > 1.0e-6f) {
+                fprintf(stderr, "NEON GELU exceeds the absolute error limit at %.9g\n",
+                        (double)erf_dense_input[index]);
+                return 1;
+            }
+        }
+        {
+            float arena[ERF_DENSE_COUNT + 1u];
+            memcpy(arena, erf_dense_input, sizeof(gelu_output));
+            lw_neon_gelu_f32(arena, arena + 1, ERF_DENSE_COUNT);
+            if (memcmp(gelu_output, arena + 1, sizeof(gelu_output)) != 0) {
+                fprintf(stderr, "NEON GELU differs with overlapping output after input\n");
+                return 1;
+            }
+            memcpy(arena + 1, erf_dense_input, sizeof(gelu_output));
+            lw_neon_gelu_f32(arena + 1, arena, ERF_DENSE_COUNT);
+            if (memcmp(gelu_output, arena, sizeof(gelu_output)) != 0) {
+                fprintf(stderr, "NEON GELU differs with overlapping output before input\n");
+                return 1;
+            }
+            memcpy(arena, erf_dense_input, sizeof(gelu_output));
+            lw_neon_gelu_f32(arena, arena, ERF_DENSE_COUNT);
+            if (memcmp(gelu_output, arena, sizeof(gelu_output)) != 0) {
+                fprintf(stderr, "NEON GELU in-place output differs\n");
+                return 1;
+            }
+        }
+        lw_neon_gelu_f32(special_input, special_output, 8u);
+        if (special_output[0] != 0.0f || signbit(special_output[0]) || special_output[1] != 0.0f ||
+            !signbit(special_output[1]) || special_output[2] != INFINITY ||
+            !isnan(special_output[3]) || !isnan(special_output[4])) {
+            fprintf(stderr, "NEON GELU special-value contract failed\n");
+            return 1;
+        }
+    }
+
     status = lw_scalar_hard_sigmoid_f32(activation_input, activation_output, 9u, 0.2f, 0.5f);
     if (!expect_status("hard_sigmoid", status, LW_STATUS_OK)) {
         return 1;

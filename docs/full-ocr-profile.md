@@ -58,7 +58,7 @@ route:
 - packed_matmul includes the REC terminal CTC projection fast path;
 - ctc_packed_projection versus ctc_generic_projection identifies the terminal
   REC projection implementation;
-- fused_gelu counts the AVX2 GELU chain fusion.
+- fused_gelu counts GELU chain fusions on AVX2 and NEON.
 
 The rec_session_cache object contains hits, misses, and reconfigurations for
 the adaptive REC Session lookup. A cache hit means the requested adaptive REC

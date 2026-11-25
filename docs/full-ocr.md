@@ -72,11 +72,13 @@ and thread resources for lower latency, so applications should benchmark `1`,
 
 Native ARM64 builds and x64 builds with compiled REC share REC's intra-op
 budget across the line workers that are active in each request. On ARM64,
-NEON REC uses those threads for large convolutions, exact GELU, and packed
-CTC projection. A four-worker handle processing one line can use the full REC
-thread budget. Two lines split it between two recognizers, and four or more
-lines keep the original per-worker allocation. Each recognizer retains a grow-only
-thread pool, avoiding per-request thread creation during sparse/dense page
+NEON REC uses those threads for large convolutions, vector GELU, and packed
+CTC projection. Fused GELU uses the piecewise Erf approximation on complete
+four-element vectors and scalar `erff` for the tail. A four-worker handle
+processing one line can use the full REC thread budget. Two lines split it
+between two recognizers, and four or more lines keep the original per-worker
+allocation. Each recognizer retains a grow-only thread pool, avoiding
+per-request thread creation during sparse/dense page
 transitions. This is internal scheduling only and does not change the C ABI or
 OCR result order. Set `LW_EXPERIMENTAL_ADAPTIVE_REC_BUDGET=OFF` at CMake
 configure time to restore the fixed allocation for A/B measurement.

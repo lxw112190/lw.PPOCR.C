@@ -64,6 +64,7 @@ void lw_wasm128_packed_matmul_shared_f32(const float* input,
 void lw_sse2_matmul_shared_f32(const float* input, const float* weights, float* output,
                                uint32_t batch_count, uint32_t rows, uint32_t inner_dimension,
                                uint32_t columns);
+void lw_neon_gelu_f32(const float* input, float* output, uint64_t count);
 void lw_neon_packed_matmul_shared_f32(const float* input, const float* packed_weights,
                                       const float* bias, float* output, uint32_t batch_count,
                                       uint32_t rows, uint32_t inner_dimension, uint32_t columns);
