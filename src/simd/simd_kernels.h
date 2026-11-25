@@ -5,6 +5,7 @@
 
 #include "scalar_kernels.h"
 
+#include <stddef.h>
 #include <stdint.h>
 
 void lw_sse2_binary_contiguous_f32(lw_scalar_binary_op operation, const float* left,
@@ -112,6 +113,13 @@ void lw_avx2_fma_packed_conv1x1_8x8_f32(
 void lw_avx2_packed_conv1x1_f32(const float* input, const float* packed_weights, const float* bias,
                                 float* output, const int32_t input_dimensions[4],
                                 const int32_t output_dimensions[4]);
+/* Returns zero when the original output-channel kernel should be used. */
+size_t lw_neon_packed_conv1x1_spatial_tiles(const int32_t input_dimensions[4],
+                                         const int32_t output_dimensions[4]);
+void lw_neon_packed_conv1x1_tiles_f32(const float* input, const float* packed_weights,
+                                    const float* bias, float* output, size_t plane,
+                                    uint32_t input_channels, uint32_t output_channels,
+                                    size_t tile_begin, size_t tile_end);
 void lw_neon_packed_conv1x1_f32(const float* input, const float* packed_weights, const float* bias,
                                 float* output, const int32_t input_dimensions[4],
                                 const int32_t output_dimensions[4]);

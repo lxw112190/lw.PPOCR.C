@@ -11,6 +11,83 @@
 #  define LW_COMPILES_NEON_PACKED_CONV1X1 0
 #endif
 
+#define LW_NEON_POINTWISE_SPATIAL_TILE 16u
+#define LW_NEON_POINTWISE_MAX_INPUT_CHANNELS 1536u
+
+size_t lw_neon_packed_conv1x1_spatial_tiles(const int32_t input_dimensions[4],
+                                         const int32_t output_dimensions[4]) {
+#if LW_COMPILES_NEON_PACKED_CONV1X1
+    const size_t plane = (size_t)input_dimensions[2] * (size_t)input_dimensions[3];
+    if (input_dimensions[0] == 1 && input_dimensions[1] >= 24 &&
+        input_dimensions[1] <= (int32_t)LW_NEON_POINTWISE_MAX_INPUT_CHANNELS &&
+        output_dimensions[1] >= 16 &&
+        (uint32_t)output_dimensions[1] % LW_PACKED_CONV1X1_OUTPUT_TILE == 0u &&
+        plane >= 64u && plane % LW_NEON_POINTWISE_SPATIAL_TILE == 0u) {
+        return plane / LW_NEON_POINTWISE_SPATIAL_TILE;
+    }
+#else
+    (void)input_dimensions;
+    (void)output_dimensions;
+#endif
+    return 0u;
+}
+
+void lw_neon_packed_conv1x1_tiles_f32(const float* input, const float* packed_weights,
+                                    const float* bias, float* output, size_t plane,
+                                    uint32_t input_channels, uint32_t output_channels,
+                                    size_t tile_begin, size_t tile_end) {
+#if LW_COMPILES_NEON_PACKED_CONV1X1
+    /* Reuse one contiguous input tile across every output-channel block.
+     * Each worker owns its scratch and writes a disjoint spatial range. */
+    float packed_input[LW_NEON_POINTWISE_MAX_INPUT_CHANNELS][LW_NEON_POINTWISE_SPATIAL_TILE];
+    for (size_t tile = tile_begin; tile < tile_end; ++tile) {
+        const size_t spatial = tile * LW_NEON_POINTWISE_SPATIAL_TILE;
+        for (uint32_t ic = 0u; ic < input_channels; ++ic) {
+            const float* src = input + (size_t)ic * plane + spatial;
+            vst1q_f32_x4(packed_input[ic], vld1q_f32_x4(src));
+        }
+        const float* weights = packed_weights;
+        for (uint32_t oc = 0u; oc < output_channels; oc += LW_PACKED_CONV1X1_OUTPUT_TILE) {
+            const float32x4_t b0 = vdupq_n_f32(bias == NULL ? 0.0f : bias[oc]);
+            const float32x4_t b1 = vdupq_n_f32(bias == NULL ? 0.0f : bias[oc + 1u]);
+            const float32x4_t b2 = vdupq_n_f32(bias == NULL ? 0.0f : bias[oc + 2u]);
+            const float32x4_t b3 = vdupq_n_f32(bias == NULL ? 0.0f : bias[oc + 3u]);
+            float32x4x4_t sum0 = {{b0, b0, b0, b0}};
+            float32x4x4_t sum1 = {{b1, b1, b1, b1}};
+            float32x4x4_t sum2 = {{b2, b2, b2, b2}};
+            float32x4x4_t sum3 = {{b3, b3, b3, b3}};
+            for (uint32_t ic = 0u; ic < input_channels; ++ic) {
+                const float32x4x4_t data = vld1q_f32_x4(packed_input[ic]);
+                const float32x4_t w = vld1q_f32(weights);
+                for (uint32_t group = 0u; group < 4u; ++group) {
+                    const float32x4_t v = data.val[group];
+                    sum0.val[group] = vaddq_f32(sum0.val[group], vmulq_laneq_f32(v, w, 0));
+                    sum1.val[group] = vaddq_f32(sum1.val[group], vmulq_laneq_f32(v, w, 1));
+                    sum2.val[group] = vaddq_f32(sum2.val[group], vmulq_laneq_f32(v, w, 2));
+                    sum3.val[group] = vaddq_f32(sum3.val[group], vmulq_laneq_f32(v, w, 3));
+                }
+                weights += LW_PACKED_CONV1X1_OUTPUT_TILE;
+            }
+            float* dst = output + (size_t)oc * plane + spatial;
+            vst1q_f32_x4(dst, sum0);
+            vst1q_f32_x4(dst + plane, sum1);
+            vst1q_f32_x4(dst + 2u * plane, sum2);
+            vst1q_f32_x4(dst + 3u * plane, sum3);
+        }
+    }
+#else
+    (void)input;
+    (void)packed_weights;
+    (void)bias;
+    (void)output;
+    (void)plane;
+    (void)input_channels;
+    (void)output_channels;
+    (void)tile_begin;
+    (void)tile_end;
+#endif
+}
+
 void lw_neon_packed_conv1x1_f32(const float* input, const float* packed_weights,
                                 const float* bias, float* output,
                                 const int32_t input_dimensions[4],
@@ -23,7 +100,13 @@ void lw_neon_packed_conv1x1_f32(const float* input, const float* packed_weights,
     const uint32_t output_blocks =
         (output_channels + LW_PACKED_CONV1X1_OUTPUT_TILE - 1u) /
         LW_PACKED_CONV1X1_OUTPUT_TILE;
+    const size_t tiles = lw_neon_packed_conv1x1_spatial_tiles(input_dimensions, output_dimensions);
     uint32_t batch;
+    if (tiles != 0u) {
+        lw_neon_packed_conv1x1_tiles_f32(input, packed_weights, bias, output, (size_t)channel_plane,
+                                       input_channels, output_channels, 0u, tiles);
+        return;
+    }
     for (batch = 0u; batch < (uint32_t)input_dimensions[0]; ++batch) {
         const float* batch_input =
             input + (size_t)((uint64_t)batch * input_channels * channel_plane);

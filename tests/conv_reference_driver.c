@@ -295,6 +295,50 @@ static void reference_conv_axis(const float* input, const float* weights, const 
     }
 }
 
+static int expect_neon_spatial_pointwise(void) {
+    enum { channels = 32, outputs = 20, plane = 96 };
+    const int32_t input_dims[4] = {1, channels, 3, 32};
+    const int32_t output_dims[4] = {1, outputs, 3, 32};
+    float input[channels * plane];
+    float weights[channels * outputs];
+    float packed_weights[channels * outputs];
+    float bias[outputs];
+    float expected[outputs * plane];
+    float actual[outputs * plane];
+    const size_t tiles = lw_neon_packed_conv1x1_spatial_tiles(input_dims, output_dims);
+    if (tiles != 6u) {
+        fprintf(stderr, "NEON pointwise test did not select spatial tiles\n");
+        return 0;
+    }
+    fill_values(input, channels * plane, 13u, 61u, 30, 29.0f);
+    fill_values(weights, channels * outputs, 17u, 43u, 21, 23.0f);
+    fill_values(bias, outputs, 7u, 29u, 14, 13.0f);
+    lw_pack_conv1x1_weights_f32(weights, channels, outputs, packed_weights);
+    for (unsigned with_bias = 0u; with_bias < 2u; ++with_bias) {
+        const float* bias_ptr = with_bias ? bias : NULL;
+        lw_scalar_packed_conv1x1_f32(input, packed_weights, bias_ptr, expected, input_dims,
+                                     output_dims);
+        lw_neon_packed_conv1x1_f32(input, packed_weights, bias_ptr, actual, input_dims,
+                                   output_dims);
+        if (memcmp(expected, actual, sizeof(expected)) != 0) {
+            fprintf(stderr, "NEON spatial pointwise differs from scalar output\n");
+            return 0;
+        }
+        memset(actual, 0, sizeof(actual));
+        lw_neon_packed_conv1x1_tiles_f32(input, packed_weights, bias_ptr, actual, plane,
+                                       channels, outputs, 0u, 1u);
+        lw_neon_packed_conv1x1_tiles_f32(input, packed_weights, bias_ptr, actual, plane,
+                                       channels, outputs, 1u, 4u);
+        lw_neon_packed_conv1x1_tiles_f32(input, packed_weights, bias_ptr, actual, plane,
+                                       channels, outputs, 4u, tiles);
+        if (memcmp(expected, actual, sizeof(expected)) != 0) {
+            fprintf(stderr, "NEON pointwise tile ranges differ from scalar output\n");
+            return 0;
+        }
+    }
+    return 1;
+}
+
 int main(void) {
     const int32_t normal_input_dimensions[4] = {2, 2, 4, 5};
     const int32_t normal_weight_dimensions[4] = {3, 2, 3, 3};
@@ -1105,6 +1149,9 @@ int main(void) {
         if (memcmp(packed_pointwise_output, packed_pointwise_simd_output,
                    sizeof(packed_pointwise_output)) != 0) {
             fprintf(stderr, "NEON packed pointwise Conv differs from canonical output\n");
+            return 1;
+        }
+        if (!expect_neon_spatial_pointwise()) {
             return 1;
         }
         {

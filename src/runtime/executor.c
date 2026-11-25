@@ -143,6 +143,7 @@ typedef struct lw_parallel_conv_context {
     uint32_t groups;
     uint32_t packed;
     uint32_t slice_channels;
+    size_t spatial_tiles;
     lw_packed_conv1x1_kernel_fn conv1x1_kernel;
     lw_packed_conv3x3_kernel_fn conv3x3_kernel;
     lw_status statuses[LW_PARALLEL_MAX_WORKERS];
@@ -187,7 +188,14 @@ static uint32_t parallel_conv_worker_count(uint32_t worker_cap,
     if (context->packed != 0u && output_channels % context->slice_channels != 0u) {
         return 1u;
     }
-    maximum_workers = (output_channels + context->slice_channels - 1u) / context->slice_channels;
+    if (context->spatial_tiles != 0u) {
+        maximum_workers = context->spatial_tiles < worker_cap
+                              ? (uint32_t)context->spatial_tiles
+                              : worker_cap;
+    } else {
+        maximum_workers = (output_channels + context->slice_channels - 1u) /
+                          context->slice_channels;
+    }
     if (maximum_workers > worker_cap) {
         maximum_workers = worker_cap;
     }
@@ -205,6 +213,18 @@ static uint32_t parallel_conv_worker_count(uint32_t worker_cap,
 static void execute_parallel_conv_slice(void* opaque, uint32_t worker_index,
                                         uint32_t worker_count) {
     lw_parallel_conv_context* context = (lw_parallel_conv_context*)opaque;
+    if (context->spatial_tiles != 0u) {
+        const size_t begin = context->spatial_tiles * worker_index / worker_count;
+        const size_t end = context->spatial_tiles * (worker_index + 1u) / worker_count;
+        const size_t plane = (size_t)context->input_dimensions[2] *
+                             (size_t)context->input_dimensions[3];
+        lw_neon_packed_conv1x1_tiles_f32(
+            context->input, context->weights, context->bias, context->output, plane,
+            (uint32_t)context->input_dimensions[1], (uint32_t)context->output_dimensions[1],
+            begin, end);
+        context->statuses[worker_index] = LW_STATUS_OK;
+        return;
+    }
     uint32_t output_channels = (uint32_t)context->output_dimensions[1];
     uint32_t item_size = context->slice_channels;
     uint32_t item_count = (output_channels + item_size - 1u) / item_size;
@@ -313,6 +333,10 @@ static lw_status dispatch_parallel_conv(lw_session* session, const float* input,
     }
     if (lw_simd_level_is_neon(session->cpu.simd)) {
         pool = lw_session_execution_pool(session, &worker_cap);
+        if (packed == LW_PREPARED_CONSTANT_CONV1X1_PACKED4) {
+            context.spatial_tiles =
+                lw_neon_packed_conv1x1_spatial_tiles(input_dimensions, output_dimensions);
+        }
         if (packed == 0u && groups == 1u && kernel[0] == 3 && kernel[1] == 3 &&
             strides[0] == 2 && strides[1] == 2) {
             /* Preserve the two-output kernel when the dispatcher splits channels. */
