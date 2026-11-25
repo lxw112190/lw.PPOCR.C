@@ -41,6 +41,26 @@ lw_status lw_scalar_erf_f32(const float* input, float* output, uint64_t element_
     return LW_STATUS_OK;
 }
 
+static float gelu_exact(float value) {
+    const float activated = erff(value / 1.4142135381698608f) + 1.0f;
+    return (value * activated) * 0.5f;
+}
+
+void lw_scalar_gelu_exact_f32(const float* input, float* output, uint64_t element_count) {
+    const uintptr_t source = (uintptr_t)input;
+    const uintptr_t destination = (uintptr_t)output;
+    /* The final tensor can reuse a region of the expired input's arena slot. */
+    if (destination > source && (destination - source) / sizeof(float) < element_count) {
+        for (uint64_t index = element_count; index-- > 0u;) {
+            output[(size_t)index] = gelu_exact(input[(size_t)index]);
+        }
+    } else {
+        for (uint64_t index = 0u; index < element_count; ++index) {
+            output[(size_t)index] = gelu_exact(input[(size_t)index]);
+        }
+    }
+}
+
 lw_status lw_scalar_hard_sigmoid_f32(const float* input, float* output, uint64_t element_count,
                                      float alpha, float beta) {
     uint64_t index;

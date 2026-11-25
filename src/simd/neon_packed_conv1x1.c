@@ -47,7 +47,39 @@ void lw_neon_packed_conv1x1_f32(const float* input, const float* packed_weights,
                 const float32x4_t b1 = vdupq_n_f32(bias == NULL ? 0.0f : bias[output_base + 1u]);
                 const float32x4_t b2 = vdupq_n_f32(bias == NULL ? 0.0f : bias[output_base + 2u]);
                 const float32x4_t b3 = vdupq_n_f32(bias == NULL ? 0.0f : bias[output_base + 3u]);
-                /* Load one weight vector for two independent groups of four pixels. */
+                /* A four-output block shares one weight load across sixteen pixels.
+                 * Keep each output's input-channel accumulation order intact. */
+                if (input_channels >= 16u) {
+                    for (; spatial + 16u <= channel_plane; spatial += 16u) {
+                        float32x4_t sum0[4] = {b0, b0, b0, b0};
+                        float32x4_t sum1[4] = {b1, b1, b1, b1};
+                        float32x4_t sum2[4] = {b2, b2, b2, b2};
+                        float32x4_t sum3[4] = {b3, b3, b3, b3};
+                        const float* src = batch_input;
+                        const float* packed = weights;
+                        uint32_t ic;
+                        for (ic = 0u; ic < input_channels; ++ic) {
+                            const float32x4_t w = vld1q_f32(packed);
+                            for (uint32_t group = 0u; group < 4u; ++group) {
+                                const float32x4_t value =
+                                    vld1q_f32(src + (size_t)spatial + group * 4u);
+                                sum0[group] = vaddq_f32(sum0[group], vmulq_laneq_f32(value, w, 0));
+                                sum1[group] = vaddq_f32(sum1[group], vmulq_laneq_f32(value, w, 1));
+                                sum2[group] = vaddq_f32(sum2[group], vmulq_laneq_f32(value, w, 2));
+                                sum3[group] = vaddq_f32(sum3[group], vmulq_laneq_f32(value, w, 3));
+                            }
+                            src += channel_plane;
+                            packed += LW_PACKED_CONV1X1_OUTPUT_TILE;
+                        }
+                        for (uint32_t group = 0u; group < 4u; ++group) {
+                            vst1q_f32(dst0 + (size_t)spatial + group * 4u, sum0[group]);
+                            vst1q_f32(dst1 + (size_t)spatial + group * 4u, sum1[group]);
+                            vst1q_f32(dst2 + (size_t)spatial + group * 4u, sum2[group]);
+                            vst1q_f32(dst3 + (size_t)spatial + group * 4u, sum3[group]);
+                        }
+                    }
+                }
+                /* Process the remaining eight-wide and smaller blocks. */
                 for (; spatial + 8u <= channel_plane; spatial += 8u) {
                     float32x4_t a0 = b0, a1 = b1, a2 = b2, a3 = b3;
                     float32x4_t a4 = b0, a5 = b1, a6 = b2, a7 = b3;

@@ -566,6 +566,9 @@ lw_status lw_scalar_conv2d_f32(const float* input, const float* weights, const f
             lw_avx2_depthwise_conv3x3_unit_pad1_f32(input, weights, bias, output, input_dimensions);
         } else if (lw_simd_level_is_sse2(simd_level)) {
             lw_sse2_depthwise_conv3x3_unit_pad1_f32(input, weights, bias, output, input_dimensions);
+        } else if (lw_simd_level_is_neon(simd_level)) {
+            lw_neon_depthwise_conv3x3_pad1_f32(input, weights, bias, output,
+                                               input_dimensions, output_dimensions, 1u);
         } else {
             lw_scalar_depthwise_conv3x3_unit_pad1_f32(input, weights, bias, output,
                                                       input_dimensions);
@@ -583,6 +586,9 @@ lw_status lw_scalar_conv2d_f32(const float* input, const float* weights, const f
         } else if (lw_simd_level_is_sse2(simd_level)) {
             lw_sse2_depthwise_conv3x3_stride2x1_pad1_f32(
                 input, weights, bias, output, input_dimensions, output_dimensions);
+        } else if (lw_simd_level_is_neon(simd_level)) {
+            lw_neon_depthwise_conv3x3_pad1_f32(input, weights, bias, output,
+                                               input_dimensions, output_dimensions, 2u);
         } else {
             lw_scalar_depthwise_conv3x3_stride2x1_pad1_f32(
                 input, weights, bias, output, input_dimensions, output_dimensions);

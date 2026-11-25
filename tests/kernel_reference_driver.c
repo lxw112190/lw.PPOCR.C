@@ -235,6 +235,28 @@ int main(void) {
     }
     print_values("erf", activation_output, 9u);
 
+    {
+        float reference[9];
+        float arena[11];
+        for (index = 0u; index < 9u; ++index) {
+            const float value = activation_input[index];
+            const float gaussian = erff(value / 1.4142135381698608f);
+            reference[index] = (value * (1.0f + gaussian)) * 0.5f;
+        }
+        memcpy(arena, activation_input, sizeof(reference));
+        lw_scalar_gelu_exact_f32(arena, arena + 2, 9u);
+        if (memcmp(reference, arena + 2, sizeof(reference)) != 0) {
+            fprintf(stderr, "GELU differs when output overlaps the end of its input\n");
+            return 1;
+        }
+        memcpy(arena + 2, activation_input, sizeof(reference));
+        lw_scalar_gelu_exact_f32(arena + 2, arena, 9u);
+        if (memcmp(reference, arena, sizeof(reference)) != 0) {
+            fprintf(stderr, "GELU differs when output overlaps the start of its input\n");
+            return 1;
+        }
+    }
+
     if (lw_simd_level_is_avx2(simd_level)) {
         const float special_input[8] = {0.0f, -0.0f, INFINITY, -INFINITY, NAN, 0.5f, -0.5f, 4.0f};
         float special_output[8];

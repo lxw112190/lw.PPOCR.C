@@ -90,6 +90,77 @@ void lw_neon_conv3x3_unit_pad1_f32(const float* input, const float* weights, con
 #endif
 }
 
+void lw_neon_depthwise_conv3x3_pad1_f32(
+    const float* input, const float* weights, const float* bias, float* output,
+    const int32_t input_dimensions[4], const int32_t output_dimensions[4], uint32_t stride_y) {
+#if LW_COMPILES_NEON_CONV3X3
+    const uint32_t channels = (uint32_t)input_dimensions[1];
+    const uint32_t height = (uint32_t)input_dimensions[2];
+    const uint32_t width = (uint32_t)input_dimensions[3];
+    const uint32_t output_height = (uint32_t)output_dimensions[2];
+    if (width >= 6u) {
+        const size_t input_plane = (size_t)height * width;
+        const size_t output_plane = (size_t)output_height * width;
+        for (uint32_t batch = 0u; batch < (uint32_t)input_dimensions[0]; ++batch) {
+            for (uint32_t channel = 0u; channel < channels; ++channel) {
+                const size_t plane = (size_t)batch * channels + channel;
+                const float* src = input + plane * input_plane;
+                const float* kernel = weights + (size_t)channel * 9u;
+                float* dst = output + plane * output_plane;
+                const float initial = bias == NULL ? 0.0f : bias[channel];
+                const float32x4_t initial_vector = vdupq_n_f32(initial);
+                for (uint32_t y = 0u; y < output_height; ++y) {
+                    const uint32_t center = y * stride_y;
+                    const uint32_t first_tap = center == 0u ? 1u : 0u;
+                    const uint32_t end_tap = center + 1u < height ? 3u : 2u;
+                    float* out = dst + (size_t)y * width;
+                    uint32_t x = 1u;
+                    float left = initial;
+                    for (uint32_t ky = first_tap; ky < end_tap; ++ky) {
+                        const float* row = src + (size_t)(center + ky - 1u) * width;
+                        const float* tap = kernel + ky * 3u;
+                        left += row[0] * tap[1];
+                        left += row[1] * tap[2];
+                    }
+                    out[0] = left;
+                    for (; x + 4u < width; x += 4u) {
+                        float32x4_t sum = initial_vector;
+                        for (uint32_t ky = first_tap; ky < end_tap; ++ky) {
+                            const float* row = src + (size_t)(center + ky - 1u) * width + x - 1u;
+                            const float* tap = kernel + ky * 3u;
+                            sum = vaddq_f32(sum, vmulq_n_f32(vld1q_f32(row), tap[0]));
+                            sum = vaddq_f32(sum, vmulq_n_f32(vld1q_f32(row + 1u), tap[1]));
+                            sum = vaddq_f32(sum, vmulq_n_f32(vld1q_f32(row + 2u), tap[2]));
+                        }
+                        vst1q_f32(out + x, sum);
+                    }
+                    for (; x < width; ++x) {
+                        float sum = initial;
+                        for (uint32_t ky = first_tap; ky < end_tap; ++ky) {
+                            const float* row = src + (size_t)(center + ky - 1u) * width;
+                            const float* tap = kernel + ky * 3u;
+                            sum += row[x - 1u] * tap[0];
+                            sum += row[x] * tap[1];
+                            if (x + 1u < width) {
+                                sum += row[x + 1u] * tap[2];
+                            }
+                        }
+                        out[x] = sum;
+                    }
+                }
+            }
+        }
+        return;
+    }
+#endif
+    if (stride_y == 1u) {
+        lw_scalar_depthwise_conv3x3_unit_pad1_f32(input, weights, bias, output, input_dimensions);
+    } else {
+        lw_scalar_depthwise_conv3x3_stride2x1_pad1_f32(
+            input, weights, bias, output, input_dimensions, output_dimensions);
+    }
+}
+
 #if LW_COMPILES_NEON_CONV3X3
 static float stride2_edge_pixel(const float* input, const float* weights, float sum,
                                 size_t input_plane, uint32_t channels,
@@ -146,22 +217,35 @@ void lw_neon_conv3x3_stride2_pad1_f32(const float* input, const float* weights, 
         const float* batch_input = input + (size_t)batch * channels * input_plane;
         float* batch_output = output + (size_t)batch * output_channels * output_plane;
         uint32_t oc;
-        for (oc = 0u; oc < output_channels; ++oc) {
+        /* Adjacent output channels use the same three input vectors per tap row.
+         * Keep separate accumulators so each channel retains its tap order. */
+        for (oc = 0u; oc < output_channels; oc += 2u) {
             const float* kernel = weights + (size_t)oc * channels * 9u;
             const float initial = bias == NULL ? 0.0f : bias[oc];
+            const int paired = oc + 1u < output_channels;
+            const float* next_kernel = paired ? kernel + (size_t)channels * 9u : kernel;
+            const float next_initial = paired && bias != NULL ? bias[oc + 1u] : initial;
             uint32_t y;
             for (y = 0u; y < output_height; ++y) {
                 float* dst = batch_output + (size_t)oc * output_plane + (size_t)y * output_width;
+                float* next_dst = paired ? dst + output_plane : NULL;
                 const uint32_t ky_begin = y == 0u ? 1u : 0u;
                 const uint32_t ky_end = (uint64_t)y * 2u + 1u >= input_height ? 2u : 3u;
                 uint32_t x = 1u;
                 dst[0] = stride2_edge_pixel(batch_input, kernel, initial, input_plane, channels,
                                             input_width, input_height, y, 0u);
+                if (paired) {
+                    next_dst[0] = stride2_edge_pixel(batch_input, next_kernel, next_initial,
+                                                    input_plane, channels, input_width,
+                                                    input_height, y, 0u);
+                }
                 for (; x + 4u <= interior_end; x += 4u) {
                     const size_t left = (size_t)x * 2u - 1u;
                     const float* src = batch_input;
                     const float* w = kernel;
+                    const float* next_w = next_kernel;
                     float32x4_t sum = vdupq_n_f32(initial);
+                    float32x4_t next_sum = vdupq_n_f32(next_initial);
                     uint32_t c;
                     for (c = 0u; c < channels; ++c) {
                         uint32_t ky;
@@ -177,15 +261,30 @@ void lw_neon_conv3x3_stride2_pad1_f32(const float* input, const float* weights, 
                             sum = vaddq_f32(sum, vmulq_n_f32(pair.val[0], tap[0]));
                             sum = vaddq_f32(sum, vmulq_n_f32(pair.val[1], tap[1]));
                             sum = vaddq_f32(sum, vmulq_n_f32(right, tap[2]));
+                            if (paired) {
+                                const float* next_tap = next_w + ky * 3u;
+                                next_sum = vaddq_f32(next_sum, vmulq_n_f32(pair.val[0], next_tap[0]));
+                                next_sum = vaddq_f32(next_sum, vmulq_n_f32(pair.val[1], next_tap[1]));
+                                next_sum = vaddq_f32(next_sum, vmulq_n_f32(right, next_tap[2]));
+                            }
                         }
                         src += input_plane;
                         w += 9u;
+                        next_w += 9u;
                     }
                     vst1q_f32(dst + x, sum);
+                    if (paired) {
+                        vst1q_f32(next_dst + x, next_sum);
+                    }
                 }
                 for (; x < output_width; ++x) {
                     dst[x] = stride2_edge_pixel(batch_input, kernel, initial, input_plane, channels,
                                                 input_width, input_height, y, x);
+                    if (paired) {
+                        next_dst[x] = stride2_edge_pixel(batch_input, next_kernel, next_initial,
+                                                        input_plane, channels, input_width,
+                                                        input_height, y, x);
+                    }
                 }
             }
         }

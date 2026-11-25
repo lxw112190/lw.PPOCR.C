@@ -332,6 +332,38 @@ int main(void) {
         print_values("batched_matmul", batched_matmul_output, 32u);
     }
 
+    if (lw_simd_level_is_neon(simd_level)) {
+        enum { BATCHES = 2, ROWS = 3, INNER = 35, COLUMNS = 37 };
+        float input[BATCHES * ROWS * INNER];
+        float weights[INNER * COLUMNS];
+        float packed[INNER * 48];
+        float bias[COLUMNS];
+        float expected[BATCHES * ROWS * COLUMNS];
+        float actual[BATCHES * ROWS * COLUMNS];
+        for (index = 0u; index < BATCHES * ROWS * INNER; ++index) {
+            input[index] = (float)((int32_t)((index * 11u) % 29u) - 14) / 13.0f;
+        }
+        for (index = 0u; index < INNER * COLUMNS; ++index) {
+            weights[index] = (float)((int32_t)((index * 17u) % 37u) - 18) / 19.0f;
+        }
+        for (index = 0u; index < COLUMNS; ++index) {
+            bias[index] = (float)((int32_t)index - 18) / 11.0f;
+        }
+        lw_pack_matmul_weights_f32(weights, INNER, COLUMNS, packed);
+        if (lw_scalar_matmul_shared_f32(input, weights, expected, BATCHES, ROWS, INNER,
+                                       COLUMNS) != LW_STATUS_OK) {
+            return 1;
+        }
+        for (index = 0u; index < BATCHES * ROWS * COLUMNS; ++index) {
+            expected[index] += bias[index % COLUMNS];
+        }
+        lw_neon_packed_matmul_shared_f32(input, packed, bias, actual, BATCHES, ROWS, INNER, COLUMNS);
+        if (memcmp(expected, actual, sizeof(expected)) != 0) {
+            fprintf(stderr, "NEON packed MatMul with bias differs from canonical output\n");
+            return 1;
+        }
+    }
+
     for (index = 0u; index < 256u; ++index) {
         packed_matmul_input[index] = (float)((int32_t)((index * 11u) % 29u) - 14) / 13.0f;
     }

@@ -63,6 +63,9 @@ void lw_wasm128_packed_matmul_shared_f32(const float* input,
 void lw_sse2_matmul_shared_f32(const float* input, const float* weights, float* output,
                                uint32_t batch_count, uint32_t rows, uint32_t inner_dimension,
                                uint32_t columns);
+void lw_neon_packed_matmul_shared_f32(const float* input, const float* packed_weights,
+                                      const float* bias, float* output, uint32_t batch_count,
+                                      uint32_t rows, uint32_t inner_dimension, uint32_t columns);
 void lw_avx2_matmul_shared_f32(const float* input, const float* weights, float* output,
                                uint32_t batch_count, uint32_t rows, uint32_t inner_dimension,
                                uint32_t columns);
@@ -169,6 +172,9 @@ void lw_avx2_conv1x5_unit_pad2_f32(const float* input, const float* weights, con
 void lw_neon_conv3x3_unit_pad1_f32(const float* input, const float* weights, const float* bias,
                                    float* output, const int32_t input_dimensions[4],
                                    const int32_t output_dimensions[4]);
+void lw_neon_depthwise_conv3x3_pad1_f32(
+    const float* input, const float* weights, const float* bias, float* output,
+    const int32_t input_dimensions[4], const int32_t output_dimensions[4], uint32_t stride_y);
 void lw_sse2_conv2x2_unit_pad_end1_f32(const float* input, const float* weights, const float* bias,
                                        float* output, const int32_t input_dimensions[4],
                                        const int32_t output_dimensions[4]);

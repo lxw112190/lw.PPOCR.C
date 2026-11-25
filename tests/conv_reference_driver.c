@@ -1101,6 +1101,25 @@ int main(void) {
             fprintf(stderr, "NEON packed pointwise Conv differs from canonical output\n");
             return 1;
         }
+        {
+            enum { BATCHES = 2, INPUT_CHANNELS = 17, OUTPUT_CHANNELS = 7, PLANE = 21 };
+            const int32_t input_dims[4] = {BATCHES, INPUT_CHANNELS, 3, 7};
+            const int32_t output_dims[4] = {BATCHES, OUTPUT_CHANNELS, 3, 7};
+            float input[BATCHES * INPUT_CHANNELS * PLANE];
+            float weights[INPUT_CHANNELS * OUTPUT_CHANNELS];
+            float packed[INPUT_CHANNELS * 8];
+            float expected[BATCHES * OUTPUT_CHANNELS * PLANE];
+            float actual[BATCHES * OUTPUT_CHANNELS * PLANE];
+            fill_values(input, BATCHES * INPUT_CHANNELS * PLANE, 13u, 43u, 21, 11.0f);
+            fill_values(weights, INPUT_CHANNELS * OUTPUT_CHANNELS, 17u, 37u, 18, 9.0f);
+            lw_pack_conv1x1_weights_f32(weights, INPUT_CHANNELS, OUTPUT_CHANNELS, packed);
+            lw_scalar_packed_conv1x1_f32(input, packed, NULL, expected, input_dims, output_dims);
+            lw_neon_packed_conv1x1_f32(input, packed, NULL, actual, input_dims, output_dims);
+            if (memcmp(expected, actual, sizeof(expected)) != 0) {
+                fprintf(stderr, "NEON 16-pixel pointwise Conv differs from the scalar reference\n");
+                return 1;
+            }
+        }
     }
     if (lw_simd_level_is_lsx(simd_level)) {
         lw_lsx_packed_conv1x1_f32(packed_pointwise_input, packed_pointwise_packed_weights,

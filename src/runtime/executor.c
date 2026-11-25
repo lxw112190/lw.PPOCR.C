@@ -744,19 +744,25 @@ static lw_status dispatch_node(lw_session* session, const uint8_t* node, uint32_
             return LW_STATUS_OUT_OF_BOUNDS;
         }
         {
-            if (lw_simd_level_is_avx2(simd_level) && prepared_constant != NULL &&
+            if ((lw_simd_level_is_avx2(simd_level) || lw_simd_level_is_neon(simd_level)) &&
+                prepared_constant != NULL &&
                 prepared_constant->kind == LW_PREPARED_CONSTANT_MATMUL_PACKED16) {
+                const float* packed_weights =
+                    (const float*)(const void*)(session->packed_weights +
+                                                (size_t)prepared_constant->packed_weight_offset);
+                const uint32_t rows = (uint32_t)input_tensors[0]->dimensions[rank - 2u];
+                const uint32_t inner = (uint32_t)input_tensors[0]->dimensions[rank - 1u];
+                const uint32_t columns = (uint32_t)input_tensors[1]->dimensions[1];
                 if (profile != NULL && profile->packed_matmul_invocations != UINT64_MAX) {
                     ++profile->packed_matmul_invocations;
                 }
-            const float* packed_weights =
-                (const float*)(const void*)(session->packed_weights +
-                                            (size_t)prepared_constant->packed_weight_offset);
-                lw_avx2_packed_matmul_shared_f32(inputs[0], packed_weights, output,
-                                                 (uint32_t)batch_count,
-                                                 (uint32_t)input_tensors[0]->dimensions[rank - 2u],
-                                                 (uint32_t)input_tensors[0]->dimensions[rank - 1u],
-                                                 (uint32_t)input_tensors[1]->dimensions[1]);
+                if (lw_simd_level_is_neon(simd_level)) {
+                    lw_neon_packed_matmul_shared_f32(inputs[0], packed_weights, NULL, output,
+                                                     (uint32_t)batch_count, rows, inner, columns);
+                } else {
+                    lw_avx2_packed_matmul_shared_f32(inputs[0], packed_weights, output,
+                                                     (uint32_t)batch_count, rows, inner, columns);
+                }
                 return LW_STATUS_OK;
             }
         }
@@ -903,7 +909,7 @@ lw_status lw_executor_dispatch_node_f32(lw_session* session, uint32_t node_index
     return dispatch_node(session, node, node_index, graph_input_index, graph_input,
                          session->cpu.simd, profile);
 }
-static int match_avx2_gelu(lw_session* session, uint32_t node_index, uint32_t graph_input_index,
+static int match_gelu(lw_session* session, uint32_t node_index, uint32_t graph_input_index,
                            const float* graph_input, const float** gelu_input, float** gelu_output,
                            uint64_t* element_count) {
     lw_fused_gelu_match match;
@@ -911,7 +917,8 @@ static int match_avx2_gelu(lw_session* session, uint32_t node_index, uint32_t gr
     const lw_runtime_tensor* source;
     const lw_runtime_tensor* output;
 #if defined(LW_EXPERIMENTAL_FUSION_MEMORY)
-    if (!lw_execution_plan_is_fused_gelu_start(session, node_index)) {
+    if (lw_simd_level_is_avx2(session->cpu.simd) &&
+        !lw_execution_plan_is_fused_gelu_start(session, node_index)) {
         return 0;
     }
 #endif
@@ -1102,8 +1109,8 @@ lw_status lw_executor_execute_best_node_f32(lw_session* session, uint32_t node_i
         const float* gelu_input;
         float* gelu_output;
         uint64_t element_count;
-        if (match_avx2_gelu(session, node_index, graph_input_index, graph_input,
-                            &gelu_input, &gelu_output, &element_count)) {
+        if (match_gelu(session, node_index, graph_input_index, graph_input,
+                       &gelu_input, &gelu_output, &element_count)) {
             lw_avx2_gelu_f32(gelu_input, gelu_output, element_count);
             if (consumed_nodes != NULL) {
                 *consumed_nodes = 5u;
@@ -1160,17 +1167,22 @@ static lw_status execute_session_nodes_f32(lw_session* session, const float* inp
             model->bytes + (size_t)model->node_offset + (size_t)node_index * LWM_V0_NODE_SIZE;
         uint32_t operation = (uint32_t)lwm_read_u16(node);
         uint64_t started = 0u;
-        if (lw_simd_level_is_avx2(simd_level) && operation == LW_OP_DIV) {
+        if (operation == LW_OP_DIV && node_limit - node_index >= 5u &&
+            (lw_simd_level_is_avx2(simd_level) || lw_simd_level_is_neon(simd_level))) {
             const float* gelu_input;
             float* gelu_output;
             uint64_t gelu_element_count;
-            if (match_avx2_gelu(session, node_index, graph_input_index, input, &gelu_input,
-                                &gelu_output, &gelu_element_count)) {
+            if (match_gelu(session, node_index, graph_input_index, input, &gelu_input,
+                           &gelu_output, &gelu_element_count)) {
                 uint64_t elapsed = 0u;
                 if (profile != NULL) {
                     started = profile->clock(profile->clock_context);
                 }
-                lw_avx2_gelu_f32(gelu_input, gelu_output, gelu_element_count);
+                if (lw_simd_level_is_avx2(simd_level)) {
+                    lw_avx2_gelu_f32(gelu_input, gelu_output, gelu_element_count);
+                } else {
+                    lw_scalar_gelu_exact_f32(gelu_input, gelu_output, gelu_element_count);
+                }
                 if (profile != NULL) {
                     uint64_t finished = profile->clock(profile->clock_context);
                     if (finished >= started) {
@@ -1414,7 +1426,8 @@ static int match_packed_ctc_projection(lw_session* session, const float* graph_i
     const lw_prepared_constant* prepared;
     uint32_t graph_input_index;
     if (projection == NULL || model->info.node_count < 3u ||
-        !lw_simd_level_is_avx2(session->cpu.simd) || session->prepared_constants == NULL ||
+        (!lw_simd_level_is_avx2(session->cpu.simd) && !lw_simd_level_is_neon(session->cpu.simd)) ||
+        session->prepared_constants == NULL ||
         session->packed_weights == NULL) {
         return 0;
     }
@@ -1614,6 +1627,7 @@ lw_status lw_execute_session_f32_ctc_greedy(
     lw_packed_ctc_projection projection;
     const float* logits;
     int fused_projection;
+    int neon_projection;
     int tiled_projection = 0;
     int softmax_done = 0;
     uint64_t started = 0u;
@@ -1639,6 +1653,7 @@ lw_status lw_execute_session_f32_ctc_greedy(
     softmax_node_index = session->model->info.node_count - 1u;
     fused_projection = match_packed_ctc_projection(session, input, logits_index, time_steps,
                                                    class_count, profile, &projection);
+    neon_projection = fused_projection && lw_simd_level_is_neon(session->cpu.simd);
     if (profile != NULL) {
         if (profile->ctc_greedy_invocations != UINT64_MAX) {
             ++profile->ctc_greedy_invocations;
@@ -1663,6 +1678,14 @@ lw_status lw_execute_session_f32_ctc_greedy(
     if (fused_projection) {
         uint64_t projection_started = profile == NULL ? 0u : profile->clock(profile->clock_context);
         uint64_t projection_elapsed = 0u;
+        if (neon_projection) {
+            /* Bias is applied as the packed GEMM stores each tile. The
+             * greedy decoder consumes logits directly from that same buffer. */
+            lw_neon_packed_matmul_shared_f32(
+                projection.activation, projection.packed_weights, projection.bias,
+                projection.logits, 1u, projection.rows, projection.inner_dimension,
+                projection.columns);
+        } else
 #if defined(LW_EXPERIMENTAL_CTC_TILED)
         if (session->ctc_logits_scratch != NULL && session->ctc_logits_scratch_rows != 0u) {
             uint64_t tiled_softmax_elapsed = 0u;
@@ -1724,7 +1747,7 @@ lw_status lw_execute_session_f32_ctc_greedy(
         started = profile->clock(profile->clock_context);
     }
     if (!softmax_done) {
-        status = fused_projection
+        status = fused_projection && !neon_projection
                  ? lw_ctc_emitted_softmax_contiguous_f32(
                        logits, best_indices, best_probabilities, time_steps, class_count)
                  : lw_ctc_greedy_softmax_contiguous_f32(

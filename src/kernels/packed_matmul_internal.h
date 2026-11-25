@@ -3,7 +3,7 @@
 
 /*
  * Private packed-weight contract for wide shared-weight MatMul. LWM keeps B
- * in canonical [K][N] order; eligible x64 AVX2 sessions convert it once to
+ * in canonical [K][N] order; eligible SIMD sessions convert it once to
  * [ceil(N/16)][K][16] and reuse the packed copy for every graph execution.
  */
 

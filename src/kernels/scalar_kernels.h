@@ -31,6 +31,7 @@ lw_status lw_scalar_binary_f32(lw_scalar_binary_op operation, const float* left,
 
 lw_status lw_scalar_relu_f32(const float* input, float* output, uint64_t element_count);
 lw_status lw_scalar_erf_f32(const float* input, float* output, uint64_t element_count);
+void lw_scalar_gelu_exact_f32(const float* input, float* output, uint64_t element_count);
 lw_status lw_scalar_hard_sigmoid_f32(const float* input, float* output, uint64_t element_count,
                                      float alpha, float beta);
 lw_status lw_scalar_sigmoid_f32(const float* input, float* output, uint64_t element_count);

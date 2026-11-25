@@ -157,7 +157,8 @@ static int prepared_pointwise_node(const lw_session* session, lw_simd_level simd
 static int prepared_matmul_node(const lw_session* session, lw_simd_level simd_level,
                                 uint32_t node_index, uint32_t* weight_tensor_index,
                                 uint64_t* packed_weight_count) {
-#if defined(_M_X64) || defined(__x86_64__)
+#if defined(_M_X64) || defined(__x86_64__) || \
+    (defined(__aarch64__) && (defined(__GNUC__) || defined(__clang__)) && !defined(_MSC_VER))
     const lw_model* model = session->model;
     const uint8_t* node =
         model->bytes + (size_t)model->node_offset + (size_t)node_index * LWM_V0_NODE_SIZE;
@@ -170,7 +171,8 @@ static int prepared_matmul_node(const lw_session* session, lw_simd_level simd_le
     uint32_t rows;
     uint32_t inner_dimension;
     uint32_t columns;
-    if (!lw_simd_level_is_avx2(simd_level) || lwm_read_u16(node) != LW_OP_MATMUL ||
+    if ((!lw_simd_level_is_avx2(simd_level) && !lw_simd_level_is_neon(simd_level)) ||
+        lwm_read_u16(node) != LW_OP_MATMUL ||
         lwm_read_u16(node + 2u) != 2u) {
         return 0;
     }
