@@ -25,7 +25,7 @@ class VersionConsistencyTest(unittest.TestCase):
 
     def test_product_metadata_uses_the_cmake_version(self) -> None:
         version = self.project_version()
-        self.assertEqual(version, "1.2.1")
+        self.assertEqual(version, "1.2.2")
 
         assembly = (
             ROOT / "examples" / "csharp-winforms" / "Properties" / "AssemblyInfo.cs"
@@ -38,7 +38,7 @@ class VersionConsistencyTest(unittest.TestCase):
             "android/demo-java/build.gradle.kts",
         ):
             gradle = (ROOT / relative).read_text(encoding="utf-8")
-            self.assertIn("versionCode = 5", gradle)
+            self.assertIn("versionCode = 6", gradle)
             self.assertIn(f'versionName = "{version}-preview.1"', gradle)
 
         sbom = json.loads((ROOT / "sbom.cdx.json").read_text(encoding="utf-8"))
@@ -232,8 +232,8 @@ class VersionConsistencyTest(unittest.TestCase):
             ROOT / "examples" / "java-jni" / "README.zh-CN.md"
         ).read_text(encoding="utf-8")
 
-        self.assertIn(f"## Preparing stable release: v{version}", readme)
-        self.assertIn(f"## 准备发布稳定版：v{version}", readme_zh)
+        self.assertIn(f"## v{version}", readme)
+        self.assertIn(f"## v{version}", readme_zh)
         for token in ("Tiny", "Small", "Medium", "android-arm64.aar"):
             self.assertIn(token, readme)
         for token in ("Tiny", "Small", "Medium", "android-arm64.aar"):

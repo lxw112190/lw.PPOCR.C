@@ -14,12 +14,12 @@ protobuf 或 ONNX Runtime。加载时转换为既有内部 IR，复用原来的�
 LWM 加载保持兼容。详见[直接加载 ONNX](docs/onnx-runtime.md)，不要将这项新能力
 理解为旧版已发布二进制也能加载 ONNX。
 
-## 准备发布稳定版：v1.2.1
+## v1.2.2
 
-当前已发布的最新稳定版是 `v1.2.0`。本源码准备发布 `v1.2.1`：C# 可配置原图像素上限，
-以及内置三模型、解压可运行的 WinForms 便携包；不改变推理计算或扩大冻结的支持范围。详见
-[v1.2.1 发布说明](docs/release-notes-v1.2.1.md)和
-[发布检查清单](docs/release-readiness-v1.2.1.md)。
+本补丁版优化 ARM64 原生完整 OCR。NEON 的 1×1、常规 2×2 和 stride-2 3×3 卷积
+按空间分块，深度卷积也得到加速。REC 按实际参与的行 worker 分配线程预算。
+详见 [v1.2.2 发布说明](docs/release-notes-v1.2.2.md)和
+[发布检查清单](docs/release-readiness-v1.2.2.md)。
 
 tag 发行的 Tiny/Small 现代 HTML 和 SDK 使用 compiled SIMD128、Pointwise 2×16
 和 REC lazy fallback；Medium 浏览器与 Node 包保持 canonical，Legacy 保持 scalar。
@@ -48,7 +48,7 @@ Pack 与自包含浏览器文件提供。LWM v0.1 仍是内部 Preview 格式。
 从 `0.1.x` 升级时应整体替换同一版本的配套文件，并重新编译 Native/Managed 调用方，
 因为 LWM 仍是内部 Preview 格式。详见[开发包说明](docs/package.md)和
 [模型选型矩阵](docs/supported-models.md)。正式版门槛见
-[v1.2.1 发布准备清单](docs/release-readiness-v1.2.1.md)。
+[v1.2.2 发布准备清单](docs/release-readiness-v1.2.2.md)。
 已批准的 1.0 稳定范围记录在
 [`ci/stable-release-scope.json`](ci/stable-release-scope.json)；Small、Medium、
 Android、Java/JNI、ARM64 和 LoongArch64 仍明确标记为 Preview。
@@ -109,18 +109,35 @@ PP-OCR ONNX 模型
 平台支持分为源码兼容、CI 验证和实体机验证三个层次。不要仅凭某个平台能够编译，便认为
 所有发行版和硬件都已经得到验证。具体说明请查看
 [`docs/package.md`](docs/package.md) 和 [`docs/architecture.md`](docs/architecture.md)。
-ARM64 已为 packed pointwise Conv、regular 3x3 Conv 和 2x2 ConvTranspose
-接入 NEON。LoongArch64 通过 Linux HWCAP 检测 LSX/LASX，有 LSX 时使用 LSX packed
+ARM64 的 NEON 路径覆盖 packed pointwise、常规 2×2 和 stride-2 3×3 卷积、
+3×3/5×5 深度卷积以及 2×2 转置卷积。LoongArch64 通过 Linux HWCAP 检测 LSX/LASX，
+有 LSX 时使用 LSX packed
 pointwise Conv（LASX CPU 本轮也复用 LSX 内核），否则回退标量。两者都不能直接套用
 amd64 的 SSE2/AVX2 性能数据，LoongArch 性能仍需客户实体机验证。
 仓库还提供手动的
-[`ARM64 OCR 性能基线`](docs/arm64-performance.md)，用于在新增 NEON 算子前采集原生
-算子耗时、线程扩展和 RSS；GitHub ARM64 runner 数据与 RK3576 实体机数据分开记录。
+[ARM64 OCR 性能工作流](docs/arm64-performance.md)，用于采集原生 OCR 分阶段耗时、
+算子耗时、线程扩展和 RSS。
 另外提供手动的
 [`Windows x64 OCR 性能分析`](docs/engine-comparison.md)，在 AVX2 runner 上采集
 DET/CLS/REC 分阶段、算子、REC 宽度和 RSS，作为定向 x64 优化前的基线。
 
 ## 性能快照与口径
+
+### BM1684 ARM64 真机
+
+在同一台 8 核 Cortex-A53 盒子上配对比较源码构建 `88c2291` 与 `c097a5b`。
+启用 CLS，REC 自适应宽度上限为 960，计时从 BGR 像素输入到 OCR 结果返回。
+输入来自仓库自带的 500×500 样例及其变体。Tiny 和 Small 各做两轮配对，Medium 做一轮。
+
+| 模型 | 行 workers | 输入数 | 完整 OCR 耗时 | 峰值 RSS |
+|---|---:|---:|---:|---:|
+| Tiny | 8（默认） | 4 | 4.15 → 3.58 秒 | 158.0 → 163.1 MiB |
+| Small | 8（默认） | 2 | 6.71 → 5.45 秒 | 302.4 → 306.2 MiB |
+| Medium | 4 | 1 | 26.77 → 23.19 秒 | 476.0 → 477.3 MiB |
+
+每组的文本、坐标和分数校验值均一致。[完整数据与测试口径](docs/release-notes-v1.2.2.md#bm1684-full-ocr)
+
+### Windows x64
 
 本机 Windows x64 Release 构建（已包含 `ac59a3b` 引入的 compiled REC 常量共享）
 在项目自带的 500×500 测试图上，

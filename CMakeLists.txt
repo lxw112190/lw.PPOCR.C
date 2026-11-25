@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.20)
 
-project(lw.PPOCR.C VERSION 1.2.1 LANGUAGES C)
+project(lw.PPOCR.C VERSION 1.2.2 LANGUAGES C)
 
 option(LW_BUILD_HTTP_DEMO
     "Build the cross-platform cpp-httplib HTTP OCR Demo" ON)

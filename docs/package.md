@@ -239,8 +239,9 @@ ldd ./bin/lw-ocr-ppm
   ./models/rec.lwm ./models/ppocr_keys.txt ./models/sample.ppm
 ```
 
-The ARM64 package selects NEON and currently accelerates packed pointwise Conv,
-regular 3x3 Conv, and 2x2 ConvTranspose. The LoongArch64 package detects LSX and
+The ARM64 package selects NEON for packed pointwise, regular 2×2 and stride-2
+3×3 convolutions, depthwise 3×3/5×5 convolutions, and 2×2 ConvTranspose.
+The LoongArch64 package detects LSX and
 LASX through Linux HWCAP; LSX-capable CPUs use the LSX packed pointwise kernel,
 LASX CPUs currently reuse that LSX implementation, and older CPUs remain on
 the scalar fallback. The workflow verifies backend selection and direct Conv
@@ -256,21 +257,21 @@ v1.2.0 modern Tiny/Small HTML and SDK use compiled SIMD128, Pointwise 2×16
 and lazy REC fallback. Medium browser and Node remain canonical; Legacy stays
 scalar. Global compiled REC remains OFF. CI sets `release_web_profile: true`,
 tests the final files, then stages them flat with SHA-256 identity checks.
-Audit reports stay CI-only. v1.2.1 preserves this profile and adds the
-`*-winforms-windows-x64-net48.zip` portable Demo with three embedded model
-directories. It requires Windows 10/11 x64 and .NET Framework 4.8; the original
-.NET 3.5 source project is retained. Follow [the v1.2.1 checklist](release-readiness-v1.2.1.md).
+The tagged Release includes the `*-winforms-windows-x64-net48.zip` portable
+Demo with three embedded model directories. It requires Windows 10/11 x64
+and .NET Framework 4.8. Build audit reports are retained in CI.
+[v1.2.2 checklist](release-readiness-v1.2.2.md)
 
 Pushing a tag whose base version matches the CMake project version starts the
 release workflow. Stable and prerelease suffixes are accepted. Before creating
 the stable release, run `python -m unittest tests.test_versioning` and
-`python tools/check_release_readiness.py --mode stable --version 1.2.1`. Then
+`python tools/check_release_readiness.py --mode stable --version 1.2.2`. Then
 create an annotated tag:
 
 ```bash
-git tag -a v1.2.1 -m "lw.PPOCR.C v1.2.1: C# large-image support and portable WinForms Demo"
-git show --no-patch v1.2.1
-git push origin v1.2.1
+git tag -a v1.2.2 -m "lw.PPOCR.C v1.2.2: ARM64 native OCR performance"
+git show --no-patch v1.2.2
+git push origin v1.2.2
 ```
 
 Do not replace or move an existing public tag. If a release must be corrected,

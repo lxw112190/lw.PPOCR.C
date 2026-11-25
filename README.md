@@ -15,13 +15,13 @@ The supported PP-OCRv6 subset is normalized once to the existing internal IR;
 legacy LWM remains compatible. See [direct ONNX loading](docs/onnx-runtime.md).
 This new source capability is not a claim about older released binaries.
 
-## Preparing stable release: v1.2.1
+## v1.2.2
 
-The latest published stable release is `v1.2.0`. This source prepares `v1.2.1`:
-configurable C# source pixel limits and a ready-to-run three-model WinForms
-portable ZIP, without changing runtime arithmetic or the frozen support scope.
-See the [v1.2.1 release notes](docs/release-notes-v1.2.1.md) and
-[release checklist](docs/release-readiness-v1.2.1.md).
+This patch accelerates native ARM64 full OCR with NEON spatial tiling for
+pointwise 1×1, regular 2×2, and stride-2 3×3 convolution, faster depthwise
+convolution, and a shared REC thread budget across active line workers.
+See the [v1.2.2 release notes](docs/release-notes-v1.2.2.md) and
+[release checklist](docs/release-readiness-v1.2.2.md).
 
 Tagged Tiny/Small modern HTML and SDK assets use compiled SIMD128, Pointwise
 2×16 and lazy REC fallback. Medium browser and Node assets remain canonical;
@@ -58,7 +58,7 @@ the complete matching set and rebuild native/managed consumers because LWM
 remains an internal Preview format.
 See the [package guide](docs/package.md) and
 [model selection matrix](docs/supported-models.md). The stable-release gate is
-tracked in the [v1.2.1 readiness checklist](docs/release-readiness-v1.2.1.md).
+tracked in the [v1.2.2 readiness checklist](docs/release-readiness-v1.2.2.md).
 The approved stable scope is recorded in
 [`ci/stable-release-scope.json`](ci/stable-release-scope.json); Small, Medium,
 Android, Java/JNI, ARM64, and LoongArch64 remain explicitly Preview.
@@ -106,19 +106,38 @@ application concern, so the core itself stays dependency-free.
 - Windows 7 x86 compatibility is preserved by design.
 - The LWM v0.1 format is custom and remains an internal Preview format.
 
-ARM64 uses NEON for packed pointwise Conv, regular 3x3 Conv, and 2x2
-ConvTranspose. LoongArch64 detects LSX/LASX through Linux HWCAP, uses the LSX
+ARM64 uses NEON for packed pointwise Conv, packed regular 2×2 and stride-2
+3×3 Conv, depthwise 3×3/5×5 Conv, and 2×2 ConvTranspose. LoongArch64 detects
+LSX/LASX through Linux HWCAP, uses the LSX
 packed pointwise kernel when available (including on LASX CPUs), and otherwise
 falls back to scalar. See the [platform matrix](docs/platform-matrix.md) and
 [development package guide](docs/package.md) before making compatibility or
 performance claims; LoongArch performance still requires physical hardware.
 The manual [ARM64 OCR performance workflow](docs/arm64-performance.md)
-collects native operator and RSS profiles before new NEON kernels are added.
+collects native stage, operator, thread-scaling, and RSS measurements.
 The manual [Native x64 OCR Performance workflow](docs/engine-comparison.md)
 collects Windows AVX2 stage, operator, REC-width, and RSS profiles before
 targeted x64 optimization.
 
 ### Performance snapshot
+
+#### BM1684 ARM64
+
+The table compares source builds `88c2291` and `c097a5b` on one eight-core
+Cortex-A53 device with CLS enabled and adaptive REC capped at 960. Latency
+covers BGR pixels to OCR results. Inputs were derived from the bundled
+500×500 sample. Tiny and Small used two paired rounds, and Medium used one.
+
+| Model | Line workers | Inputs | Full OCR before → after | Peak RSS before → after |
+|---|---:|---:|---:|---:|
+| Tiny | 8 (default) | 4 | 4.15 → 3.58 s | 158.0 → 163.1 MiB |
+| Small | 8 (default) | 2 | 6.71 → 5.45 s | 302.4 → 306.2 MiB |
+| Medium | 4 | 1 | 26.77 → 23.19 s | 476.0 → 477.3 MiB |
+
+Text, box, and score checksums matched in each pair. See the
+[full benchmark and test scope](docs/release-notes-v1.2.2.md#bm1684-full-ocr).
+
+#### Windows x64
 
 A local Windows x64 Release build with compiled REC packed-constant sharing
 (introduced in `ac59a3b`) measured native full OCR on the bundled 500×500 test
