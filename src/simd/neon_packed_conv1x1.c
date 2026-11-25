@@ -6,6 +6,7 @@
 
 #if defined(_M_ARM64) || defined(__aarch64__)
 #  include <arm_neon.h>
+#  include "neon_conv_accumulate_internal.h"
 #  define LW_COMPILES_NEON_PACKED_CONV1X1 1
 #else
 #  define LW_COMPILES_NEON_PACKED_CONV1X1 0
@@ -52,27 +53,38 @@ void lw_neon_packed_conv1x1_tiles_f32(const float* input, const float* packed_we
             const float32x4_t b1 = vdupq_n_f32(bias == NULL ? 0.0f : bias[oc + 1u]);
             const float32x4_t b2 = vdupq_n_f32(bias == NULL ? 0.0f : bias[oc + 2u]);
             const float32x4_t b3 = vdupq_n_f32(bias == NULL ? 0.0f : bias[oc + 3u]);
-            float32x4x4_t sum0 = {{b0, b0, b0, b0}};
-            float32x4x4_t sum1 = {{b1, b1, b1, b1}};
-            float32x4x4_t sum2 = {{b2, b2, b2, b2}};
-            float32x4x4_t sum3 = {{b3, b3, b3, b3}};
+            float32x4_t sum00 = b0, sum01 = b0, sum02 = b0, sum03 = b0;
+            float32x4_t sum10 = b1, sum11 = b1, sum12 = b1, sum13 = b1;
+            float32x4_t sum20 = b2, sum21 = b2, sum22 = b2, sum23 = b2;
+            float32x4_t sum30 = b3, sum31 = b3, sum32 = b3, sum33 = b3;
+            /* Separate accumulators and stores avoid materializing grouped
+             * vectors on the stack during the input-channel loop. */
             for (uint32_t ic = 0u; ic < input_channels; ++ic) {
                 const float32x4x4_t data = vld1q_f32_x4(packed_input[ic]);
                 const float32x4_t w = vld1q_f32(weights);
-                for (uint32_t group = 0u; group < 4u; ++group) {
-                    const float32x4_t v = data.val[group];
-                    sum0.val[group] = vaddq_f32(sum0.val[group], vmulq_laneq_f32(v, w, 0));
-                    sum1.val[group] = vaddq_f32(sum1.val[group], vmulq_laneq_f32(v, w, 1));
-                    sum2.val[group] = vaddq_f32(sum2.val[group], vmulq_laneq_f32(v, w, 2));
-                    sum3.val[group] = vaddq_f32(sum3.val[group], vmulq_laneq_f32(v, w, 3));
-                }
+                LW_NEON_ACCUMULATE4(data.val[0], w, sum00, sum10, sum20, sum30);
+                LW_NEON_ACCUMULATE4(data.val[1], w, sum01, sum11, sum21, sum31);
+                LW_NEON_ACCUMULATE4(data.val[2], w, sum02, sum12, sum22, sum32);
+                LW_NEON_ACCUMULATE4(data.val[3], w, sum03, sum13, sum23, sum33);
                 weights += LW_PACKED_CONV1X1_OUTPUT_TILE;
             }
             float* dst = output + (size_t)oc * plane + spatial;
-            vst1q_f32_x4(dst, sum0);
-            vst1q_f32_x4(dst + plane, sum1);
-            vst1q_f32_x4(dst + 2u * plane, sum2);
-            vst1q_f32_x4(dst + 3u * plane, sum3);
+            vst1q_f32(dst, sum00);
+            vst1q_f32(dst + 4u, sum01);
+            vst1q_f32(dst + 8u, sum02);
+            vst1q_f32(dst + 12u, sum03);
+            vst1q_f32(dst + 1u * plane, sum10);
+            vst1q_f32(dst + 1u * plane + 4u, sum11);
+            vst1q_f32(dst + 1u * plane + 8u, sum12);
+            vst1q_f32(dst + 1u * plane + 12u, sum13);
+            vst1q_f32(dst + 2u * plane, sum20);
+            vst1q_f32(dst + 2u * plane + 4u, sum21);
+            vst1q_f32(dst + 2u * plane + 8u, sum22);
+            vst1q_f32(dst + 2u * plane + 12u, sum23);
+            vst1q_f32(dst + 3u * plane, sum30);
+            vst1q_f32(dst + 3u * plane + 4u, sum31);
+            vst1q_f32(dst + 3u * plane + 8u, sum32);
+            vst1q_f32(dst + 3u * plane + 12u, sum33);
         }
     }
 #else

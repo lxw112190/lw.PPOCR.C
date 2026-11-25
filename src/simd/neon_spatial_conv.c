@@ -7,6 +7,7 @@
 
 #if defined(_M_ARM64) || defined(__aarch64__)
 #  include <arm_neon.h>
+#  include "neon_conv_accumulate_internal.h"
 #  define LW_COMPILES_NEON_SPATIAL_CONV 1
 #else
 #  define LW_COMPILES_NEON_SPATIAL_CONV 0
@@ -76,12 +77,19 @@ static void pack_row(float* tile, const float* source,
     }
 }
 
-static void store_tile(float* dst, float32x4x4_t sum, uint32_t pixels) {
+static void store_tile(float* dst, float32x4_t a, float32x4_t b, float32x4_t c,
+                       float32x4_t d, uint32_t pixels) {
     if (pixels == LW_NEON_SPATIAL_PIXELS) {
-        vst1q_f32_x4(dst, sum);
+        vst1q_f32(dst, a);
+        vst1q_f32(dst + 4u, b);
+        vst1q_f32(dst + 8u, c);
+        vst1q_f32(dst + 12u, d);
     } else {
         float values[LW_NEON_SPATIAL_PIXELS];
-        vst1q_f32_x4(values, sum);
+        vst1q_f32(values, a);
+        vst1q_f32(values + 4u, b);
+        vst1q_f32(values + 8u, c);
+        vst1q_f32(values + 12u, d);
         memcpy(dst, values, (size_t)pixels * sizeof(*dst));
     }
 }
@@ -98,31 +106,28 @@ static void compute_tile(const lw_neon_spatial_conv* conv, const float* tile,
         const float32x4_t b1 = vdupq_n_f32(conv->bias == NULL ? 0.0f : conv->bias[oc + 1u]);
         const float32x4_t b2 = vdupq_n_f32(conv->bias == NULL ? 0.0f : conv->bias[oc + 2u]);
         const float32x4_t b3 = vdupq_n_f32(conv->bias == NULL ? 0.0f : conv->bias[oc + 3u]);
-        float32x4x4_t sum0 = {{b0, b0, b0, b0}};
-        float32x4x4_t sum1 = {{b1, b1, b1, b1}};
-        float32x4x4_t sum2 = {{b2, b2, b2, b2}};
-        float32x4x4_t sum3 = {{b3, b3, b3, b3}};
+        float32x4_t sum00 = b0, sum01 = b0, sum02 = b0, sum03 = b0;
+        float32x4_t sum10 = b1, sum11 = b1, sum12 = b1, sum13 = b1;
+        float32x4_t sum20 = b2, sum21 = b2, sum22 = b2, sum23 = b2;
+        float32x4_t sum30 = b3, sum31 = b3, sum32 = b3, sum33 = b3;
         const float* data = tile;
         for (uint32_t ic = 0u; ic < conv->input_channels; ++ic) {
             const float* weights = coefficients + (size_t)ic * kernel_area * 4u;
             for (uint32_t tap = 0u; tap < taps; ++tap) {
                 const float32x4x4_t values = vld1q_f32_x4(data);
                 const float32x4_t w = vld1q_f32(weights + (size_t)tap * 4u);
-                for (uint32_t vector = 0u; vector < 4u; ++vector) {
-                    const float32x4_t v = values.val[vector];
-                    sum0.val[vector] = vaddq_f32(sum0.val[vector], vmulq_laneq_f32(v, w, 0));
-                    sum1.val[vector] = vaddq_f32(sum1.val[vector], vmulq_laneq_f32(v, w, 1));
-                    sum2.val[vector] = vaddq_f32(sum2.val[vector], vmulq_laneq_f32(v, w, 2));
-                    sum3.val[vector] = vaddq_f32(sum3.val[vector], vmulq_laneq_f32(v, w, 3));
-                }
+                LW_NEON_ACCUMULATE4(values.val[0], w, sum00, sum10, sum20, sum30);
+                LW_NEON_ACCUMULATE4(values.val[1], w, sum01, sum11, sum21, sum31);
+                LW_NEON_ACCUMULATE4(values.val[2], w, sum02, sum12, sum22, sum32);
+                LW_NEON_ACCUMULATE4(values.val[3], w, sum03, sum13, sum23, sum33);
                 data += LW_NEON_SPATIAL_PIXELS;
             }
         }
         float* dst = conv->output + (size_t)oc * conv->output_plane + offset;
-        store_tile(dst, sum0, pixels);
-        store_tile(dst + conv->output_plane, sum1, pixels);
-        store_tile(dst + 2u * conv->output_plane, sum2, pixels);
-        store_tile(dst + 3u * conv->output_plane, sum3, pixels);
+        store_tile(dst, sum00, sum01, sum02, sum03, pixels);
+        store_tile(dst + 1u * conv->output_plane, sum10, sum11, sum12, sum13, pixels);
+        store_tile(dst + 2u * conv->output_plane, sum20, sum21, sum22, sum23, pixels);
+        store_tile(dst + 3u * conv->output_plane, sum30, sum31, sum32, sum33, pixels);
     }
 }
 
