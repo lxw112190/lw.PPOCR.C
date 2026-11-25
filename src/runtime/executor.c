@@ -216,6 +216,15 @@ static void execute_parallel_conv_slice(void* opaque, uint32_t worker_index,
     if (context->spatial_tiles != 0u) {
         const size_t begin = context->spatial_tiles * worker_index / worker_count;
         const size_t end = context->spatial_tiles * (worker_index + 1u) / worker_count;
+        if (context->packed == LW_PREPARED_CONSTANT_NEON_SPATIAL_PACKED4) {
+            lw_neon_spatial_conv_rows_f32(
+                context->input, context->weights, context->bias, context->output,
+                context->input_dimensions, context->output_dimensions,
+                (uint32_t)context->kernel[0], (uint32_t)context->strides[0],
+                (uint32_t)begin, (uint32_t)end);
+            context->statuses[worker_index] = LW_STATUS_OK;
+            return;
+        }
         const size_t plane = (size_t)context->input_dimensions[2] *
                              (size_t)context->input_dimensions[3];
         lw_neon_packed_conv1x1_tiles_f32(
@@ -328,7 +337,8 @@ static lw_status dispatch_parallel_conv(lw_session* session, const float* input,
     context.slice_channels = 1u;
     if (packed == LW_PREPARED_CONSTANT_CONV3X3_STRIDE2_PACKED8) {
         context.slice_channels = LW_PACKED_CONV3X3_STRIDE2_OUTPUT_TILE;
-    } else if (packed == LW_PREPARED_CONSTANT_CONV1X1_PACKED4) {
+    } else if (packed == LW_PREPARED_CONSTANT_CONV1X1_PACKED4 ||
+               packed == LW_PREPARED_CONSTANT_NEON_SPATIAL_PACKED4) {
         context.slice_channels = LW_PACKED_CONV1X1_OUTPUT_TILE;
     }
     if (lw_simd_level_is_neon(session->cpu.simd)) {
@@ -336,6 +346,8 @@ static lw_status dispatch_parallel_conv(lw_session* session, const float* input,
         if (packed == LW_PREPARED_CONSTANT_CONV1X1_PACKED4) {
             context.spatial_tiles =
                 lw_neon_packed_conv1x1_spatial_tiles(input_dimensions, output_dimensions);
+        } else if (packed == LW_PREPARED_CONSTANT_NEON_SPATIAL_PACKED4) {
+            context.spatial_tiles = (size_t)output_dimensions[2];
         }
         if (packed == 0u && groups == 1u && kernel[0] == 3 && kernel[1] == 3 &&
             strides[0] == 2 && strides[1] == 2) {
@@ -551,6 +563,29 @@ static lw_status dispatch_node(lw_session* session, const uint8_t* node, uint32_
         lw_status parallel_status;
         if (input_count != 2u && input_count != 3u) {
             return LW_STATUS_INVALID_SHAPE;
+        }
+        if (prepared_constant != NULL &&
+            prepared_constant->kind == LW_PREPARED_CONSTANT_NEON_SPATIAL_PACKED4) {
+            const float* packed_weights =
+                (const float*)(const void*)(session->packed_weights +
+                                            (size_t)prepared_constant->packed_weight_offset);
+            const float* bias = input_count == 3u ? inputs[2] : NULL;
+            if (profile != NULL && kernel[0] == 3 &&
+                profile->packed_conv3x3_stride2_invocations != UINT64_MAX) {
+                ++profile->packed_conv3x3_stride2_invocations;
+            }
+            parallel_status = dispatch_parallel_conv(
+                session, inputs[0], packed_weights, bias, output, input_tensors[0]->dimensions,
+                input_tensors[1]->dimensions, output_tensor->dimensions, kernel, strides,
+                dilations, pads, groups, LW_PREPARED_CONSTANT_NEON_SPATIAL_PACKED4,
+                NULL, NULL, profile);
+            if (parallel_status != LW_STATUS_OK) {
+                lw_neon_spatial_conv_rows_f32(
+                    inputs[0], packed_weights, bias, output, input_tensors[0]->dimensions,
+                    output_tensor->dimensions, (uint32_t)kernel[0], (uint32_t)strides[0],
+                    0u, (uint32_t)output_tensor->dimensions[2]);
+            }
+            return LW_STATUS_OK;
         }
         {
             if (prepared_constant != NULL &&

@@ -116,6 +116,14 @@ void lw_avx2_packed_conv1x1_f32(const float* input, const float* packed_weights,
 /* Returns zero when the original output-channel kernel should be used. */
 size_t lw_neon_packed_conv1x1_spatial_tiles(const int32_t input_dimensions[4],
                                          const int32_t output_dimensions[4]);
+int lw_neon_spatial_conv_supported(const int32_t input[4], const int32_t output[4],
+                                  uint32_t kernel, uint32_t stride);
+/* Weights use the pointwise pack4 layout with channel and tap dimensions flattened. */
+void lw_neon_spatial_conv_rows_f32(const float* input, const float* weights,
+                                   const float* bias, float* output,
+                                   const int32_t input_dims[4], const int32_t output_dims[4],
+                                   uint32_t kernel, uint32_t stride,
+                                   uint32_t row_begin, uint32_t row_end);
 void lw_neon_packed_conv1x1_tiles_f32(const float* input, const float* packed_weights,
                                     const float* bias, float* output, size_t plane,
                                     uint32_t input_channels, uint32_t output_channels,

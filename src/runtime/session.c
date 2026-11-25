@@ -13,6 +13,7 @@
 #include "parallel_internal.h"
 #include "cpu_features.h"
 #include "operator_internal.h"
+#include "simd_kernels.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -274,6 +275,50 @@ static int prepared_stride2_conv3x3_node(
 #endif
 }
 
+static int prepared_neon_spatial_conv_node(const lw_session* session, lw_simd_level simd_level,
+                                            uint32_t node_index, uint64_t* packed_weight_count) {
+    if (!lw_simd_level_is_neon(simd_level)) {
+        return 0;
+    }
+    const lw_model* model = session->model;
+    const uint8_t* node = model->bytes + (size_t)model->node_offset +
+                          (size_t)node_index * LWM_V0_NODE_SIZE;
+    const uint16_t inputs = lwm_read_u16(node + 2u);
+    if (lwm_read_u16(node) != LW_OP_CONV || (inputs != 2u && inputs != 3u)) {
+        return 0;
+    }
+    const uint8_t* params = model->bytes + (size_t)lwm_read_u64(node + 56u);
+    const uint32_t kernel = lwm_read_u32(params + 8u);
+    const uint32_t stride = lwm_read_u32(params + 16u);
+    const uint32_t pad_begin = stride == 2u ? 1u : 0u;
+    const lw_runtime_tensor* input = &session->tensors[lwm_read_u32(node + 8u)];
+    const lw_runtime_tensor* weights = &session->tensors[lwm_read_u32(node + 12u)];
+    const lw_runtime_tensor* output = &session->tensors[lwm_read_u32(node + 40u)];
+    if (input->dtype != LW_DTYPE_F32 || input->rank != 4u || weights->dtype != LW_DTYPE_F32 ||
+        weights->rank != 4u || output->dtype != LW_DTYPE_F32 || output->rank != 4u ||
+        (weights->flags & LWM_V0_TENSOR_FLAG_CONSTANT) == 0u ||
+        !lw_neon_spatial_conv_supported(input->dimensions, output->dimensions, kernel, stride) ||
+        lwm_read_u32(params + 4u) != 1u || lwm_read_u32(params + 12u) != kernel ||
+        lwm_read_u32(params + 20u) != stride || lwm_read_i32(params + 24u) != 1 ||
+        lwm_read_i32(params + 28u) != 1 || lwm_read_u32(params + 32u) != pad_begin ||
+        lwm_read_u32(params + 36u) != pad_begin || lwm_read_i32(params + 40u) != 1 ||
+        lwm_read_i32(params + 44u) != 1 || weights->dimensions[0] != output->dimensions[1] ||
+        weights->dimensions[1] != input->dimensions[1] ||
+        (uint32_t)weights->dimensions[2] != kernel ||
+        (uint32_t)weights->dimensions[3] != kernel) {
+        return 0;
+    }
+    if (inputs == 3u) {
+        const lw_runtime_tensor* bias = &session->tensors[lwm_read_u32(node + 16u)];
+        if (bias->dtype != LW_DTYPE_F32 ||
+            bias->byte_size != (uint64_t)(uint32_t)output->dimensions[1] * sizeof(float)) {
+            return 0;
+        }
+    }
+    return lw_packed_conv1x1_weight_count((uint32_t)input->dimensions[1] * kernel * kernel,
+                                          (uint32_t)output->dimensions[1], packed_weight_count);
+}
+
 static const float* constant_f32_data(const lw_session* session, uint32_t tensor_index) {
     const lw_model* model = session->model;
     const uint8_t* disk =
@@ -314,6 +359,9 @@ static lw_status prepare_constant_layout(lw_session* session, lw_error* error) {
         if (prepared_pointwise_node(session, simd_level, node_index, &weight_tensor_index,
                                     &packed_weight_count)) {
             prepared->kind = LW_PREPARED_CONSTANT_CONV1X1_PACKED4;
+        } else if (prepared_neon_spatial_conv_node(session, simd_level, node_index,
+                                                    &packed_weight_count)) {
+            prepared->kind = LW_PREPARED_CONSTANT_NEON_SPATIAL_PACKED4;
         } else if (prepared_stride2_conv3x3_node(
                        session, simd_level, node_index, &weight_tensor_index,
                        &packed_weight_count)) {
@@ -384,6 +432,13 @@ static lw_status pack_prepared_constants(lw_session* session, lw_error* error) {
                 (uint32_t)session->tensors[output_index].dimensions[1],
                 (float*)(void*)(session->packed_weights +
                                 (size_t)prepared->packed_weight_offset));
+        } else if (prepared->kind == LW_PREPARED_CONSTANT_NEON_SPATIAL_PACKED4) {
+            weight_tensor_index = lwm_read_u32(node + 12u);
+            const int32_t* dims = session->tensors[weight_tensor_index].dimensions;
+            lw_pack_conv1x1_weights_f32(
+                constant_f32_data(session, weight_tensor_index),
+                (uint32_t)dims[1] * (uint32_t)dims[2] * (uint32_t)dims[3], (uint32_t)dims[0],
+                (float*)(void*)(session->packed_weights + (size_t)prepared->packed_weight_offset));
         } else if (prepared->kind == LW_PREPARED_CONSTANT_CONV3X3_STRIDE2_PACKED8 &&
                    prepared_stride2_conv3x3_node(
                        session, simd_level, node_index, &weight_tensor_index,

@@ -339,6 +339,53 @@ static int expect_neon_spatial_pointwise(void) {
     return 1;
 }
 
+static int expect_neon_spatial_convolution(int32_t width, uint32_t kernel, uint32_t stride) {
+    enum { channels = 8, outputs = 12, height = 7, max_width = 69 };
+    const int32_t input_dims[4] = {1, channels, height, width};
+    const int32_t output_dims[4] = {
+        1, outputs, stride == 1u ? height : (height + 1) / 2,
+        stride == 1u ? width : (width + 1) / 2,
+    };
+    const uint32_t output_height = (uint32_t)output_dims[2];
+    const uint32_t inner = channels * kernel * kernel;
+    const size_t output_count = (size_t)outputs * output_height * (size_t)output_dims[3];
+    float input[channels * height * max_width];
+    float weights[outputs * channels * 9];
+    float packed_weights[outputs * channels * 9];
+    float bias[outputs];
+    float expected[outputs * height * max_width];
+    float actual[outputs * height * max_width];
+    if (!lw_neon_spatial_conv_supported(input_dims, output_dims, kernel, stride)) {
+        fprintf(stderr, "NEON spatial Conv test shape did not select packed lowering\n");
+        return 0;
+    }
+    fill_values(input, channels * height * (uint32_t)width, 17u, 109u, 53, 41.0f);
+    fill_values(weights, outputs * inner, 31u, 79u, 39, 37.0f);
+    fill_values(bias, outputs, 7u, 29u, 14, 13.0f);
+    lw_pack_conv1x1_weights_f32(weights, inner, outputs, packed_weights);
+    for (uint32_t with_bias = 0u; with_bias < 2u; ++with_bias) {
+        const float* bias_ptr = with_bias ? bias : NULL;
+        if (stride == 1u) {
+            lw_scalar_conv2x2_unit_pad_end1_f32(input, weights, bias_ptr, expected,
+                                                input_dims, output_dims);
+        } else {
+            lw_scalar_conv3x3_stride2_pad1_f32(input, weights, bias_ptr, expected,
+                                               input_dims, output_dims);
+        }
+        memset(actual, 0, output_count * sizeof(*actual));
+        lw_neon_spatial_conv_rows_f32(input, packed_weights, bias_ptr, actual, input_dims,
+                                      output_dims, kernel, stride, 0u, 1u);
+        lw_neon_spatial_conv_rows_f32(input, packed_weights, bias_ptr, actual, input_dims,
+                                      output_dims, kernel, stride, 1u, output_height);
+        if (memcmp(expected, actual, output_count * sizeof(*actual)) != 0) {
+            fprintf(stderr, "NEON spatial Conv %ux%u stride %u differs from scalar\n",
+                    kernel, kernel, stride);
+            return 0;
+        }
+    }
+    return 1;
+}
+
 int main(void) {
     const int32_t normal_input_dimensions[4] = {2, 2, 4, 5};
     const int32_t normal_weight_dimensions[4] = {3, 2, 3, 3};
@@ -1151,7 +1198,10 @@ int main(void) {
             fprintf(stderr, "NEON packed pointwise Conv differs from canonical output\n");
             return 1;
         }
-        if (!expect_neon_spatial_pointwise()) {
+        if (!expect_neon_spatial_pointwise() ||
+            !expect_neon_spatial_convolution(64, 2u, 1u) ||
+            !expect_neon_spatial_convolution(69, 3u, 2u) ||
+            !expect_neon_spatial_convolution(66, 3u, 2u)) {
             return 1;
         }
         {
