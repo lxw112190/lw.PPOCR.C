@@ -434,6 +434,41 @@ static int run_backend_op_by_op(lw_x64_det_instance* instance, float* output,
     return 1;
 }
 
+static int check_direct_input(const lw_model* model, uint32_t height, uint32_t width,
+                              const float* nchw_input, const float* expected,
+                              float* actual, lw_error* error) {
+    lw_x64_det_program* program = NULL;
+    lw_x64_det_instance* instance = NULL;
+    uint64_t input_count;
+    float* input;
+    int ok = 0;
+    const uint64_t plane = (uint64_t)height * width;
+    if (lw_x64_det_backend_compile_ex(model, height, width, LW_X64_DET_COMPILE_NHWC_DIRECT,
+                                      &program, error) != LW_X64_DET_COMPILE_OK ||
+        program->direct_nhwc == 0u ||
+        lw_x64_det_instance_create(program, &instance, error) != LW_STATUS_OK) {
+        fprintf(stderr, "direct NHWC DET setup failed: %s\n", error->message);
+        goto cleanup;
+    }
+    input = lw_x64_det_instance_input(instance, &input_count);
+    if (input == NULL || input_count != plane * 3u) {
+        fprintf(stderr, "direct NHWC DET input slot is invalid\n");
+        goto cleanup;
+    }
+    lw_x64_fast_nchw_to_nhwc(nchw_input, input, 1u, 3u, height, width);
+    if (lw_x64_det_instance_run_profiled(instance, actual, plane, NULL, error) != LW_STATUS_OK ||
+        memcmp(expected, actual, (size_t)plane * sizeof(float)) != 0) {
+        fprintf(stderr, "direct NHWC DET differs from the converted input: %s\n",
+                error->message);
+        goto cleanup;
+    }
+    ok = 1;
+cleanup:
+    lw_x64_det_instance_free(instance);
+    lw_x64_det_program_free(program);
+    return ok;
+}
+
 int main(int argc, char** argv) {
     const uint32_t default_height = 32u;
     const uint32_t default_width = 64u;
@@ -634,6 +669,10 @@ int main(int argc, char** argv) {
         }
         if (memcmp(backend_output, determinism_output, (size_t)plane * sizeof(float)) != 0) {
             fprintf(stderr, "NHWC backend is not bit-deterministic\n");
+            goto cleanup;
+        }
+        if (!check_direct_input(model, height, width, source_input,
+                                backend_output, determinism_output, &error)) {
             goto cleanup;
         }
     }

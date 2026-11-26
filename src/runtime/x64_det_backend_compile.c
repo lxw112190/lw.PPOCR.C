@@ -49,20 +49,17 @@ static float read_f32(const uint8_t* p) {
 static uint64_t value_elements(const lw_x64_det_value* value) { return value->bytes / sizeof(float); }
 
 /* Effective layout of a tensor's primary slot: whatever layout its producer
- * node runs in. The WASM detector writes direct-NHWC graph input into its
- * arena slot; treating that slot as NCHW would convert it a second time. */
+ * node runs in. A direct-NHWC graph input is already in its arena layout. */
 static uint8_t det_tensor_eff_layout(const lw_session* session,
                                      const lw_x64_det_program* program, uint32_t tensor_index) {
     int32_t birth;
     if (session == NULL || program == NULL || tensor_index >= program->value_count) {
         return LW_X64_DET_LAYOUT_NCHW;
     }
-#if defined(__EMSCRIPTEN__) && defined(LW_WASM_COMPILED_DET)
     if (program->direct_nhwc != 0u &&
         (session->tensors[tensor_index].flags & LWM_V0_TENSOR_FLAG_INPUT) != 0u) {
         return LW_X64_DET_LAYOUT_NHWC;
     }
-#endif
     birth = session->tensors[tensor_index].birth_node;
     if (birth < 0 || (uint32_t)birth >= program->model->info.node_count) {
         return LW_X64_DET_LAYOUT_NCHW;
@@ -1303,6 +1300,8 @@ lw_x64_det_compile_result lw_x64_det_backend_compile_ex(
     uint32_t i;
     uint32_t capacity;
     lw_x64_det_compile_result lowered;
+    const int direct_input = strategy == LW_X64_DET_COMPILE_NHWC_DIRECT;
+    if (direct_input) strategy = LW_X64_DET_COMPILE_NHWC;
     if (out_program == NULL || model == NULL || height == 0u || width == 0u ||
         height > INT32_MAX || width > INT32_MAX) {
         lw_set_error(error, LW_STATUS_INVALID_ARGUMENT, "DET backend arguments are invalid");
@@ -1367,7 +1366,7 @@ lw_x64_det_compile_result lw_x64_det_backend_compile_ex(
             lw_x64_det_program_free(program);
             return LW_X64_DET_COMPILE_INVALID_GRAPH;
         }
-        program->direct_nhwc = plan.graph_input_direct_nhwc;
+        program->direct_nhwc = direct_input && plan.graph_input_direct_nhwc;
         status = plan_effective_layouts(model, session, &plan, program, error);
         lw_layout_plan_free(&plan);
         if (status != LW_STATUS_OK) {

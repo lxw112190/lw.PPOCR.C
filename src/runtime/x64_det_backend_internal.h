@@ -45,7 +45,8 @@ typedef enum lw_x64_det_compile_result {
 
 typedef enum lw_x64_det_compile_strategy {
     LW_X64_DET_COMPILE_NCHW = 0,
-    LW_X64_DET_COMPILE_NHWC = 1
+    LW_X64_DET_COMPILE_NHWC = 1,
+    LW_X64_DET_COMPILE_NHWC_DIRECT = 2
 } lw_x64_det_compile_strategy;
 
 typedef enum lw_x64_det_storage_layout {

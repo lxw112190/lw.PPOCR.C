@@ -127,6 +127,15 @@ static void pointwise_run_range(const lw_rec_pointwise_shard* shard,
                                             shard->output_channels);
         break;
     default:
+        if (shard->input_channels == 512u && shard->output_channels == 1024u &&
+            pixel_count <= 720u) {
+            /* A 16-tile group uses 192 KiB of input. Long ranges keep the
+             * larger default group to reduce passes over the packed weights. */
+            lw_avx2_fma_nhwc_pointwise_grouped_f32(
+                input, shard->packed_weights, &ep, output, pixel_count,
+                shard->input_channels, shard->output_channels, 16u);
+            break;
+        }
         lw_avx2_fma_nhwc_pointwise_f32(input, shard->packed_weights, &ep, output,
                                        pixel_count, shard->input_channels,
                                        shard->output_channels);
