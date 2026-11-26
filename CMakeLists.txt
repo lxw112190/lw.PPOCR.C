@@ -65,6 +65,12 @@ option(LW_EXPERIMENTAL_AVX2_FAST_PATH
     "Enable compiled AVX2/FMA x64 REC backends for adaptive widths" ON)
 option(LW_EXPERIMENTAL_ADAPTIVE_REC_BUDGET
     "Share the native x64 and ARM64 REC thread budget across active line workers" ON)
+set(LW_X64_OCR_THREAD_BUDGET "8" CACHE STRING
+    "Native x64 OCR thread budget (8: physical-core policy, 16: logical-processor policy)")
+set_property(CACHE LW_X64_OCR_THREAD_BUDGET PROPERTY STRINGS 8 16)
+if(NOT LW_X64_OCR_THREAD_BUDGET MATCHES "^(8|16)$")
+    message(FATAL_ERROR "LW_X64_OCR_THREAD_BUDGET must be 8 or 16")
+endif()
 option(LW_EXPERIMENTAL_DET_FIXED_POINT_RESIZE
     "Use the OpenCV-parity fixed-point DET resize with LUT normalization" ON)
 option(LW_EXPERIMENTAL_CLS_FIXED_POINT_RESIZE

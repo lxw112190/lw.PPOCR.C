@@ -323,6 +323,8 @@ if(BUILD_TESTING AND NOT EMSCRIPTEN)
 
     add_executable(test-cpu-topology tests/test_cpu_topology.c)
     target_link_libraries(test-cpu-topology PRIVATE lw_ppocr_c)
+    target_compile_definitions(test-cpu-topology PRIVATE
+        LW_X64_OCR_THREAD_BUDGET=${LW_X64_OCR_THREAD_BUDGET})
     target_include_directories(test-cpu-topology PRIVATE
         "${CMAKE_CURRENT_SOURCE_DIR}/src/runtime")
     target_compile_features(test-cpu-topology PRIVATE c_std_11)
@@ -951,7 +953,8 @@ if(BUILD_TESTING AND NOT EMSCRIPTEN)
         --cls-model "${LW_PPOCR_C_CLS_LWM}"
         --rec-model "${LW_PPOCR_C_REC_LWM}"
         --dictionary "${CMAKE_CURRENT_SOURCE_DIR}/models/ppocrv6-tiny/ppocr_keys.txt"
-        --image "${LW_PPOCR_C_DET_DEMO_PPM}")
+        --image "${LW_PPOCR_C_DET_DEMO_PPM}"
+        --thread-budget "${LW_X64_OCR_THREAD_BUDGET}")
     if(LW_REC_RESIDENT_WIDTHS AND NOT EMSCRIPTEN)
         list(APPEND full_ocr_profile_test_args --expect-resident)
     endif()

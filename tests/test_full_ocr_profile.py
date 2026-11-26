@@ -80,7 +80,11 @@ class FullOcrProfileTest(unittest.TestCase):
                 self.assertGreaterEqual(parallel["available_processors"], 1)
                 self.assertGreaterEqual(parallel["smt_width"], 1)
                 self.assertGreaterEqual(parallel["det_intra_cap"], 1)
-                self.assertLessEqual(parallel["det_intra_cap"], 8)
+                self.assertLessEqual(parallel["det_intra_cap"], ARGUMENTS.thread_budget)
+                if ARGUMENTS.thread_budget == 16:
+                    self.assertEqual(
+                        parallel["det_intra_cap"], min(16, parallel["available_processors"])
+                    )
                 self.assertGreaterEqual(parallel["det_intra_actual"], 1)
                 self.assertLessEqual(
                     parallel["det_intra_actual"], parallel["det_intra_cap"]
@@ -483,6 +487,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--rec-model", required=True)
     parser.add_argument("--dictionary", required=True)
     parser.add_argument("--image", required=True)
+    parser.add_argument("--thread-budget", type=int, choices=(8, 16), default=8)
     parser.add_argument("--expect-resident", action="store_true")
     parser.add_argument("--expect-compiled-rec", action="store_true")
     parser.add_argument("--expect-prepared", action="store_true")

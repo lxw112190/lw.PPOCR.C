@@ -63,8 +63,9 @@ Android、Java/JNI、ARM64 和 LoongArch64 仍明确标记为 Preview。
 - 完整 OCR 在 DET 后使用独立 CLS/REC worker 并行处理文字行；原生 64 位默认使用进程
   可用逻辑处理器数且最多 8 个，x86 与 WebAssembly 默认 1 个，可通过
   `lw_ocr_options.worker_count` 调整；
-- 原生 64 位 DET 根据进程可用 CPU 和物理核心数单独选择 intra-op 线程（最多 8 个），
-  不再与 CLS/REC 的 `worker_count` 绑定；x86 与 WebAssembly 保持单线程；
+- 原生 64 位完整 OCR 默认按物理核心数选择最多 8 个算子线程。DET 先使用这笔预算，REC
+  再按实际参与的行 worker 分配。原生 x64 可选最多 16 个逻辑处理器的配置。
+  [x64 线程预算](docs/full-ocr-profile.md#native-x64-thread-budget)
 - 输入为调用方已经解码的 BGR8 图像，核心库不绑定具体图片解码库；
 - 提供 C 命令行示例、C# WinForms Demo、桌面 Java/JVM JNI 示例、原生 HTTP/Web Demo
   和单文件离线 WASM Demo；

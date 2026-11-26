@@ -296,6 +296,14 @@ uint32_t lw_parallel_default_det_thread_count(const lw_cpu_topology* topology) {
 #else
     uint32_t count = 0u;
     if (topology != NULL) {
+#if defined(LW_X64_OCR_THREAD_BUDGET) && LW_X64_OCR_THREAD_BUDGET == 16
+        /* The latency-oriented OCR build can also use SMT siblings. Keep the
+         * budget inside the process's detected CPU availability. */
+        if (topology->available_processors != 0u) {
+            return topology->available_processors < LW_X64_OCR_THREAD_BUDGET
+                ? topology->available_processors : LW_X64_OCR_THREAD_BUDGET;
+        }
+#endif
         count = topology->physical_cores;
         if (topology->available_processors != 0u && topology->available_processors < count) {
             count = topology->available_processors;

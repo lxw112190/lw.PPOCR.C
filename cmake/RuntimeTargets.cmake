@@ -168,6 +168,11 @@ if(LW_EXPERIMENTAL_ADAPTIVE_REC_BUDGET AND NOT EMSCRIPTEN AND
    (LW_X64_REC_FAST_ENABLED OR LW_SYSTEM_PROCESSOR_LOWER MATCHES "^(arm64|aarch64)$"))
     set(LW_ADAPTIVE_REC_BUDGET_ENABLED ON)
 endif()
+if(LW_X64_OCR_THREAD_BUDGET STREQUAL "16" AND
+   (NOT LW_X64_REC_FAST_ENABLED OR NOT CMAKE_SIZEOF_VOID_P EQUAL 8 OR
+    NOT LW_ADAPTIVE_REC_BUDGET_ENABLED))
+    message(FATAL_ERROR "LW_X64_OCR_THREAD_BUDGET=16 requires compiled native x64 REC and the adaptive REC budget")
+endif()
 
 # Keep the portable Conv references and their SIMD implementations on the same
 # multiply-then-add contract. GCC enables FP contraction by default on AArch64
@@ -251,6 +256,9 @@ function(lw_configure_runtime_target target)
 endfunction()
 
 function(lw_configure_runtime_features target)
+    if(LW_X64_OCR_THREAD_BUDGET STREQUAL "16")
+        target_compile_definitions(${target} PRIVATE LW_X64_OCR_THREAD_BUDGET=16)
+    endif()
     if(LW_ADAPTIVE_REC_BUDGET_ENABLED)
         target_compile_definitions(${target} PRIVATE LW_EXPERIMENTAL_ADAPTIVE_REC_BUDGET=1)
     endif()

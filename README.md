@@ -164,9 +164,10 @@ These are local measurements, not portable latency or memory guarantees. The
 include the exact pre-change comparison; the separate
 [paired x64 CI comparison](https://github.com/lxw112190/lw.PPOCR.C/actions/runs/36099882256)
 is available for release-to-candidate comparisons.
-DET uses a separate CPU-topology-aware intra-op budget, capped at eight
-physical cores, before the independently configured CLS/REC line workers begin. This keeps
-`worker_count` focused on line-level memory and latency trade-offs.
+Full OCR defaults to a CPU-topology-aware intra-op budget of up to eight
+physical cores. DET uses that budget first, then REC shares it across
+active line workers. Native x64 builds can opt into a budget of up to
+16 logical processors for single-request latency. [x64 thread budget](docs/full-ocr-profile.md#native-x64-thread-budget)
 
 Long-text clients such as the C full-OCR demo, offline HTML, Java/JNI, and C#
 Demo use `REC target_width = 960` as a maximum to preserve wide-line detail.

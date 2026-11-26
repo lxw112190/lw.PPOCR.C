@@ -21,6 +21,27 @@ The last two arguments are measured iterations and OCR line workers. Run one
 ordinary warm-up before the measured iterations so dynamic DET session sizing,
 crop storage, and reusable workspaces do not distort the report.
 
+## Native x64 thread budget
+
+For a native x64 build with compiled AVX2 REC and adaptive REC threading, opt
+into a budget of up to 16 logical processors with:
+
+```sh
+cmake -S . -B build/x64-ocr-latency -DLW_X64_OCR_THREAD_BUDGET=16
+cmake --build build/x64-ocr-latency --config Release
+```
+
+The build limits the budget to the process's detected CPU availability. DET
+can use the full budget. After detection, REC divides it among the active line
+workers. With four active workers this gives up to four intra-op threads per
+recognizer. `worker_count` still controls how many lines OCR can process at
+once. The default value of `LW_X64_OCR_THREAD_BUDGET` is `8`, which uses the
+existing physical-core policy.
+
+The budget applies to each OCR handle independently. For applications running
+multiple OCR requests at the same time, measure aggregate throughput and
+request latency with the intended number of handles.
+
 ## Measurement semantics
 
 The JSON report separates latency from accumulated worker work:

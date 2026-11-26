@@ -3,6 +3,10 @@
 #include <stdint.h>
 #include <stdio.h>
 
+#ifndef LW_X64_OCR_THREAD_BUDGET
+#define LW_X64_OCR_THREAD_BUDGET 8
+#endif
+
 int main(void) {
     lw_cpu_topology topology;
     lw_cpu_topology four_core = {8u, 4u, 8u, 2u};
@@ -17,7 +21,7 @@ int main(void) {
         topology.available_processors == 0u || topology.smt_width == 0u ||
         topology.available_processors > topology.logical_processors ||
         topology.physical_cores > topology.logical_processors || line_workers == 0u ||
-        line_workers > 8u || det_threads == 0u || det_threads > 8u ||
+        line_workers > 8u || det_threads == 0u || det_threads > LW_X64_OCR_THREAD_BUDGET ||
         det_threads > topology.available_processors) {
         fprintf(stderr,
                 "invalid topology: logical=%u physical=%u available=%u smt=%u "
@@ -38,11 +42,12 @@ int main(void) {
     }
 #else
     if (lw_parallel_default_line_worker_count(&four_core) != 8u ||
-        lw_parallel_default_det_thread_count(&four_core) != 4u ||
+        lw_parallel_default_det_thread_count(&four_core) !=
+            (LW_X64_OCR_THREAD_BUDGET == 16 ? 8u : 4u) ||
         lw_parallel_default_line_worker_count(&quota_limited) != 4u ||
         lw_parallel_default_det_thread_count(&quota_limited) != 4u ||
         lw_parallel_default_line_worker_count(&large_host) != 8u ||
-        lw_parallel_default_det_thread_count(&large_host) != 8u ||
+        lw_parallel_default_det_thread_count(&large_host) != LW_X64_OCR_THREAD_BUDGET ||
         lw_parallel_default_line_worker_count(NULL) != 4u ||
         lw_parallel_default_det_thread_count(NULL) != 4u) {
         return 1;
