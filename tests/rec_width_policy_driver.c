@@ -2,7 +2,11 @@
 #include <stdio.h>
 
 int main(void) {
-#ifdef LW_TEST_FINE_WIDTHS
+#if defined(LW_ARM64_FINE_REC_WIDTHS)
+    static const uint32_t expected[] = {
+        192u, 256u, 320u, 384u, 480u, 576u, 640u, 768u, 896u, 960u
+    };
+#elif defined(LW_TEST_FINE_WIDTHS)
     static const uint32_t expected[] = {
         192u, 256u, 320u, 384u, 448u, 480u, 512u, 576u,
         640u, 704u, 768u, 832u, 896u, 960u

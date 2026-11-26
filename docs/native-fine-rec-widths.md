@@ -2,8 +2,8 @@
 
 `LW_NATIVE_FINE_REC_WIDTHS=ON` reduces recognition padding in compiled native
 x64 OCR. It is **OFF by default**, independent of `LW_WASM_FINE_REC_WIDTHS`.
-WASM, ARM64 and canonical native builds are unchanged. Configuration rejects
-enabling this option without the native x64 fast path.
+CMake requires the native x64 fast path when this option is enabled.
+The ARM64 experiment below uses its own flag.
 
 The existing buckets are 192/320/480/640/960. The experiment uses
 192/256/320/384/448/480/512/576/640/704/768/832/896/960. The minimum remains 192
@@ -164,3 +164,54 @@ Reports include binary/model/sample SHA identities, selected CMake options,
 individual process measurements, paired ratio ranges, and untimed full text
 whose buffer checksum must match the measured benchmark. All generated outputs
 stay under ignored `build/` directories.
+
+## ARM64 experiment
+
+Native ARM64 builds can opt into `LW_ARM64_FINE_REC_WIDTHS=ON`. The policy
+adds 256, 384, 576, 768 and 896 to the five production buckets. It uses the
+recognizer's existing session cache. The 960 cap and the fixed-width policy
+for caps of 320 and below stay in effect.
+
+On the BM1684 with eight Cortex-A53 cores and GCC 9.4 in Release, both builds
+used the same official ONNX assets, shared CLS and REC width cap of 960. The
+table reports medians of whole-image-set time and peak process RSS. Tiny and
+Small used two pairs with reversed run order. Medium used one pair.
+
+| Model | Workers | Images | Default → fine OCR seconds | Reduction | Default → fine peak RSS MiB |
+|---|---:|---:|---:|---:|---:|
+| Tiny | 8 | 4 | 2.791 → 2.602 | 6.8% | 160.5 → 190.4 |
+| Small | 4 | 2 | 4.327 → 3.841 | 11.2% | 267.9 → 271.1 |
+| Small | 8 | 2 | 4.359 → 3.663 | 16.0% | 316.6 → 304.8 |
+| Medium | 4 | 1 | 18.643 → 16.099 | 13.6% | 471.2 → 557.7 |
+
+The single-image Small profile reported 18.2% → 8.0% REC padding and
+3.10 s → 2.59 s for full OCR. Tiny and Medium retained their text checksums.
+In the warmed Small benchmark, the original image changed `OEMODM` to the
+reviewed `OEM ODM` spelling, and one line in the cropped image lost a comma.
+The experimental build uses the existing reviewed Small sample fixture in
+`native_onnx_import`.
+
+For Small, a separate on-device quality run used 100 project-generated images
+resized to a 960-pixel long side limit and 614 ground-truth lines. Each driver
+was statically linked to its own runtime and used four Cortex-A53 cores.
+
+| Metric | Default | Fine |
+|---|---:|---:|
+| Matched lines | 613 | 613 |
+| Exact reference lines | 442 / 614 (71.987%) | 442 / 614 (71.987%) |
+| Matched CER | 4.6179% | 4.6129% |
+| Detection F1 | 99.9185% | 99.9185% |
+
+One image gained an exact line and one lost an exact line. The ARM64 option
+defaults to OFF. The experiment changes individual lines, and the sample peak
+RSS increased by about 30 MiB for Tiny and 86 MiB for Medium.
+
+Build the default and experimental executables from the same source and
+compiler for an on-device comparison:
+
+```sh
+cmake -S . -B build/arm64-default -DCMAKE_BUILD_TYPE=Release -DLW_BUILD_HTTP_DEMO=OFF -DLW_ARM64_FINE_REC_WIDTHS=OFF
+cmake -S . -B build/arm64-fine -DCMAKE_BUILD_TYPE=Release -DLW_BUILD_HTTP_DEMO=OFF -DLW_ARM64_FINE_REC_WIDTHS=ON
+cmake --build build/arm64-default --target full-ocr-dataset-benchmark lw-ocr-ppm
+cmake --build build/arm64-fine --target full-ocr-dataset-benchmark lw-ocr-ppm
+```

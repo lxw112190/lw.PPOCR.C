@@ -16,6 +16,8 @@ option(LW_WASM_COMPILED_REC
     "Experimentally run WASM REC on the compiled physical backend" OFF)
 option(LW_WASM_FINE_REC_WIDTHS
     "Use 64-pixel adaptive REC width buckets in compiled WASM OCR" OFF)
+option(LW_ARM64_FINE_REC_WIDTHS
+    "Experimentally reduce ARM64 REC padding with finer width buckets" OFF)
 option(LW_NATIVE_FINE_REC_WIDTHS
     "Experimentally reduce native compiled REC padding with finer widths (including 480)" OFF)
 option(LW_EXPERIMENTAL_REC_FFN_TILING

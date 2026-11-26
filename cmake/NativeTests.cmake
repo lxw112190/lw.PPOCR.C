@@ -51,7 +51,7 @@ if(BUILD_TESTING AND NOT EMSCRIPTEN)
     endif()
     add_test(NAME nhwc_depthwise_portable COMMAND nhwc-depthwise-portable-driver)
 
-    foreach(policy IN ITEMS default fine)
+    foreach(policy IN ITEMS default fine arm64_fine)
         add_executable(rec-width-policy-${policy} tests/rec_width_policy_driver.c)
         target_include_directories(rec-width-policy-${policy} PRIVATE
             "${CMAKE_CURRENT_SOURCE_DIR}/src/ppocr")
@@ -59,6 +59,9 @@ if(BUILD_TESTING AND NOT EMSCRIPTEN)
         if(policy STREQUAL "fine")
             target_compile_definitions(rec-width-policy-${policy} PRIVATE
                 LW_NATIVE_FINE_REC_WIDTHS=1 LW_TEST_FINE_WIDTHS=1)
+        elseif(policy STREQUAL "arm64_fine")
+            target_compile_definitions(rec-width-policy-${policy} PRIVATE
+                LW_ARM64_FINE_REC_WIDTHS=1 LW_TEST_FINE_WIDTHS=1)
         endif()
         if(MSVC)
             target_compile_options(rec-width-policy-${policy} PRIVATE /W4 /WX /utf-8)
@@ -732,7 +735,7 @@ if(BUILD_TESTING AND NOT EMSCRIPTEN)
         WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
         TIMEOUT 360)
     set(LW_ONNX_WIDTH_TEST_ARGS)
-    if(LW_NATIVE_FINE_REC_WIDTHS)
+    if(LW_NATIVE_FINE_REC_WIDTHS OR LW_ARM64_FINE_REC_WIDTHS)
         list(APPEND LW_ONNX_WIDTH_TEST_ARGS --fine-rec-widths)
     endif()
     add_test(NAME native_onnx_import
