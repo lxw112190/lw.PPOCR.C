@@ -191,7 +191,7 @@ static uint64_t det_slot_offset(lw_x64_det_program* program, uint32_t tensor_ind
 
 static lw_status compile_conv(const lw_model* model, const lw_session* session,
                               lw_x64_det_program* program, const uint8_t* node,
-                              lw_x64_det_op* op, lw_error* error) {
+                              lw_x64_det_op* op, int materialize_constants, lw_error* error) {
     const lw_runtime_tensor* input = &session->tensors[lwm_read_u32(node + 8u)];
     const lw_runtime_tensor* weight = &session->tensors[lwm_read_u32(node + 12u)];
     const lw_runtime_tensor* output = &session->tensors[lwm_read_u32(node + 40u)];
@@ -240,15 +240,17 @@ static lw_status compile_conv(const lw_model* model, const lw_session* session,
                 lw_set_error(error, LW_STATUS_UNSUPPORTED, "NCHW pointwise shape is unsupported");
                 return LW_STATUS_UNSUPPORTED;
             }
-            packed = (float*)alloc_constant(program, count * sizeof(float));
-            if (packed == NULL) {
-                lw_set_error(error, LW_STATUS_OUT_OF_MEMORY, "NCHW pointwise pack allocation failed");
-                return LW_STATUS_OUT_OF_MEMORY;
+            if (materialize_constants) {
+                packed = (float*)alloc_constant(program, count * sizeof(float));
+                if (packed == NULL) {
+                    lw_set_error(error, LW_STATUS_OUT_OF_MEMORY, "NCHW pointwise pack allocation failed");
+                    return LW_STATUS_OUT_OF_MEMORY;
+                }
+                lw_pack_conv1x1_weights_f32(weights, op->data.conv.input_channels,
+                                            op->data.conv.output_channels, packed);
+                op->data.conv.packed_weights = packed;
             }
-            lw_pack_conv1x1_weights_f32(weights, op->data.conv.input_channels,
-                                        op->data.conv.output_channels, packed);
             op->data.conv.kernel_kind = LW_X64_DET_CONV_POINTWISE;
-            op->data.conv.packed_weights = packed;
             op->data.conv.nchw_conv_kernel = LW_X64_DET_NCHW_CONV_POINTWISE_PACKED;
             op->data.conv.nchw_pointwise_kernel =
                 choose_nchw_pointwise_kernel(op->data.conv.input_height,
@@ -326,21 +328,22 @@ static lw_status compile_conv(const lw_model* model, const lw_session* session,
         lw_set_error(error, LW_STATUS_UNSUPPORTED, "Tiny DET Conv shape is not NHWC-lowerable");
         return LW_STATUS_UNSUPPORTED;
     }
-    packed = (float*)alloc_constant(program, count * sizeof(float));
-    if (packed == NULL) {
-        lw_set_error(error, LW_STATUS_OUT_OF_MEMORY, "Conv packed weight allocation failed");
-        return LW_STATUS_OUT_OF_MEMORY;
-    }
-    if (op->data.conv.kernel_kind == LW_X64_DET_CONV_DEPTHWISE) {
-        lw_pack_nhwc_depthwise_f32(constant_f32(model, lwm_read_u32(node + 12u)),
-                                   op->data.conv.input_channels, kh, kw, packed);
-    } else {
-        lw_pack_nhwc_dense_f32(constant_f32(model, lwm_read_u32(node + 12u)),
-                               op->data.conv.input_channels,
-                               op->data.conv.output_channels, kh, kw, packed);
-    }
-    op->data.conv.packed_weights = packed;
     op->data.conv.original_weights = constant_f32(model, lwm_read_u32(node + 12u));
+    if (materialize_constants) {
+        packed = (float*)alloc_constant(program, count * sizeof(float));
+        if (packed == NULL) {
+            lw_set_error(error, LW_STATUS_OUT_OF_MEMORY, "Conv packed weight allocation failed");
+            return LW_STATUS_OUT_OF_MEMORY;
+        }
+        if (op->data.conv.kernel_kind == LW_X64_DET_CONV_DEPTHWISE) {
+            lw_pack_nhwc_depthwise_f32(op->data.conv.original_weights,
+                                       op->data.conv.input_channels, kh, kw, packed);
+        } else {
+            lw_pack_nhwc_dense_f32(op->data.conv.original_weights, op->data.conv.input_channels,
+                                   op->data.conv.output_channels, kh, kw, packed);
+        }
+        op->data.conv.packed_weights = packed;
+    }
     if (lwm_read_u16(node + 2u) >= 3u) {
         op->data.conv.bias = constant_f32(model, lwm_read_u32(node + 16u));
     }
@@ -386,7 +389,7 @@ static uint64_t det_slot_offset(lw_x64_det_program* program, uint32_t tensor_ind
 
 static lw_status compile_node(const lw_model* model, const lw_session* session,
                               lw_x64_det_program* program, uint32_t node_index,
-                              lw_x64_det_op* op, lw_error* error) {
+                              lw_x64_det_op* op, int materialize_constants, lw_error* error) {
     const uint8_t* node = node_bytes(model, node_index);
     const uint16_t semantic = lwm_read_u16(node);
     uint32_t input_index = lwm_read_u32(node + 8u);
@@ -401,7 +404,8 @@ static lw_status compile_node(const lw_model* model, const lw_session* session,
     op->semantic_begin = node_index;
     op->semantic_count = 1u;
     switch (semantic) {
-    case LW_OP_CONV: return compile_conv(model, session, program, node, op, error);
+    case LW_OP_CONV:
+        return compile_conv(model, session, program, node, op, materialize_constants, error);
     case LW_OP_RELU: op->kind = LW_X64_DET_OP_RELU; break;
     case LW_OP_ERF: op->kind = LW_X64_DET_OP_ERF; break;
     case LW_OP_HARD_SIGMOID:
@@ -412,23 +416,9 @@ static lw_status compile_node(const lw_model* model, const lw_session* session,
     case LW_OP_SIGMOID: op->kind = LW_X64_DET_OP_SIGMOID_NCHW; break;
     case LW_OP_BATCH_NORMALIZATION: {
         uint32_t c = (uint32_t)input->dimensions[1];
-        float* mul = (float*)alloc_constant(program, (uint64_t)c * sizeof(float));
-        float* add = (float*)alloc_constant(program, (uint64_t)c * sizeof(float));
-        uint32_t j;
-        if (mul == NULL || add == NULL) return LW_STATUS_OUT_OF_MEMORY;
-        for (j = 0u; j < c; ++j) {
-            float m = constant_f32(model, lwm_read_u32(node + 12u))[j];
-            float b = constant_f32(model, lwm_read_u32(node + 16u))[j];
-            float mean = constant_f32(model, lwm_read_u32(node + 20u))[j];
-            float var = constant_f32(model, lwm_read_u32(node + 24u))[j];
-            float scale = m / sqrtf(var + read_f32(params + 4u));
-            mul[j] = scale;
-            add[j] = b - mean * scale;
-        }
         op->kind = LW_X64_DET_OP_AFFINE;
         op->data.affine.input_offset = det_slot_offset(program, input_index, layout);
         op->data.affine.output_offset = out_value->offset;
-        op->data.affine.mul = mul; op->data.affine.add = add;
         op->data.affine.scale = constant_f32(model, lwm_read_u32(node + 12u));
         op->data.affine.bias = constant_f32(model, lwm_read_u32(node + 16u));
         op->data.affine.mean = constant_f32(model, lwm_read_u32(node + 20u));
@@ -437,6 +427,19 @@ static lw_status compile_node(const lw_model* model, const lw_session* session,
         op->data.affine.channel_major = (uint8_t)(layout == LW_X64_DET_LAYOUT_NCHW || input->rank != 4u);
         op->data.affine.pixels = (uint32_t)(value_elements(&program->values[input_index]) / c);
         op->data.affine.channels = c;
+        if (materialize_constants) {
+            float* mul = (float*)alloc_constant(program, (uint64_t)c * sizeof(float));
+            float* add = (float*)alloc_constant(program, (uint64_t)c * sizeof(float));
+            if (mul == NULL || add == NULL) return LW_STATUS_OUT_OF_MEMORY;
+            for (uint32_t j = 0u; j < c; ++j) {
+                float scale = op->data.affine.scale[j] /
+                    sqrtf(op->data.affine.variance[j] + op->data.affine.epsilon);
+                mul[j] = scale;
+                add[j] = op->data.affine.bias[j] - op->data.affine.mean[j] * scale;
+            }
+            op->data.affine.mul = mul;
+            op->data.affine.add = add;
+        }
         break;
     }
     case LW_OP_ADD: case LW_OP_MUL: case LW_OP_DIV: case LW_OP_SUB: case LW_OP_POW:
@@ -553,23 +556,24 @@ static lw_status compile_node(const lw_model* model, const lw_session* session,
             }
             if (oc != 1u) {
                 uint64_t count = 0u;
-                float* packed;
                 if (!lw_nhwc_convtranspose_packed_weight_count(
                         op->data.conv_transpose.input_dimensions[1], oc, &count)) {
                     lw_set_error(error, LW_STATUS_UNSUPPORTED,
                                  "DET ConvTranspose pack shape is unsupported");
                     return LW_STATUS_UNSUPPORTED;
                 }
-                packed = (float*)alloc_constant(program, count * sizeof(float));
-                if (packed == NULL) {
-                    lw_set_error(error, LW_STATUS_OUT_OF_MEMORY,
-                                 "DET ConvTranspose pack allocation failed");
-                    return LW_STATUS_OUT_OF_MEMORY;
+                if (materialize_constants) {
+                    float* packed = (float*)alloc_constant(program, count * sizeof(float));
+                    if (packed == NULL) {
+                        lw_set_error(error, LW_STATUS_OUT_OF_MEMORY,
+                                     "DET ConvTranspose pack allocation failed");
+                        return LW_STATUS_OUT_OF_MEMORY;
+                    }
+                    lw_pack_nhwc_convtranspose2x2_f32(
+                        op->data.conv_transpose.weights,
+                        (uint32_t)op->data.conv_transpose.input_dimensions[1], oc, packed);
+                    op->data.conv_transpose.packed_weights = packed;
                 }
-                lw_pack_nhwc_convtranspose2x2_f32(
-                    op->data.conv_transpose.weights,
-                    (uint32_t)op->data.conv_transpose.input_dimensions[1], oc, packed);
-                op->data.conv_transpose.packed_weights = packed;
                 op->kind = LW_X64_DET_OP_CONV_TRANSPOSE_NHWC;
             } else {
                 op->kind = LW_X64_DET_OP_CONV_TRANSPOSE_NHWC_C1;
@@ -858,10 +862,6 @@ static lw_status plan_arena_offsets(lw_x64_det_program* program, lw_error* error
 
 static void reset_lowering(lw_x64_det_program* program, uint32_t limit) {
     uint32_t i;
-    for (i = 0u; i < program->packed_constant_count; ++i) free(program->constants[i].data);
-    free(program->constants);
-    program->constants = NULL;
-    program->packed_constant_count = 0u;
     memset(program->ops, 0, (size_t)limit * sizeof(*program->ops));
     program->op_count = 0u;
     program->semantic_consumed = 0u;
@@ -878,7 +878,7 @@ static void reset_lowering(lw_x64_det_program* program, uint32_t limit) {
 
 static lw_x64_det_compile_result lower_ops(const lw_model* model, const lw_session* session,
                                            lw_x64_det_program* program, uint32_t limit,
-                                           lw_error* error);
+                                           int materialize_constants, lw_error* error);
 
 static uint32_t det_tensor_consumer_count(const lw_model* model, uint32_t tensor_index) {
     uint32_t count = 0u;
@@ -1024,7 +1024,7 @@ static void update_input_uses(const lw_model* model, const lw_session* session,
 
 static lw_x64_det_compile_result lower_ops(const lw_model* model, const lw_session* session,
                                            lw_x64_det_program* program, uint32_t limit,
-                                           lw_error* error) {
+                                           int materialize_constants, lw_error* error) {
     uint32_t i;
     uint32_t physical = 0u;
     lw_status status = LW_STATUS_OK;
@@ -1095,7 +1095,7 @@ static lw_x64_det_compile_result lower_ops(const lw_model* model, const lw_sessi
         {
             lw_x64_det_op* op = &program->ops[physical];
             memset(op, 0, sizeof(*op));
-            status = compile_node(model, session, program, i, op, error);
+            status = compile_node(model, session, program, i, op, materialize_constants, error);
             if (status != LW_STATUS_OK || op->kind == LW_X64_DET_OP_GENERIC_UNSUPPORTED) {
                 ++program->unsupported_nodes;
                 if (status == LW_STATUS_OK || error == NULL || error->message[0] == 0) {
@@ -1396,7 +1396,9 @@ lw_x64_det_compile_result lw_x64_det_backend_compile_ex(
             program->input_value = i;
         }
     }
-    lowered = lower_ops(model, session, program, capacity, error);
+    /* Arena planning needs operator shapes and lifetimes only. Pack the model
+     * constants once, when lowering the executable ops with final offsets. */
+    lowered = lower_ops(model, session, program, capacity, 0, error);
     if (lowered != LW_X64_DET_COMPILE_OK) {
         lw_session_free(session);
         lw_x64_det_program_free(program);
@@ -1410,7 +1412,7 @@ lw_x64_det_compile_result lw_x64_det_backend_compile_ex(
                                                  : LW_X64_DET_COMPILE_INVALID_GRAPH;
     }
     reset_lowering(program, capacity);
-    lowered = lower_ops(model, session, program, capacity, error);
+    lowered = lower_ops(model, session, program, capacity, 1, error);
     if (lowered != LW_X64_DET_COMPILE_OK) {
         lw_session_free(session);
         lw_x64_det_program_free(program);
